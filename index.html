@@ -78,7 +78,7 @@ button:focus-visible { outline: 2px solid var(--tile); outline-offset: 2px; }
 .hud .pc { color: var(--tile); min-width: 4ch; }
 .hud .tm { color: var(--dim); }
 .hud .tg.bump { animation: bump .35s ease-out; }
-@keyframes bump { 0% { transform: scale(1.4); } 100% { transform: scale(1); } }
+@keyframes bump { 0% { transform: scale(1.16); } 100% { transform: scale(1); } }
 .hud .tg { display: inline-block; font: 600 11px/1 var(--body); letter-spacing: .1em; padding: 4px 6px; border: 1px solid currentColor; border-radius: 2px; }
 .bar b { position: absolute; top: 0; bottom: -4px; width: 2px; background: var(--ink); }
 .corner { position: fixed; top: 10px; right: clamp(10px, 3vw, 24px); display: flex; gap: 8px; }
@@ -123,6 +123,7 @@ input[type=range] { width: 170px; accent-color: var(--tile); }
   display: inline-block; min-width: 1.5em; padding: 2px 7px; margin: 0 2px; border-radius: 3px; text-align: center;
   font: 600 13px/1.4 var(--body); background: var(--ink); color: rgb(var(--bgc));
 }
+.tip.coach { width: auto; max-width: calc(100% - 32px); padding: 8px 14px; font-size: 13.5px; }
 .tip.wait { border-color: var(--tile); box-shadow: 0 0 0 3px rgb(var(--bgc) / .6); }
 
 /* ---------- panels ---------- */
@@ -218,7 +219,7 @@ textarea.out {
 <div class="hud" id="hud" hidden>
   <span class="no" id="hudNo">01</span><span class="nm" id="hudNm">First Light</span><span class="pc" id="hudPc">0%</span>
   <span class="sp" id="hudSp"></span><span class="tm" id="hudTm"></span><span class="sp" id="hudPts"></span>
-  <span class="tg" id="tgShield" hidden style="color:#7fe7ff">Shield</span><span class="tg" id="tgSlow" hidden style="color:#d9b8ff">Slow-mo</span><span class="tg" id="tgBoost" hidden style="color:var(--tile)"></span><span class="tg" id="tgPrac" hidden>Practice</span>
+  <span class="tg" id="tgShield" hidden style="color:#7fe7ff">Shield</span><span class="tg" id="tgSlow" hidden style="color:#d9b8ff">Slow-mo</span><span class="tg" id="tgBoost" hidden style="color:var(--tile)"></span><span class="tg" id="tgPerf" hidden style="color:#fff"></span><span class="tg" id="tgPrac" hidden>Practice</span>
 </div>
 <div class="corner">
   <button class="btn" id="btnPause" type="button" hidden>Pause</button>
@@ -250,6 +251,7 @@ textarea.out {
   <h2 id="failBig">0%</h2>
   <div class="meter" id="failMeter"><i id="failBar"></i><b id="failBest"></b></div>
   <p class="stat" id="failStat"></p>
+  <p class="stat" id="failNeed" hidden></p>
   <div class="row"><button class="btn go" id="btnRetry" type="button">Restart</button><button class="btn" id="btnFromStart" type="button" hidden>From the start</button><button class="btn" id="btnNew" type="button" hidden>New course</button><button class="btn" id="btnQuit3" type="button">Level select</button><button class="btn" id="btnNote3" type="button">Feedback</button></div>
   <p id="failHint"></p>
   <div class="rate" id="failRate" hidden></div>
@@ -344,7 +346,13 @@ function setFeel(o) {
   for (const k in FEEL0) if (typeof src[k] === 'number' && isFinite(src[k])) o[k] = src[k];   // anything missing keeps its default
   HOP = o.hop; FLIP = o.flip; JUMP = o.jump; COYOTE = Math.max(LANDGRACE + .005, o.coyote); PEND = o.buffer;
 }
-const HZ0 = .38, HZ1 = .62;   // the slice of a row a low bar occupies
+const HZ0 = .38, HZ1 = .62;
+// Pace: how fast time runs. Sparks add lasting speed, a press at the last moment adds a short surge, slow-mo stretches time.
+//   boostMax: the most ordinary sparks can add.  risk: what each red spark adds on top of that, for good.  perfect: seconds before a move's last moment that count as "at the last moment".
+//   surge: the burst a perfect press gives; each perfect in a row adds surgeStep, up to surgeMax; it fades over surgeSecs.
+const PACE = { boostMax: .25, risk: .01, perfect: .09, surge: .12, surgeStep: .02, surgeMax: .24, surgeSecs: 3, slow: .6, slowSecs: 3.5 };
+const PACE0 = Object.assign({}, PACE);
+function setPace(o) { Object.assign(PACE, PACE0); for (const k in PACE0) if (o && typeof o[k] === 'number' && isFinite(o[k])) PACE[k] = o[k]; }   // the slice of a row a low bar occupies
 
 function rng(a) {
   return function () {
@@ -405,6 +413,7 @@ class Track {
   // cfg: a level config, or null for the endless run
   constructor(seed, cfg) {
     this.rnd = rng(seed); this.seed = seed;
+    this.rnd2 = rng((seed ^ 0x5bd1e995) >>> 0); this.extra = 0;   // a second stream for the risk routes, so adding them leaves the rest of the course as it was
     // per row: solid lanes, tall-block lanes, low-bar lanes, launch-pad lanes, no-flip flag, speed, zone (1 sprint, 2 slow)
     this.S = []; this.B = []; this.H = []; this.PD = []; this.X = []; this.V = []; this.Z = [];
     this.G = {};                       // per row: moving-obstacle drawing info
@@ -477,7 +486,7 @@ class Track {
     this.S.push(m); this.B.push(b || 0); this.H.push(0); this.PD.push(0); this.X.push(0); this.Z.push(this.zone);
     this.V.push(this.vo || this.base(row) * this.mult);
   }
-  item(r, lane, t) { if (!this.I[r]) { this.I[r] = { lane: lane & 7, t }; if (t === 'spark' || t === 'high') this.nSparks++; } }
+  item(r, lane, t) { if (!this.I[r]) { this.I[r] = { lane: lane & 7, t }; if (t === 'spark' || t === 'high' || t === 'risk') this.nSparks++; if (t === 'risk') this.nRisk = (this.nRisk || 0) + 1; } }
   spark(r, lane) { this.item(r, lane, 'spark'); }
   plain(n, o) {
     o = o || {};
@@ -513,9 +522,10 @@ class Track {
   // gaps between obstacles shrink, give a breather at half way, then test everything close together.
   layout(cfg, N) {
     let shields = cfg.shields | 0, slows = cfg.slows | 0, breathed = false, last = null;
+    const risks = cfg.risk == null ? 3 : cfg.risk; let risked = 0;
     for (const k of cfg.fresh || []) { this.lead(-.4, null); this.runKind(k); last = k; }
-    while (this.S.length < N) {
-      const prog = this.S.length / N;
+    while (this.S.length - this.extra < N) {
+      const prog = (this.S.length - this.extra) / N;
       if (!breathed && prog >= .5) { breathed = true; this.breather(shields > 0); if (shields > 0) shields--; continue; }
       const kind = this.draw(last); last = kind;
       // what the stretch before this obstacle offers: slow-mo (off the route, your choice) before a rhythm section,
@@ -523,8 +533,34 @@ class Track {
       let offer = null;
       if (slows > 0 && prog > .6 && PRECISION[kind]) { offer = 'slow'; slows--; }
       else if (shields > 0 && prog > .72 && CRASH[kind]) { offer = 'shield'; shields--; }
+      // a risk route now and then: an optional stretch with red sparks off the safe line
+      if (risked < risks && prog >= (risked + 1) / (risks + 1) && this.mult === 1) { this.riskStretch(); risked++; }
       this.lead(prog, offer); this.runKind(kind);
     }
+  }
+  // Risk route: a calm straight where the safe line carries on, and three red sparks sit somewhere that takes nerve:
+  // on a short strip along the far wall (flip over, flip back before it ends) or on a short strip beside the floor
+  // (hop out, hop back before it ends). Worth more points and more speed. Built from its own random stream and with
+  // the corridor put back as it was, so the course around it is unchanged.
+  riskStretch() {
+    const P = this.P = this.params(this.S.length), v = P.speed, s0 = this.S.length, e0 = this.events.length, w0 = this.w, dec = this.decor;
+    this.decor = []; this.noDecor = true;
+    const far = this.rnd2() < .5, s = this.rnd2() < .5 ? 1 : -1;
+    this.narrow(far ? 2 : 1);
+    const hops = far ? 0 : this.w + 1, air = far ? FLIP * v : hops * HOP * v, lane = far ? this.L + 4 : this.L + s * hops;
+    const a = this.S.length, p0 = a + .3 + Math.ceil(v * .12), p1 = p0 + Math.max(1.5, v * .28);       // the window to set off in
+    const q0 = Math.ceil(p1 + air) + 1, back0 = q0 + 2.25, b = Math.ceil(back0 + Math.max(1.3, v * .2));   // sparks at q0..q0+2; the strip ends after row b
+    const n = Math.ceil(b + .6 + air) + 2 - a;
+    this.plain(n, { noHoles: true });
+    for (let r = Math.floor(p0 + air); r <= b; r++) this.S[r] |= this.bit(lane);
+    for (let c = 0; c < 3; c++) this.item(q0 + c, lane, 'risk');
+    this.nOpt = (this.nOpt || 0) + 3;
+    const out = far ? 'F' : s > 0 ? 'L' : 'R', home = far ? 'F' : s > 0 ? 'R' : 'L', kind = far ? 'riskFar' : 'riskSide';
+    for (let h = 0; h < Math.max(1, hops); h++) this.events.push({ z0: p0 + h * .01, z1: p1 + h * .01, key: out, opt: 1, kind });
+    for (let h = 0; h < Math.max(1, hops); h++) this.events.push({ z0: back0 + h * .01, z1: b + .6 + h * .01, key: home, opt: 1, kind });
+    this.w = w0; this.noDecor = false; this.decor = dec;
+    (this.segs || (this.segs = [])).push([s0, this.S.length, kind]);
+    this.extra += this.S.length - s0;
   }
   // next obstacle from a shuffle bag (each kind turns up in proportion), never the same family twice running
   draw(last) {
@@ -605,6 +641,7 @@ class Track {
   segment() {
     const kind = this.draw(this.lastKind); this.lastKind = kind;
     const x = this.rnd(), offer = PRECISION[kind] && x < .14 ? 'slow' : CRASH[kind] && x < .3 ? 'shield' : null;
+    if (this.S.length > 150 && this.mult === 1 && this.rnd2() < .16) this.riskStretch();
     this.lead(.5, offer); this.runKind(kind);
   }
   // change pace: 1.35 = sprint, .7 = slow zone; eased in over four rows
@@ -800,6 +837,7 @@ class Runner {
     this.taken[r] = 1;
     if (it.t === 'shield') { this.shield = true; this.emit('shield'); }
     else if (it.t === 'slow') this.emit('slow');
+    else if (it.t === 'risk') { this.sparks++; this.risk = (this.risk || 0) + 1; this.pts += 300; this.emit('risk'); }
     else { this.sparks++; this.pts += it.t === 'high' ? 200 : 100; this.emit('spark'); }
   }
   air(mode, dur, high) { this.mode = mode; this.dur = dur; this.high = high || .5; this.from = this.lane; this.t = 0; this.gap = 0; }
@@ -877,6 +915,60 @@ class Bot {
   }
 }
 
+// The clock of a run. It is stepped with the physics and fed the same events, so the same presses always give the same
+// time: a run's time can be worked out again from its recording, on any machine.
+class Pace {
+  // base: the speed setting (1 = normal). plain: no boosts and no perfects (the tutorial).
+  constructor(track, base, plain) {
+    this.tr = track; this.base = base || 1; this.plain = !!plain;
+    this.boost = 0; this.over = 0; this.surge = 0; this.slowT = 0; this.t = 0;
+    this.streak = 0; this.best = 0; this.perfects = 0; this.ei = 0; this.hit = {};
+  }
+  scale() { return this.base * (1 + this.boost + this.over + this.surge) * (this.slowT > 0 ? PACE.slow : 1); }
+  gain() { return this.boost + this.over + this.surge; }   // how much faster than the base speed, as a fraction
+  // dt of game time has just been simulated: returns the real time that took, and moves the clock and the timers on
+  step(dt) {
+    const real = dt / this.scale(); this.t += real;
+    if (this.slowT > 0) this.slowT -= real;
+    if (this.surge > 0) { this.surge -= PACE.surgeMax * real / PACE.surgeSecs; if (this.surge < 0) this.surge = 0; }
+    return real;
+  }
+  // n sparks' worth of lasting speed: each closes a fixed share of the gap to the cap, so the first few are felt most
+  spark(n) {
+    if (this.plain || this.boost >= PACE.boostMax) return;
+    const k = this.tr.end === Infinity ? .06 : 1 - Math.pow(.28, 3 / Math.max(15, this.tr.nSparks));
+    for (let i = 0; i < (n || 1); i++) this.boost += (PACE.boostMax - this.boost) * k;
+    if (this.boost > PACE.boostMax * .97) this.boost = PACE.boostMax;
+  }
+  // a red spark: an ordinary spark's worth, plus a little speed beyond the cap that nothing else gives
+  risk() { this.spark(1); if (!this.plain) this.over += PACE.risk; }
+  slow() { this.slowT = PACE.slowSecs; }
+  // A press of move m at position z: which move on the course's route it answers, where in that move's window it came
+  // (f: 0 first moment, 1 last), how many seconds were left, and whether that was close enough to the end to be perfect.
+  press(m, z) {
+    const ev = this.tr.events, v = this.tr.speedAt(z), slack = v * .3;
+    while (this.ei < ev.length && ev[this.ei].z1 + slack < z) this.ei++;
+    for (let j = this.ei; j < ev.length && ev[j].z0 - slack <= z; j++) {
+      const e = ev[j]; if (this.hit[j] || e.key !== m) continue;
+      this.hit[j] = 1;
+      const f = (z - e.z0) / Math.max(.01, e.z1 - e.z0), left = (e.z1 - z) / v, perfect = !this.plain && f >= 0 && left <= PACE.perfect;
+      if (perfect) {
+        this.streak++; this.perfects++; if (this.streak > this.best) this.best = this.streak;
+        this.surge = Math.min(PACE.surgeMax, Math.max(this.surge, PACE.surge + PACE.surgeStep * (this.streak - 1)));
+      } else this.streak = 0;
+      return { e, j, f, left, perfect };
+    }
+    return null;
+  }
+  // the required move that was due and never made (for telling the player what was needed), or null
+  missed(z) {
+    const ev = this.tr.events, v = this.tr.speedAt(z);
+    let j = this.ei; while (j > 0 && ev[j - 1].z1 + v * 1.2 >= z) j--;
+    for (; j < ev.length && ev[j].z0 <= z + v * .3; j++) if (!this.hit[j] && !ev[j].opt && ev[j].z1 + v * 1.2 >= z) return ev[j];
+    return null;
+  }
+}
+
 
 // ================= setup =================
 const $ = id => document.getElementById(id);
@@ -919,6 +1011,7 @@ if (!stats || typeof stats !== 'object') stats = {};
 if (!Array.isArray(stats.lv)) stats.lv = [];
 if (!Array.isArray(stats.endless)) stats.endless = [];
 if (!stats.daily || typeof stats.daily !== 'object') stats.daily = {};
+if (!stats.know || typeof stats.know !== 'object') stats.know = {};   // how many times the player has made each kind of move: reminders stop after two
 const lvS = i => stats.lv[i] || (stats.lv[i] = { best: 0, clears: 0, tries: 0, sparks: 0, perfect: false, pclear: false });
 { const old = store.get('best', null); if (Array.isArray(old)) old.forEach((b, i) => { if (b && i < LEVELS.length) { const s = lvS(i); s.best = Math.max(s.best, b); if (b >= 100) s.clears = Math.max(1, s.clears); } }); }
 const saveStats = () => store.set('stats', stats);
@@ -940,6 +1033,8 @@ const TUNE = [
   ['coyote', 'Edge forgiveness', .03, .14, .005, .06, 's', 'play', 'How long you can run past the end of the floor and still act.'],
   ['buffer', 'Early-press memory', .15, .80, .01, .45, 's', 'play', 'How long a press made in the air waits for you to land.'],
   ['boost', 'Top speed from sparks', 0, .5, .01, .25, '%', 'play', 'How much faster a full run of sparks makes you.'],
+  ['pwin', 'Perfect window', .04, .2, .005, .09, 's', 'play', 'How close to the last moment a press must come to count as perfect.'],
+  ['surge', 'Speed from a perfect', 0, .2, .01, .12, '%', 'play', 'The burst a perfect press gives. Each one in a row adds a little more.'],
   'View',
   ['camBack', 'Camera distance', 3, 6.5, .1, 4.4, '', 'cam', 'How far behind the ball the camera sits.'],
   ['camUp', 'Camera height', 0, .9, .02, .5, '', 'cam', 'How far above the centre of the tunnel.'],
@@ -964,13 +1059,14 @@ const tuneDiff = () => { const o = {}; for (const k in TUNE0) if (!tuneSame(k)) 
 const tunedPlay = () => TUNE.some(t => typeof t !== 'string' && t[7] !== 'cam' && !tuneSame(t[0]));
 function applyTune() {
   setFeel({ hop: tune.hop, flip: tune.flip, jump: tune.jump, coyote: tune.coyote, buffer: tune.buffer });
-  CAMBACK = tune.camBack; CAMY = -tune.camUp; BR = tune.ball; BOOST_MAX = tune.boost;
+  CAMBACK = tune.camBack; CAMY = -tune.camUp; BR = tune.ball;
+  setPace({ boostMax: tune.boost, perfect: tune.pwin, surge: tune.surge, surgeMax: tune.surge > 0 ? tune.surge + .12 : 0 });
 }
 
 // ---------- play recording (temporary: so the game can be tuned from how it is really played) ----------
 // One small record per attempt: where it ended and on what, the time, sparks, how early or late each press came inside
 // the window the course allows for it, and the frame rate. Kept in this browser; see the Play data sheet.
-const BUILD = '2026-11-23h', CORE_ID = '0a9fd111a3';   // CORE_ID: which engine (generator + physics) this page was built from
+const BUILD = '2026-11-23i', CORE_ID = '1ebcb7c5d3';   // CORE_ID: which engine (generator + physics) this page was built from
 // Where play records are sent from the public copy of the game: a small relay that files them on the play-data branch
 // of the game's GitHub repository (see relay/ in the repository). Empty = nothing is sent.
 let RELAY = 'https://eightfold-relay.jamesccupps.workers.dev/', relayAnywhere = false;
@@ -1064,50 +1160,44 @@ function telEv(code) {
 const telMode = () => typeof mode === 'number' ? 'L' + (mode + 1) : mode === 'daily' ? 'D' + today().key : mode === 'endless' ? 'E' : 'T';
 function telStart(cp) {
   const now = performance.now();
-  telCur = tel.on && !bot ? { cp: cp ? Math.floor(cp.z) : 0, pr: 0, px: 0, ei: 0, hit: {}, fh: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], kk: {}, sh: 0, sl: 0, sg: 0, fn: 0, ft: 0, fj: 0, fx: 0, fb: [0, 0, 0, 0, 0, 0, 0], rs: 0, rn: 0,
+  telCur = tel.on && !bot ? { cp: cp ? Math.floor(cp.z) : 0, pr: 0, px: 0, fh: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], kk: {}, sh: 0, sl: 0, sg: 0, fn: 0, ft: 0, fj: 0, fx: 0, fb: [0, 0, 0, 0, 0, 0, 0], rs: 0, rn: 0,
     tr: [], inp: [0, 0, 0, 0, 0], tt: [], tw: 0, th: 0, pzN: 0, pzT: 0, rt: telLast && mode != null && telLast.m === telMode() ? Math.min(600, +((now - telLast.at) / 1000).toFixed(1)) : -1 } : null;
   pauseAt = 0;
 }
 // a press: find the move on the course's own route it belongs to, and note where in that move's window it came.
 // src: 0 keyboard, 1 tap on the tunnel, 2 on-screen button, 3 mouse, 4 swipe on the tunnel
-function telPress(m, src) {
+function telPress(m, src, hit) {
   const c = telCur; if (!c) return; c.pr++; c.inp[src | 0]++;
-  const ev = track.events, z = runner.z, v = track.speedAt(z), slack = v * .3;
   // the trace: every press as position (hundredths of a row) and move, so the run can be replayed against its course
-  if (c.tr.length >= 400) c.tr.splice(0, 2); c.tr.push(Math.floor(z * 100), 'LRFJ'.indexOf(m));
-  while (c.ei < ev.length && ev[c.ei].z1 + slack < z) c.ei++;
-  for (let j = c.ei; j < ev.length && ev[j].z0 - slack <= z; j++) {
-    const e = ev[j]; if (c.hit[j] || e.key !== m) continue;
-    c.hit[j] = 1;
-    const f = (z - e.z0) / Math.max(.01, e.z1 - e.z0), ms = Math.round((e.z1 - z) / v / timeScale() * 1000);
-    c.fh[f < 0 ? 0 : f >= 1 ? 11 : 1 + Math.floor(f * 10)]++;
-    const k = e.kind || (e.opt ? 'detour' : 'other'), a = c.kk[k] || (c.kk[k] = [0, 0, 0, 0, 1e9]);
-    a[0]++; a[1] += clamp(f, -1, 2); if (f >= 1) a[2]++; else if (f < 0) a[3]++; if (ms < a[4]) a[4] = ms;
-    return;
-  }
-  c.px++;   // a press the route did not call for
+  if (c.tr.length >= 400) c.tr.splice(0, 2); c.tr.push(Math.floor(runner.z * 100), 'LRFJ'.indexOf(m));
+  if (!hit) { c.px++; return; }   // a press the route did not call for
+  const e = hit.e, f = hit.f, ms = Math.round(hit.left / timeScale() * 1000);
+  c.fh[f < 0 ? 0 : f >= 1 ? 11 : 1 + Math.floor(f * 10)]++;
+  const k = e.kind || (e.opt ? 'detour' : 'other'), a = c.kk[k] || (c.kk[k] = [0, 0, 0, 0, 1e9]);
+  a[0]++; a[1] += clamp(f, -1, 2); if (f >= 1) a[2]++; else if (f < 0) a[3]++; if (ms < a[4]) a[4] = ms;
 }
 function telEnd(res) {
   const c = telCur; if (!c) return; telCur = null;
   if (mode == null || !track || !runner || bot) return;
   const z = c.dz != null ? c.dz : runner.z, row = Math.floor(z), v = track.speedAt(z), ev = track.events, win = res === 'win';   // dz: where the ball was when the run ended
   if (pauseAt) { c.pzT += performance.now() - pauseAt; pauseAt = 0; }
-  const rec = { s: SID, i: telSeq++, cs: track.checksum(), t: Math.round(Date.now() / 1000), m: telMode(), a: tries, res, pc: score(), z: row, d: +runT.toFixed(1), sp: runner.sparks, pts: tally(win).total, pr: c.pr, px: c.px, fh: c.fh,
+  const rec = { s: SID, i: telSeq++, cs: track.checksum(), t: Math.round(Date.now() / 1000), m: telMode(), a: tries, res, pc: score(), z: row, d: +runT.toFixed(2), sp: runner.sparks, pts: tally(win).total, pr: c.pr, px: c.px, fh: c.fh,
     fps: c.ft > 0 ? Math.round(c.fn / c.ft) : 0, fj: c.fj, fx: Math.min(9999, Math.round(c.fx)),
     ft: c.fb, rm: c.rn ? +(c.rs / c.rn).toFixed(2) : 0 };   // ft: frames taking under 9, 13, 18, 25, 35, 50 and over 50 ms; rm: ms spent drawing each frame
   if (!win) {
     rec.k = track.kindAt(row); rec.ln = runner.lane & 7;
     if (runner.dead) rec.am = Math.max(0, ['ground', 'hop', 'flip', 'jump'].indexOf(runner.dead.was));   // on the floor, or mid turn / flip / jump
     // the required move that was due and never made, and how long past its last moment the run ended (ms; negative = still time)
-    let j = c.ei; while (j > 0 && ev[j - 1].z1 + v * 1.2 >= z) j--;
-    for (; j < ev.length && ev[j].z0 <= z + v * .3; j++) if (!c.hit[j] && !ev[j].opt && ev[j].z1 + v * 1.2 >= z) { rec.nx = [ev[j].kind || 'other', ev[j].key, Math.round((z - ev[j].z1) / v * 1000)]; break; }
+    const due = pace.missed(z); if (due) rec.nx = [due.kind || 'other', due.key, Math.round((z - due.z1) / v * 1000)];
   }
   const kk = {}; let any = false; for (const k in c.kk) { const a = c.kk[k]; kk[k] = [a[0], Math.round(a[1] / a[0] * 100), a[2], a[3], a[4]]; any = true; }
   if (any) rec.kk = kk;
   if (c.tr.length) rec.tr = c.tr;
   if (c.pr) rec.in = c.inp;
   if (track.end !== Infinity) rec.ns = track.nSparks; else rec.seed = track.seed;
-  if (boost > 0) rec.bo = Math.round(boost * 100);
+  if (pace.boost > 0) rec.bo = Math.round(pace.boost * 100);
+  if (pace.perfects) rec.pf = [pace.perfects, pace.best];                 // perfect presses, and the longest run of them
+  if (track.nRisk || runner.risk) rec.rk = [runner.risk | 0, track.end === Infinity ? 0 : track.nRisk | 0];   // red sparks taken, of how many
   if (c.cp) rec.cp = c.cp; if (c.sh) rec.sh = c.sh; if (c.sl) rec.sl = c.sl; if (c.sg) rec.sg = c.sg;
   if (c.tt.length) rec.tt = c.tt;                                   // tutorial: step, ms the step waited for its key, wrong keys first
   if (c.pzN) rec.pz = [c.pzN, Math.round(c.pzT / 1000)];          // pauses, and seconds spent paused
@@ -1309,7 +1399,9 @@ const Snd = {
     else if (name === 'jump') this.tone('triangle', 330, 660, t, .16, .16);
     else if (name === 'launch') { this.tone('sine', 220, 990, t, .5, .2); this.noise(t, .3, .06, 4000); }
     else if (name === 'flip') { this.tone('sine', 280, 880, t, .28, .16); this.noise(t, .2, .05, 3000); }
-    else if (name === 'spark') { const k = 1 + boost * 2.2; this.tone('triangle', 1320 * k, 1760 * k, t, .09, .12); }
+    else if (name === 'spark') { const k = 1 + (pace ? pace.boost : 0) * 2.2; this.tone('triangle', 1320 * k, 1760 * k, t, .09, .12); }
+    else if (name === 'risk') { this.tone('triangle', 1760, 2640, t, .1, .14); this.tone('triangle', 2640, 3520, t + .07, .12, .12); }
+    else if (name === 'perfect') this.tone('sine', 1975, 2960, t, .07, .1);
     else if (name === 'shield' || name === 'slow') { this.tone('triangle', 660, 0, t, .12, .16); this.tone('triangle', 990, 0, t + .09, .2, .16); }
     else if (name === 'shieldhit') { this.noise(t, .2, .3, 1200); this.tone('square', 180, 90, t, .2, .15, 1200); }
     else if (name === 'fall' || name === 'crash') { this.noise(t, .35, .45, name === 'crash' ? 300 : 900); this.tone('sawtooth', 220, 38, t, .45, .3, 900); }
@@ -1320,23 +1412,18 @@ const Snd = {
 // ================= game state =================
 let state = 'menu';            // menu | play | dead | fail | win | pause
 let mode = null;               // level index, 'endless', 'daily' or 'tutorial'
-let track, runner, bot = null, deadT = 0, failT = 0, tries = 0, runT = 0, slowT = 0, shake = 0, flash = 0;
+let track, runner, bot = null, deadT = 0, failT = 0, tries = 0, runT = 0, shake = 0, flash = 0;
 let tutI = 0, tutNote = 0, frozen = false, lastZone = 0;
 let shards = [], ballAt = { x: 0, y: 0, R: 10 }, lastPc = '', lastSp = '', lastTm = '';
-let BOOST_MAX = .25;     // sparks add speed for the rest of the run, up to +25% (the tuning drawer can change it)
-// Each spark closes a fixed share of the gap to the cap, so the first few are felt and the rest top it up:
-// about 70% of the cap by a third of a level's sparks, all of it by roughly nine in ten.
-function addBoost() {
-  const k = track.end === Infinity ? .06 : 1 - Math.pow(.28, 3 / Math.max(15, track.nSparks));
-  boost += (BOOST_MAX - boost) * k; if (boost > BOOST_MAX * .97) boost = BOOST_MAX;
-}
-let boostVis = 0, kick = 0;   // eased copy of the boost for the view, music and streaks; kick is a brief pulse on each pickup
-let boost = 0;
+// The run's clock and speed live in the engine (Pace): sparks add lasting speed, a press at the last moment adds a surge.
+let pace = null, perfAt = 0, perfFlash = 0, deathZ = 0, coachI = 0, coachOn = null;
+let boostVis = 0, kick = 0;   // eased copy of the speed-up for the view, music and streaks; kick is a brief pulse on each pickup
 const fmtN = n => Math.round(n).toLocaleString('en-US');
 function parOf(tr) { if (tr.end === Infinity) return 0; if (tr.par == null) { let t = 0; for (let r = 0; r < tr.end; r++) t += 1 / tr.V[r]; tr.par = t; } return tr.par; }
 // points for the run so far (or the finished run): what each part is worth
 function tally(win) {
   const parts = [['Sparks', runner.pts]];
+  if (pace && pace.perfects) parts.push(['Perfect timing', pace.perfects * 50]);
   if (track.end === Infinity) parts.push(['Distance', Math.floor(runner.z) * 10]);
   else {
     parts.push(['Progress', score() * 10]);
@@ -1350,21 +1437,24 @@ function tally(win) {
 }
 const practice = () => opts.speed < 1 || opts.cp || tunedPlay();
 // how much faster or slower than real time the run is going right now
-const timeScale = () => state === 'menu' || mode === 'tutorial' ? 1 : opts.speed * tune.pace * (1 + boost) * (slowT > 0 && state === 'play' ? .6 : 1);
+const timeScale = () => state === 'menu' || !pace ? 1 : pace.scale();
 let resumeCp = null, touchSeen = false;
 const scored = () => mode !== 'tutorial' && !practice();
 
 function toast(t) { const el = $('toast'); el.className = 'toast'; el.textContent = t; void el.offsetWidth; el.className = 'toast show'; }
 function showBig(html) { const el = $('big'); el.className = 'big'; el.innerHTML = html; void el.offsetWidth; el.className = 'big show'; }
 function attach() {
-  runner = new Runner(track);
+  runner = new Runner(track); pace = new Pace(track, 1, true);
   runner.on = name => {
     if (state !== 'play') return;
     if (telCur) { if (name === 'shieldhit') telCur.sh++; else if (name === 'slow') telCur.sl++; else if (name === 'shield') telCur.sg++; }
     Snd.fx(name);
-    if (name === 'spark' && mode !== 'tutorial' && boost < BOOST_MAX) { addBoost(); kick = 1; if (boost >= BOOST_MAX) toast('Top speed'); }
+    if ((name === 'spark' || name === 'risk') && mode !== 'tutorial') {
+      const was = pace.boost; if (name === 'risk') pace.risk(); else pace.spark(1); kick = 1;
+      if (pace.boost > was && pace.boost >= PACE.boostMax) toast('Top speed');
+    }
     if (name === 'shield') toast('Shield');
-    else if (name === 'slow') { slowT = 3.5; toast('Slow-mo'); }
+    else if (name === 'slow') { pace.slow(); toast('Slow-mo'); }
     else if (name === 'shieldhit') { toast('Shield used'); if (!calm()) shake = .6; burst(10); }
     else if (name === 'crash') burst(16);
   };
@@ -1378,8 +1468,9 @@ function modeName() { return mode === 'endless' ? 'Endless' : mode === 'daily' ?
 function hidePanels() { for (const id of ['menu', 'pausePanel', 'failPanel', 'winPanel', 'scoreSheet', 'ctrlSheet', 'briefSheet', 'tuneSheet', 'dataSheet', 'noteSheet']) $(id).hidden = true; overlay = null; }
 function begin(first, cp) {
   telEnd('restart'); attach(); bot = null; state = 'play'; telStart(cp);
+  pace = new Pace(track, mode === 'tutorial' ? 1 : opts.speed * tune.pace, mode === 'tutorial'); coachI = 0; coachOn = null; perfFlash = 0; lastPerf = -1;
   if (cp) { runner.z = cp.z; runner.lane = runner.from = runner.cam = cp.lane; } shards.length = 0; shake = 0; flash = 0; lastPc = lastSp = lastTm = '';
-  lastProg = ''; lastPts = ''; lastBoost = -1; lastFlags = -1; boost = 0; boostVis = 0; kick = 0; runT = 0; slowT = 0; tutI = 0; tutNote = 0; frozen = false; lastZone = cp ? (track.Z[Math.floor(cp.z)] || 0) : 0; tries++;
+  lastProg = ''; lastPts = ''; lastBoost = -1; lastFlags = -1; boostVis = 0; kick = 0; runT = 0; tutI = 0; tutNote = 0; frozen = false; lastZone = cp ? (track.Z[Math.floor(cp.z)] || 0) : 0; tries++;
   hidePanels(); $('tip').hidden = true;
   $('hud').hidden = false; $('bar').hidden = false; $('btnPause').hidden = false;
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
@@ -1458,7 +1549,9 @@ function showBrief(m, tr, song) {
   $('brAlsoH').hidden = !old.length; const also = $('brAlso'); also.textContent = ''; also.className = fresh.length ? 'chips' : 'cards';
   for (const t of old) { if (fresh.length) { const c = document.createElement('span'); c.className = 'chip'; c.textContent = TYPES[t][0]; also.appendChild(c); } else also.appendChild(card(t, false)); }
   let nSh = 0, nSl = 0; if (tr.end !== Infinity) for (const r in tr.I) { if (tr.I[r].t === 'shield') nSh++; else if (tr.I[r].t === 'slow') nSl++; }
-  $('brNote').textContent = 'Sparks mark the line: over each jump and past each opening. Each is worth 100 points (200 in the air) and adds speed, most of it from the first few, up to +' + Math.round(BOOST_MAX * 100) + '%. That is how you beat par.'
+  $('brNote').textContent = 'Sparks mark the line: over each jump and past each opening. Each is worth 100 points (200 in the air) and adds speed, most of it from the first few, up to +' + Math.round(PACE.boostMax * 100) + '%. That is how you beat par.'
+    + ' A press at the last moment is a perfect: a burst of speed that grows with each one in a row.'
+    + (tr.nRisk || tr.end === Infinity ? ' Red sparks sit off the safe line: three times the points, and speed beyond the usual top speed, if you get back before the strip ends.' : '')
     + (nSh ? ' ' + (nSh > 1 ? nSh + ' shields sit' : 'A shield sits') + ' on your route before the walls.' : '')
     + (nSl ? ' Slow-mo sits one lane off the route before ' + (nSl > 1 ? 'the rhythm sections' : 'a rhythm section') + ': it helps, but it costs time.' : '')
     + (tr.end === Infinity ? ' Shields and slow-mo turn up before the sections they suit.' : '');
@@ -1482,7 +1575,7 @@ function record(win) {   // returns { best, rec, total, parts, newScore, newTime
   const s = score(), sp = runner.sparks, tl = tally(win); let best = s, rec = false, newScore = false, newTime = false;
   if (!scored()) {
     if (win && typeof mode === 'number' && !lvS(mode).pclear) { lvS(mode).pclear = true; saveStats(); }
-    return { best: null, rec: false, total: tl.total, parts: tl.parts };
+    saveStats(); return { best: null, rec: false, total: tl.total, parts: tl.parts };
   }
   stats.total = (stats.total || 0) + sp;
   const marks = st => {   // best score and, for a finished run, best time
@@ -1518,7 +1611,12 @@ function showFail() {
   $('btnFromStart').hidden = !resumeCp;
   const bits = [runner.dead && runner.dead.kind === 'crash' ? 'Hit an obstacle' : 'Fell through a gap', fmtN(r.total) + ' points', fmtT(runT), sparkText()];
   if (r.best != null) bits.push(r.rec ? 'new best' : 'best ' + r.best + (endless ? ' m' : '%'));
+  if (pace.perfects) bits.push(pace.perfects + ' perfect');
   bits.push('attempt ' + tries);
+  // what the run ended on, and the move it needed
+  const need = mode === 'tutorial' ? null : pace.missed(deathZ), ng = need && GROUP[need.kind], NT = ng && TYPES[ng], fn = $('failNeed');
+  fn.hidden = !(NT && NT[2]);
+  if (!fn.hidden) { fn.innerHTML = esc(NT[0]) + ': ' + esc(NT[1]) + ' <kbd>' + keyHtml(need.key) + '</kbd>'; }
   $('failStat').textContent = bits.join('  ·  ');
   $('btnNew').hidden = mode !== 'endless';
   $('failHint').textContent = (practice() && mode !== 'tutorial' ? 'Practice run: not recorded. ' : '') + (touchSeen ? 'Restart replays' : 'Press ' + labelFor('restart') + ' or ' + labelFor('jump') + ' to restart') + (resumeCp ? ' from the checkpoint.' : ' the same course.');
@@ -1529,9 +1627,9 @@ function onWin() {
   state = 'win'; Snd.fx('win'); telEv('win:' + telMode()); $('big').className = 'big'; $('tip').hidden = true; $('btnPause').hidden = true;
   const res = record(true);
   const tut = mode === 'tutorial', lv = typeof mode === 'number', perfect = runner.sparks >= track.nSparks;
-  if (tut) { stats.tut = true; saveStats(); }
+  if (tut) { stats.tut = true; for (const g of ['turns', 'overhead', 'blocks', 'bars', 'gaps', 'ringgap', 'beams', 'sweepers']) stats.know[g] = Math.max(2, stats.know[g] | 0); saveStats(); }
   $('winTitle').textContent = tut ? 'You are set.' : lv && mode === LEVELS.length - 1 ? 'All eight. Done.' : 'Through.';
-  $('winStat').textContent = tut ? '' : [fmtN(res.total) + ' points' + (res.newScore ? ' (new best)' : ''), fmtT(runT) + (res.newTime ? ' (new best)' : '') + ', par ' + fmtT(parOf(track)), sparkText() + (perfect ? ', all of them' : ''), 'attempt ' + tries].join('  ·  ');
+  $('winStat').textContent = tut ? '' : [fmtN(res.total) + ' points' + (res.newScore ? ' (new best)' : ''), fmtT(runT) + (res.newTime ? ' (new best)' : '') + ', par ' + fmtT(parOf(track)), sparkText() + (perfect ? ', all of them' : ''), (pace.perfects ? pace.perfects + ' perfect' + (pace.best > 1 ? ' (best run of ' + pace.best + ')' : '') : 'no perfects'), 'attempt ' + tries].join('  ·  ');
   $('winParts').textContent = tut ? '' : res.parts.filter(p => p[1] > 0).map(p => p[0] + ' ' + fmtN(p[1])).join('  +  ');
   $('winText').textContent = tut ? 'That is every move. Key bindings and a practice speed are under Controls & options.'
     : practice() ? 'Cleared in practice: the next level unlocks, but the score is not recorded.'
@@ -1553,6 +1651,17 @@ function setPause(p) {
 }
 
 // ---------- tutorial: the run freezes at each obstacle until the right key is pressed ----------
+const keyHtml = k => touchSeen ? ({ L: '\u25C0', R: '\u25B6', F: 'Flip', J: 'Jump' })[k] : esc(labelFor(actionForMove(k)));
+const MOVE = { L: 'turn', R: 'turn', F: 'flip', J: 'jump' };
+// Outside the tutorial: the first two times a kind of obstacle comes up, say what it is and which key answers it.
+function coach() {
+  const ev = track.events, z = runner.z;
+  while (coachI < ev.length && (ev[coachI].opt || ev[coachI].z1 + 1 < z || pace.hit[coachI])) coachI++;
+  const e = ev[coachI], g = e && GROUP[e.kind], T = g && TYPES[g], tip = $('tip');
+  if (T && T[2] && (stats.know[g] | 0) < 2 && z >= e.z0 - track.speedAt(z) * 1.5) {
+    if (coachOn !== e) { coachOn = e; tip.innerHTML = esc(T[0]) + ': <kbd>' + keyHtml(e.key) + '</kbd> ' + MOVE[e.key]; tip.className = 'tip coach'; tip.hidden = false; }
+  } else if (coachOn) { coachOn = null; tip.hidden = true; }
+}
 function tipHtml(e) {
   if (touchSeen) return esc(e.tip.replace('Press {K}', 'Tap {K}').replace('press {K}', 'tap {K}')).replace('{K}', '<kbd>' + ({ L: '\u25C0', R: '\u25B6', F: 'Flip', J: 'Jump' })[e.key] + '</kbd>');
   return esc(e.tip).replace('{K}', '<kbd>' + esc(labelFor(actionForMove(e.key))) + '</kbd>');
@@ -1577,9 +1686,10 @@ function tick(dt) {
   runner.step(dt);
   if (state === 'menu') { if (runner.dead || runner.z > 700) startAttract(); }
   else if (state === 'play') {
-    if (runner.dead) { state = 'dead'; deadT = 0; if (telCur) telCur.dz = runner.z; if (!calm()) { shake = 1; flash = .5; } }
+    if (runner.dead) { state = 'dead'; deadT = 0; deathZ = runner.z; if (telCur) telCur.dz = runner.z; if (!calm()) { shake = 1; flash = .5; } }
     else if (runner.z >= track.end) onWin();
     else {
+      if (mode !== 'tutorial') coach();
       const zn = track.Z[Math.floor(runner.z)] || 0;
       if (zn !== lastZone) { lastZone = zn; if (zn === 1) toast('Sprint'); else if (zn === 2) toast('Slow zone'); }
     }
@@ -1657,10 +1767,14 @@ function drawBeam(pos, dA, dB, col, far, fog) {
   quad(cx + a1x * sA, cy + a1y * sA, cx + a2x * sA, cy + a2y * sA, cx + b1x * sA, cy + b1y * sA, cx + b2x * sA, cy + b2y * sA); ctx.fill(); ctx.stroke();
 }
 function drawItem(it, dm, fog) {
-  const s = F / dm, high = it.t === 'high'; lanePt(it.lane, high ? .5 : .78, 0);
+  const s = F / dm, high = it.t === 'high', risk = it.t === 'risk'; lanePt(it.lane, high ? .5 : .78, 0);
   const x = cx + PT[0] * s, y = cy + (PT[1] - CAMY) * s, u = s * .075;
   ctx.globalAlpha = 1 - fog * .85;
-  if (it.t === 'spark' || high) {
+  if (risk) {   // a red spark: bigger, in the hazard colour, with a white heart
+    const q = u * 1.5; ctx.fillStyle = rgb(pal.hz); ctx.beginPath(); ctx.moveTo(x, y - q * 1.35); ctx.lineTo(x + q, y); ctx.lineTo(x, y + q * 1.35); ctx.lineTo(x - q, y); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(x, y - q * .55); ctx.lineTo(x + q * .42, y); ctx.lineTo(x, y + q * .55); ctx.lineTo(x - q * .42, y); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = rgb(pal.hz); ctx.lineWidth = Math.max(1, u * .3); ctx.beginPath(); ctx.arc(x, y, q * 1.9, 0, 6.2832); ctx.stroke();
+  } else if (it.t === 'spark' || high) {
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(x, y - u * 1.35); ctx.lineTo(x + u, y); ctx.lineTo(x, y + u * 1.35); ctx.lineTo(x - u, y); ctx.closePath(); ctx.fill();
     if (high) { ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, u * .28); ctx.beginPath(); ctx.arc(x, y, u * 2.1, 0, 6.2832); ctx.stroke(); }
   } else {
@@ -1697,7 +1811,7 @@ function render(fdt, lead) {
   if (!track.level && Math.abs(z - palZ) > 2) { pal = endlessPal(z); palZ = z; }
   F = Math.min(W * 1.25, H * 1.4) * tune.zoom;
   if (pal !== pcPal || W !== pcW || H !== pcH) prepPal();
-  const rush = calm() || BOOST_MAX <= 0 || state !== 'play' && state !== 'dead' ? 0 : Math.min(1, boostVis / BOOST_MAX);   // 0..1: how much of the boost is in play
+  const top = PACE.boostMax + PACE.surgeMax + .09, rush = calm() || top <= 0 || state !== 'play' && state !== 'dead' ? 0 : Math.min(1, boostVis / top);   // 0..1: how much of the boost is in play
   F *= 1 - rush * .1 - (calm() ? 0 : kick * .012);   // wider view at speed, with a small punch on each spark
   syncCss(false);
   const pulse = Snd.pulse(), pat = track.level ? track.level.pat : 0;
@@ -1796,6 +1910,10 @@ function render(fdt, lead) {
     }
     if (j === zb) drawRunner(v, cam);
   }
+  if (perfFlash > 0) {   // a ring off the ball on a perfect press
+    if (!calm()) { ctx.globalAlpha = perfFlash; ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(2, ballAt.R * .22); ctx.beginPath(); ctx.arc(ballAt.x, ballAt.y, ballAt.R * (1.25 + (1 - perfFlash) * 1.7), 0, 6.2832); ctx.stroke(); ctx.globalAlpha = 1; ctx.lineWidth = 1; }
+    perfFlash = Math.max(0, perfFlash - fdt * 3.2);
+  }
 
   if (shards.length) {
     ctx.fillStyle = '#fff';
@@ -1836,7 +1954,7 @@ function drawRunner(v, cam) {
 let lastFlags = -1, lastProg = '';
 const EL = {};
 for (const id of ['hudPc', 'hudSp', 'hudTm', 'hudPts', 'tgBoost', 'prog', 'tgShield', 'tgSlow', 'pad']) EL[id] = $(id);
-let lastPts = '', lastBoost = -1;
+let lastPts = '', lastBoost = -1, lastPerf = -1;
 function hud() {
   if (state === 'menu' || state === 'brief') { if (lastFlags !== 0) { lastFlags = 0; $('pad').hidden = true; } return; }
   const endless = track.end === Infinity, s = score(), txt = endless ? s + ' m' : s + '%';
@@ -1845,8 +1963,10 @@ function hud() {
   if (sp !== lastSp) { lastSp = sp; EL.hudSp.textContent = sp; }
   const tm = fmtT(runT); if (tm !== lastTm) { lastTm = tm; EL.hudTm.textContent = tm; }
   const pts = mode === 'tutorial' ? '' : fmtN(tally(false).total) + ' pts'; if (pts !== lastPts) { lastPts = pts; EL.hudPts.textContent = pts; }
-  const bp = mode === 'tutorial' ? 0 : Math.round(boost * 100); if (bp !== lastBoost) { lastBoost = bp; EL.tgBoost.hidden = !bp; EL.tgBoost.textContent = '+' + bp + '% speed'; if (bp) { EL.tgBoost.classList.remove('bump'); void EL.tgBoost.offsetWidth; EL.tgBoost.classList.add('bump'); } }
-  const flags = (runner.shield ? 1 : 0) | (slowT > 0 ? 2 : 0) | (touchSeen && (state === 'play' || state === 'dead') ? 4 : 0);
+  const ps = pace.streak > 0 && performance.now() - perfAt < 1600 ? pace.streak : 0;
+  if (ps !== lastPerf) { const el = $('tgPerf'); lastPerf = ps; el.hidden = !ps; if (ps) { el.textContent = ps > 1 ? 'Perfect \u00D7' + ps : 'Perfect'; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); } }
+  const bp = mode === 'tutorial' ? 0 : Math.round(pace.gain() * 100); if (bp !== lastBoost) { const up = bp > lastBoost; lastBoost = bp; EL.tgBoost.hidden = !bp; EL.tgBoost.textContent = '+' + bp + '% speed'; if (bp && up) { EL.tgBoost.classList.remove('bump'); void EL.tgBoost.offsetWidth; EL.tgBoost.classList.add('bump'); } }
+  const flags = (runner.shield ? 1 : 0) | (pace.slowT > 0 ? 2 : 0) | (touchSeen && (state === 'play' || state === 'dead') ? 4 : 0);
   if (flags !== lastFlags) { lastFlags = flags; EL.tgShield.hidden = !(flags & 1); EL.tgSlow.hidden = !(flags & 2); EL.pad.hidden = !(flags & 4); }
   const top = stats.endless[0] ? stats.endless[0].m : 0;
   const pr = (endless ? clamp(runner.z / Math.max(80, top), 0, 1) : clamp(runner.z / track.end, 0, 1)).toFixed(3);
@@ -2017,6 +2137,7 @@ function openTune() {
 function closeTune(play) {
   if (overlay !== 'tuneSheet') return;
   $('tuneSheet').hidden = true; overlay = null; idleFor = 0; saveTune();
+  if (pace && mode != null && mode !== 'tutorial') pace.base = opts.speed * tune.pace;
   if (tuneTouched) telTune();
   const dirty = tuneDirty; tuneDirty = false;
   if (state === 'menu') {
@@ -2123,7 +2244,12 @@ function act(m, src) {   // m: 'L' | 'R' | 'F' | 'J'; src: 0 keyboard, 1 touch o
     } else if (c) c.tw++;
     return;
   }
-  telPress(m, src); runner.press(m);
+  const hit = pace.press(m, runner.z);
+  if (hit) {
+    const g = !hit.e.opt && GROUP[hit.e.kind]; if (g) stats.know[g] = Math.min(9, (stats.know[g] | 0) + 1);
+    if (hit.perfect) { perfAt = performance.now(); perfFlash = 1; kick = Math.max(kick, .8); Snd.fx('perfect'); }
+  }
+  telPress(m, src, hit); runner.press(m);
 }
 const turn = left => (left !== opts.invert) ? 'L' : 'R';
 window.addEventListener('keydown', e => {
@@ -2242,21 +2368,29 @@ function frame(ts) {
   }
   if (state === 'fail') failT += dt;
   if (telCur && state === 'play' && dt > 0) { telCur.fn++; telCur.ft += dt; if (dt > .025) telCur.fj++; }
-  boostVis += (boost - boostVis) * Math.min(1, dt * 4); if (kick > 0) kick = Math.max(0, kick - dt * 3);
+  boostVis += ((pace ? pace.gain() : 0) - boostVis) * Math.min(1, dt * 5); if (kick > 0) kick = Math.max(0, kick - dt * 3);
   Snd.rate = 1 + (state === 'play' && mode !== 'tutorial' ? boostVis : 0) * .6;   // the music speeds up with you
   // screens where nothing moves (paused, result, briefing, or a sheet covering the tunnel) are drawn for a moment, then left alone
   const still = state === 'pause' || state === 'fail' || state === 'brief' || overlay !== null;
   if (still) idleFor += dt; else idleFor = 0;
   if (!still) {
     // practice speed and slow-mo stretch time itself, so every jump and gap keeps its proportions
-    let scale = state === 'menu' ? 1 : (mode === 'tutorial' ? 1 : opts.speed * tune.pace * (1 + boost));
-    if (state === 'play' && !frozen) runT += dt;   // the level clock is real time, so going faster shows
-    if (slowT > 0 && state === 'play') { slowT -= dt; scale *= .6; }
-    acc += dt * scale; while (acc >= STEP) { tick(STEP); acc -= STEP; if (state === 'fail' || state === 'win') { acc = 0; break; } }
+// Practice speed, sparks, perfect presses and slow-mo all stretch time itself, so every jump and gap keeps its proportions.
+    // Each physics step costs STEP / scale of real time, and the level clock is the sum of those costs, so the same
+    // presses give the same time on any machine, however smoothly it runs.
+    acc += dt;
+    for (let n = 0; n < 96; n++) {
+      const sc = state === 'menu' ? 1 : pace.scale();
+      if (acc < STEP / sc) break;
+      const playing = state === 'play';
+      tick(STEP);
+      if (playing && state === 'play' && !frozen) { acc -= pace.step(STEP); runT = pace.t; } else acc -= STEP / sc;
+      if (state === 'fail' || state === 'win') { acc = 0; break; }
+    }
   }
   Snd.pump();
   if (!still || idleFor < 1.2) {
-    const lead = !still && !frozen && !runner.dead && (state === 'play' || state === 'menu' || state === 'win') ? acc : 0;
+    const lead = !still && !frozen && !runner.dead && (state === 'play' || state === 'menu' || state === 'win') ? acc * (state === 'menu' ? 1 : pace.scale()) : 0;
     const t0 = performance.now(); render(state === 'pause' ? 0 : dt, lead); const rms = performance.now() - t0; pf.ms += rms; pf.n++;
     if (telCur && state === 'play') { telCur.rs += rms; telCur.rn++; }
     if ((++frameNo & 3) === 0 || still) hud();

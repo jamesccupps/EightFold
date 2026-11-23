@@ -8,7 +8,13 @@ function setFeel(o) {
   for (const k in FEEL0) if (typeof src[k] === 'number' && isFinite(src[k])) o[k] = src[k];   // anything missing keeps its default
   HOP = o.hop; FLIP = o.flip; JUMP = o.jump; COYOTE = Math.max(LANDGRACE + .005, o.coyote); PEND = o.buffer;
 }
-const HZ0 = .38, HZ1 = .62;   // the slice of a row a low bar occupies
+const HZ0 = .38, HZ1 = .62;
+// Pace: how fast time runs. Sparks add lasting speed, a press at the last moment adds a short surge, slow-mo stretches time.
+//   boostMax: the most ordinary sparks can add.  risk: what each red spark adds on top of that, for good.  perfect: seconds before a move's last moment that count as "at the last moment".
+//   surge: the burst a perfect press gives; each perfect in a row adds surgeStep, up to surgeMax; it fades over surgeSecs.
+const PACE = { boostMax: .25, risk: .01, perfect: .09, surge: .12, surgeStep: .02, surgeMax: .24, surgeSecs: 3, slow: .6, slowSecs: 3.5 };
+const PACE0 = Object.assign({}, PACE);
+function setPace(o) { Object.assign(PACE, PACE0); for (const k in PACE0) if (o && typeof o[k] === 'number' && isFinite(o[k])) PACE[k] = o[k]; }   // the slice of a row a low bar occupies
 
 function rng(a) {
   return function () {
@@ -69,6 +75,7 @@ class Track {
   // cfg: a level config, or null for the endless run
   constructor(seed, cfg) {
     this.rnd = rng(seed); this.seed = seed;
+    this.rnd2 = rng((seed ^ 0x5bd1e995) >>> 0); this.extra = 0;   // a second stream for the risk routes, so adding them leaves the rest of the course as it was
     // per row: solid lanes, tall-block lanes, low-bar lanes, launch-pad lanes, no-flip flag, speed, zone (1 sprint, 2 slow)
     this.S = []; this.B = []; this.H = []; this.PD = []; this.X = []; this.V = []; this.Z = [];
     this.G = {};                       // per row: moving-obstacle drawing info
@@ -141,7 +148,7 @@ class Track {
     this.S.push(m); this.B.push(b || 0); this.H.push(0); this.PD.push(0); this.X.push(0); this.Z.push(this.zone);
     this.V.push(this.vo || this.base(row) * this.mult);
   }
-  item(r, lane, t) { if (!this.I[r]) { this.I[r] = { lane: lane & 7, t }; if (t === 'spark' || t === 'high') this.nSparks++; } }
+  item(r, lane, t) { if (!this.I[r]) { this.I[r] = { lane: lane & 7, t }; if (t === 'spark' || t === 'high' || t === 'risk') this.nSparks++; if (t === 'risk') this.nRisk = (this.nRisk || 0) + 1; } }
   spark(r, lane) { this.item(r, lane, 'spark'); }
   plain(n, o) {
     o = o || {};
@@ -177,9 +184,10 @@ class Track {
   // gaps between obstacles shrink, give a breather at half way, then test everything close together.
   layout(cfg, N) {
     let shields = cfg.shields | 0, slows = cfg.slows | 0, breathed = false, last = null;
+    const risks = cfg.risk == null ? 3 : cfg.risk; let risked = 0;
     for (const k of cfg.fresh || []) { this.lead(-.4, null); this.runKind(k); last = k; }
-    while (this.S.length < N) {
-      const prog = this.S.length / N;
+    while (this.S.length - this.extra < N) {
+      const prog = (this.S.length - this.extra) / N;
       if (!breathed && prog >= .5) { breathed = true; this.breather(shields > 0); if (shields > 0) shields--; continue; }
       const kind = this.draw(last); last = kind;
       // what the stretch before this obstacle offers: slow-mo (off the route, your choice) before a rhythm section,
@@ -187,8 +195,34 @@ class Track {
       let offer = null;
       if (slows > 0 && prog > .6 && PRECISION[kind]) { offer = 'slow'; slows--; }
       else if (shields > 0 && prog > .72 && CRASH[kind]) { offer = 'shield'; shields--; }
+      // a risk route now and then: an optional stretch with red sparks off the safe line
+      if (risked < risks && prog >= (risked + 1) / (risks + 1) && this.mult === 1) { this.riskStretch(); risked++; }
       this.lead(prog, offer); this.runKind(kind);
     }
+  }
+  // Risk route: a calm straight where the safe line carries on, and three red sparks sit somewhere that takes nerve:
+  // on a short strip along the far wall (flip over, flip back before it ends) or on a short strip beside the floor
+  // (hop out, hop back before it ends). Worth more points and more speed. Built from its own random stream and with
+  // the corridor put back as it was, so the course around it is unchanged.
+  riskStretch() {
+    const P = this.P = this.params(this.S.length), v = P.speed, s0 = this.S.length, e0 = this.events.length, w0 = this.w, dec = this.decor;
+    this.decor = []; this.noDecor = true;
+    const far = this.rnd2() < .5, s = this.rnd2() < .5 ? 1 : -1;
+    this.narrow(far ? 2 : 1);
+    const hops = far ? 0 : this.w + 1, air = far ? FLIP * v : hops * HOP * v, lane = far ? this.L + 4 : this.L + s * hops;
+    const a = this.S.length, p0 = a + .3 + Math.ceil(v * .12), p1 = p0 + Math.max(1.5, v * .28);       // the window to set off in
+    const q0 = Math.ceil(p1 + air) + 1, back0 = q0 + 2.25, b = Math.ceil(back0 + Math.max(1.3, v * .2));   // sparks at q0..q0+2; the strip ends after row b
+    const n = Math.ceil(b + .6 + air) + 2 - a;
+    this.plain(n, { noHoles: true });
+    for (let r = Math.floor(p0 + air); r <= b; r++) this.S[r] |= this.bit(lane);
+    for (let c = 0; c < 3; c++) this.item(q0 + c, lane, 'risk');
+    this.nOpt = (this.nOpt || 0) + 3;
+    const out = far ? 'F' : s > 0 ? 'L' : 'R', home = far ? 'F' : s > 0 ? 'R' : 'L', kind = far ? 'riskFar' : 'riskSide';
+    for (let h = 0; h < Math.max(1, hops); h++) this.events.push({ z0: p0 + h * .01, z1: p1 + h * .01, key: out, opt: 1, kind });
+    for (let h = 0; h < Math.max(1, hops); h++) this.events.push({ z0: back0 + h * .01, z1: b + .6 + h * .01, key: home, opt: 1, kind });
+    this.w = w0; this.noDecor = false; this.decor = dec;
+    (this.segs || (this.segs = [])).push([s0, this.S.length, kind]);
+    this.extra += this.S.length - s0;
   }
   // next obstacle from a shuffle bag (each kind turns up in proportion), never the same family twice running
   draw(last) {
@@ -269,6 +303,7 @@ class Track {
   segment() {
     const kind = this.draw(this.lastKind); this.lastKind = kind;
     const x = this.rnd(), offer = PRECISION[kind] && x < .14 ? 'slow' : CRASH[kind] && x < .3 ? 'shield' : null;
+    if (this.S.length > 150 && this.mult === 1 && this.rnd2() < .16) this.riskStretch();
     this.lead(.5, offer); this.runKind(kind);
   }
   // change pace: 1.35 = sprint, .7 = slow zone; eased in over four rows
@@ -464,6 +499,7 @@ class Runner {
     this.taken[r] = 1;
     if (it.t === 'shield') { this.shield = true; this.emit('shield'); }
     else if (it.t === 'slow') this.emit('slow');
+    else if (it.t === 'risk') { this.sparks++; this.risk = (this.risk || 0) + 1; this.pts += 300; this.emit('risk'); }
     else { this.sparks++; this.pts += it.t === 'high' ? 200 : 100; this.emit('spark'); }
   }
   air(mode, dur, high) { this.mode = mode; this.dur = dur; this.high = high || .5; this.from = this.lane; this.t = 0; this.gap = 0; }
@@ -538,5 +574,59 @@ class Bot {
       if (this.skipOpt && e.opt) { this.i++; continue; }
       if (run.z >= e.z0 + (e.z1 - e.z0) * this.f) { run.press(e.key); this.i++; } else break;
     }
+  }
+}
+
+// The clock of a run. It is stepped with the physics and fed the same events, so the same presses always give the same
+// time: a run's time can be worked out again from its recording, on any machine.
+class Pace {
+  // base: the speed setting (1 = normal). plain: no boosts and no perfects (the tutorial).
+  constructor(track, base, plain) {
+    this.tr = track; this.base = base || 1; this.plain = !!plain;
+    this.boost = 0; this.over = 0; this.surge = 0; this.slowT = 0; this.t = 0;
+    this.streak = 0; this.best = 0; this.perfects = 0; this.ei = 0; this.hit = {};
+  }
+  scale() { return this.base * (1 + this.boost + this.over + this.surge) * (this.slowT > 0 ? PACE.slow : 1); }
+  gain() { return this.boost + this.over + this.surge; }   // how much faster than the base speed, as a fraction
+  // dt of game time has just been simulated: returns the real time that took, and moves the clock and the timers on
+  step(dt) {
+    const real = dt / this.scale(); this.t += real;
+    if (this.slowT > 0) this.slowT -= real;
+    if (this.surge > 0) { this.surge -= PACE.surgeMax * real / PACE.surgeSecs; if (this.surge < 0) this.surge = 0; }
+    return real;
+  }
+  // n sparks' worth of lasting speed: each closes a fixed share of the gap to the cap, so the first few are felt most
+  spark(n) {
+    if (this.plain || this.boost >= PACE.boostMax) return;
+    const k = this.tr.end === Infinity ? .06 : 1 - Math.pow(.28, 3 / Math.max(15, this.tr.nSparks));
+    for (let i = 0; i < (n || 1); i++) this.boost += (PACE.boostMax - this.boost) * k;
+    if (this.boost > PACE.boostMax * .97) this.boost = PACE.boostMax;
+  }
+  // a red spark: an ordinary spark's worth, plus a little speed beyond the cap that nothing else gives
+  risk() { this.spark(1); if (!this.plain) this.over += PACE.risk; }
+  slow() { this.slowT = PACE.slowSecs; }
+  // A press of move m at position z: which move on the course's route it answers, where in that move's window it came
+  // (f: 0 first moment, 1 last), how many seconds were left, and whether that was close enough to the end to be perfect.
+  press(m, z) {
+    const ev = this.tr.events, v = this.tr.speedAt(z), slack = v * .3;
+    while (this.ei < ev.length && ev[this.ei].z1 + slack < z) this.ei++;
+    for (let j = this.ei; j < ev.length && ev[j].z0 - slack <= z; j++) {
+      const e = ev[j]; if (this.hit[j] || e.key !== m) continue;
+      this.hit[j] = 1;
+      const f = (z - e.z0) / Math.max(.01, e.z1 - e.z0), left = (e.z1 - z) / v, perfect = !this.plain && f >= 0 && left <= PACE.perfect;
+      if (perfect) {
+        this.streak++; this.perfects++; if (this.streak > this.best) this.best = this.streak;
+        this.surge = Math.min(PACE.surgeMax, Math.max(this.surge, PACE.surge + PACE.surgeStep * (this.streak - 1)));
+      } else this.streak = 0;
+      return { e, j, f, left, perfect };
+    }
+    return null;
+  }
+  // the required move that was due and never made (for telling the player what was needed), or null
+  missed(z) {
+    const ev = this.tr.events, v = this.tr.speedAt(z);
+    let j = this.ei; while (j > 0 && ev[j - 1].z1 + v * 1.2 >= z) j--;
+    for (; j < ev.length && ev[j].z0 <= z + v * .3; j++) if (!this.hit[j] && !ev[j].opt && ev[j].z1 + v * 1.2 >= z) return ev[j];
+    return null;
   }
 }

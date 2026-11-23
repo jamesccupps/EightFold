@@ -6,7 +6,7 @@
 const fs = require('fs'), path = require('path'), crypto = require('crypto'), { execFileSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const NAMES = 'LEVELS,DAILY,TUTORIAL,Track,Runner';
-const compile = src => new Function(src + `; return {${NAMES}, setFeel: typeof setFeel === 'function' ? setFeel : null};`)();
+const compile = src => new Function(src + `; return {${NAMES}, setFeel: typeof setFeel === 'function' ? setFeel : null, Pace: typeof Pace === 'function' ? Pace : null, setPace: typeof setPace === 'function' ? setPace : null};`)();
 const idOf = src => crypto.createHash('sha1').update(src).digest('hex').slice(0, 10);
 const nowSrc = fs.readFileSync(path.join(ROOT, 'src', 'core.js'), 'utf8'), NOW = idOf(nowSrc);
 const engines = { [NOW]: compile(nowSrc) };
@@ -31,7 +31,7 @@ function courseFor(rec, E) {
   if (m === 'E') return rec.seed != null ? new E.Track(rec.seed, null) : null;
   return new E.Track(1, E.TUTORIAL);
 }
-// returns { res, z, sparks, exact } or null when the run cannot be replayed: no trace, a trace too short for the run,
+// returns { res, z, sparks, exact, time, timeOk } or null when the run cannot be replayed: no trace, a trace too short for the run,
 // an engine that cannot be found, or a course that does not match the one recorded
 function replay(rec, core) {
   const tr = rec.tr || [];
@@ -39,6 +39,7 @@ function replay(rec, core) {
   const E = engine(core || rec._core); if (!E) return null;
   const tu = rec.tu || {};
   if (E.setFeel) E.setFeel({ hop: tu.hop, flip: tu.flip, jump: tu.jump, coyote: tu.coyote, buffer: tu.buffer });
+  if (E.setPace) E.setPace({ boostMax: tu.boost, perfect: tu.pwin, surge: tu.surge, surgeMax: tu.surge == null ? undefined : tu.surge > 0 ? tu.surge + .12 : 0 });
   let out = null;
   try {
     const track = courseFor(rec, E); if (!track) return null;
@@ -46,29 +47,38 @@ function replay(rec, core) {
     const r = new E.Runner(track);
     if (rec.cp) { const cp = track.cps.find(c => Math.floor(c.z) === rec.cp); if (!cp) return null; r.z = cp.z; r.lane = r.from = r.cam = cp.lane; }
     const ended = rec.res === 'fall' || rec.res === 'crash' || rec.res === 'win', stopAt = ended ? Infinity : rec.z + 1;
+    // the run's clock, worked out the way the game does it: stepped with the physics and fed the same sparks and presses
+    const pace = E.Pace ? new E.Pace(track, (tu.pace || 1) * (rec._speed || 1), false) : null;
+    if (pace) r.on = name => { if (name === 'spark') pace.spark(1); else if (name === 'risk') pace.risk(); else if (name === 'slow') pace.slow(); };
     let i = 0, guard = 0;
     while (!r.dead && r.z < track.end && r.z < stopAt && guard++ < 4e6) {
-      while (i < tr.length && r.z * 100 >= tr[i]) { r.press('LRFJ'[tr[i + 1]]); i += 2; }
+      while (i < tr.length && r.z * 100 >= tr[i]) { const m = 'LRFJ'[tr[i + 1]]; if (pace) pace.press(m, r.z); r.press(m); i += 2; }
       r.step(1 / 240);
+      if (pace && !r.dead && r.z < track.end) pace.step(1 / 240);
     }
     const res = r.dead ? r.dead.kind : r.z >= track.end ? 'win' : rec.res;
     out = { res, z: Math.floor(r.z), sparks: r.sparks, track, exact: res === rec.res && (!ended || res === 'win' || Math.abs(Math.floor(r.z) - rec.z) <= 1) };
-  } finally { if (E.setFeel) E.setFeel({}); }
+    if (pace && ended) { out.time = pace.t; out.perfects = pace.perfects; out.timeOk = rec.pf !== undefined || rec.rk !== undefined || pace.perfects === 0 ? Math.abs(pace.t - rec.d) < .011 : null; }
+  } finally { if (E.setFeel) E.setFeel({}); if (E.setPace) E.setPace({}); }
   return out;
 }
 function load(p) {   // -> list of attempts, each knowing which engine its visit ran on
   if (fs.statSync(p).isDirectory()) return [].concat(...fs.readdirSync(p).map(f => load(path.join(p, f))));
   if (!p.endsWith('.json')) return [];
   const d = JSON.parse(fs.readFileSync(p, 'utf8'));
-  if (d.attempts) return d.attempts.map(a => Object.assign({ _core: d.session && d.session.core }, a));
-  const cores = {}; for (const s of d.sessions || []) cores[s.id] = s.core;
-  return (d.log || []).map(a => Object.assign({ _core: cores[a.s] }, a));
+  if (d.attempts) return d.attempts.map(a => Object.assign({ _core: d.session && d.session.core, _speed: d.session && d.session.speed }, a));
+  const cores = {}, speeds = {}; for (const s of d.sessions || []) { cores[s.id] = s.core; speeds[s.id] = s.speed; }
+  return (d.log || []).map(a => Object.assign({ _core: cores[a.s], _speed: speeds[a.s] }, a));
 }
 module.exports = { replay, courseFor, load, engine, NOW };
 if (require.main === module) {
   const all = [].concat(...process.argv.slice(2).map(load));
-  let can = 0, same = 0; const off = [];
-  for (const rec of all) { const r = replay(rec); if (!r) continue; can++; if (r.exact) same++; else off.push(`${rec.s} #${rec.i} ${rec.m}: recorded ${rec.res} at row ${rec.z}, replay ${r.res} at row ${r.z}`); }
-  console.log(`${all.length} attempts, ${can} with a full trace, ${same} replay to the recorded ending`);
+  let can = 0, same = 0, timed = 0, timeSame = 0; const off = [];
+  for (const rec of all) {
+    const r = replay(rec); if (!r) continue; can++;
+    if (r.exact) same++; else off.push(`${rec.s} #${rec.i} ${rec.m}: recorded ${rec.res} at row ${rec.z}, replay ${r.res} at row ${r.z}`);
+    if (r.timeOk != null) { timed++; if (r.timeOk) timeSame++; else off.push(`${rec.s} #${rec.i} ${rec.m}: recorded time ${rec.d}, replay ${r.time.toFixed(2)}`); }
+  }
+  console.log(`${all.length} attempts, ${can} with a full trace, ${same} replay to the recorded ending` + (timed ? `, ${timeSame} of ${timed} to the recorded time` : ''));
   for (const line of off.slice(0, 40)) console.log('  differs: ' + line);
 }

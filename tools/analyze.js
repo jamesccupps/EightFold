@@ -15,7 +15,7 @@ let visits = [].concat(...args.map(files)).map(f => JSON.parse(fs.readFileSync(f
 if (since) visits = visits.filter(d => new Date((d.session.t || 0) * 1000).toISOString().slice(0, 10) >= since);
 const ghost = d => !d.attempts.length && !(d.session.notes || []).length && (d.session.dur || 0) < 5;
 const ghosts = visits.filter(ghost).length; visits = visits.filter(d => !ghost(d));
-const runs = [].concat(...visits.map(d => d.attempts.map(a => Object.assign({ _s: d.session, _core: d.session.core }, a))));
+const runs = [].concat(...visits.map(d => d.attempts.map(a => Object.assign({ _s: d.session, _core: d.session.core, _speed: d.session.speed }, a))));
 const who = s => s.pid || s.id, uniq = a => [...new Set(a)];
 const med = a => { if (!a.length) return NaN; const b = a.slice().sort((x, y) => x - y); return b[b.length >> 1]; };
 const pct = (a, b) => b ? Math.round(100 * a / b) + '%' : '-';
@@ -24,7 +24,7 @@ const pad = (s, n) => String(s).padEnd(n), lpad = (s, n) => String(s).padStart(n
 const out = s => console.log(s), head = s => out('\n== ' + s + ' ==');
 const NAME = { step: 'shifting floor', stairs: 'shifting floor (stairs)', zigzag: 'zigzag', spiral: 'spiral', flipGate: 'floor overhead', pingpong: 'floor overhead (repeated)', dodge1: 'tall block', dodge2: 'two tall blocks',
   slalom: 'slalom', blockFlip: 'blocked side', hurdle: 'low bar', hurdles: 'low bars', laneGap: 'short gap', stones: 'stepping stones', ringGap: 'ring gap', sweep: 'sliding block', beam: 'beam', fan: 'fan', fans: 'fans',
-  launch: 'launch pad', sprint: 'sprint zone', crawl: 'slow zone', field: 'scattered floor', floor: 'open floor', detour: 'spark detour', other: 'other' };
+  launch: 'launch pad', sprint: 'sprint zone', crawl: 'slow zone', field: 'scattered floor', riskFar: 'risk route (far wall)', riskSide: 'risk route (side strip)', floor: 'open floor', detour: 'spark detour', other: 'other' };
 const nm = k => NAME[k] || k;
 const course = m => m[0] === 'L' ? 'Level ' + m.slice(1) : m[0] === 'D' ? 'Daily ' + m.slice(1) : m === 'E' ? 'Endless' : 'Tutorial';
 const order = m => m[0] === 'T' ? '0' : m[0] === 'L' ? '1' + m : m === 'E' ? '3' : '2' + m;

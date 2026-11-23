@@ -34,9 +34,23 @@ Every key can be rebound under **Controls & options**, which also has a 75% prac
 - **Sparks** mark the line (over each jump, past each opening). Each is worth points and adds speed, most of it from the first few, up to +25%. The view widens, the speed lines stretch and the music picks up as it builds. That speed is how a run beats its par time.
 - **Helpers:** a shield sits on the route before stretches of things you can run into; slow-mo sits one lane off the route before rhythm sections, because it costs time.
 
-### Scoring
+### Scoring and speed
 
-100 points per spark (200 for one in the air), 10 per percent of progress, and for a cleared level 1,000 for the clear, 100 per second under par and 1,000 for collecting every spark. Endless scores 10 per metre plus sparks.
+Points: sparks 100 (200 in the air, 300 for a red one), 50 for each perfect press, 10 per percent of progress, 1,000 for a clear, 100 per second under par, 1,000 for every spark.
+
+Speed is where the skill shows. Three things make a run faster:
+
+- **Sparks** add lasting speed, most of it from the first few, up to +25%.
+- **Perfect timing.** A press in the last moment of a move's window (the last 0.09 s by default) is a perfect: a burst of speed that fades over three seconds. Each perfect in a row makes the burst bigger, up to +24%, so a streak keeps you flying and one early press drops you back.
+- **Risk routes.** Three times a level, a calm stretch has three red sparks off the safe line: on a short strip along the far wall (flip over, flip back before it ends) or beside the floor (hop out, hop back). Each red spark adds 1% of speed beyond the cap, for the rest of the run. Staying on the safe line costs nothing but the time.
+
+On level 1 the same course takes about 45 s on the safe line with early presses, 43 s with the risk routes, 42 s on the safe line with every press perfect, and under 40 s with both.
+
+The level clock is not wall-clock time. It is stepped with the physics, so the same presses give the same time on any machine, and a run's time can be worked out again from its recording (`tools/replay.js` does this).
+
+### Help for new players
+
+The first two times each kind of obstacle comes up outside the tutorial, a one-line reminder names it and the key that answers it. After a fall, the result screen says what the run ended on and which move it needed.
 
 ## Tuning and play data (temporary)
 
@@ -49,7 +63,7 @@ Two tools are in the game for now, to find the right feel and then be taken out 
 - the course, how the run ended, where, on which obstacle, and what the ball was doing (on the floor, mid turn, flip or jump);
 - every press as a position and a move, so the run can be replayed against its course (`node tools/replay.js`), and where each press fell inside the window the course allows;
 - the required move that was due and not made, and by how much;
-- time, score, sparks, shields and slow-mo used, speed gained, pauses, how long before the next try, and how it was played (keyboard, taps, swipes, on-screen buttons, mouse);
+- time, score, sparks, red sparks taken, perfect presses and the longest run of them, shields and slow-mo used, speed gained, pauses, how long before the next try, and how it was played (keyboard, taps, swipes, on-screen buttons, mouse);
 - a checksum of the course, so a recording is only ever played back against the course it was made on;
 - frame rate, how long frames took (in seven bands), the longest frame, the time spent drawing, and any drop in resolution.
 
