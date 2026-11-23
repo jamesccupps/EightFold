@@ -957,8 +957,8 @@ let mode = null;               // level index, 'endless', 'daily' or 'tutorial'
 let track, runner, bot = null, deadT = 0, failT = 0, tries = 0, runT = 0, slowT = 0, shake = 0, flash = 0;
 let tutI = 0, tutNote = 0, frozen = false, lastZone = 0;
 let shards = [], ballAt = { x: 0, y: 0, R: 10 }, lastPc = '', lastSp = '', lastTm = '';
-const BOOST_MAX = .15;   // sparks add speed for the rest of the run, up to +15%
-const sparkBoost = () => track.end === Infinity ? .005 : BOOST_MAX / Math.max(15, .8 * track.nSparks);
+const BOOST_MAX = .25;   // sparks add speed for the rest of the run, up to +25%
+const sparkBoost = () => track.end === Infinity ? .008 : BOOST_MAX / Math.max(15, .8 * track.nSparks);
 let boost = 0;
 const fmtN = n => Math.round(n).toLocaleString('en-US');
 function parOf(tr) { if (tr.end === Infinity) return 0; if (tr.par == null) { let t = 0; for (let r = 0; r < tr.end; r++) t += 1 / tr.V[r]; tr.par = t; } return tr.par; }
@@ -1083,7 +1083,7 @@ function showBrief(m, tr, song) {
   $('brAlsoH').hidden = !old.length; const also = $('brAlso'); also.textContent = ''; also.className = fresh.length ? 'chips' : 'cards';
   for (const t of old) { if (fresh.length) { const c = document.createElement('span'); c.className = 'chip'; c.textContent = TYPES[t][0]; also.appendChild(c); } else also.appendChild(card(t, false)); }
   let nSh = 0, nSl = 0; if (tr.end !== Infinity) for (const r in tr.I) { if (tr.I[r].t === 'shield') nSh++; else if (tr.I[r].t === 'slow') nSl++; }
-  $('brNote').textContent = 'Sparks mark the line: over each jump and past each opening. Each is worth 100 points (200 in the air) and adds a little speed, up to +15%, which is how you beat par.'
+  $('brNote').textContent = 'Sparks mark the line: over each jump and past each opening. Each is worth 100 points (200 in the air) and adds speed, up to +' + Math.round(BOOST_MAX * 100) + '%, which is how you beat par.'
     + (nSh ? ' ' + (nSh > 1 ? nSh + ' shields sit' : 'A shield sits') + ' on your route before the walls.' : '')
     + (nSl ? ' Slow-mo sits one lane off the route before ' + (nSl > 1 ? 'the rhythm sections' : 'a rhythm section') + ': it helps, but it costs time.' : '')
     + (tr.end === Infinity ? ' Shields and slow-mo turn up before the sections they suit.' : '');

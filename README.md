@@ -31,7 +31,7 @@ Every key can be rebound under **Controls & options**, which also has a 75% prac
 - **Endless:** no finish line; it speeds up and adds obstacles as you go.
 - **Daily:** one 60-second course a day, generated from the date, the same for everyone.
 - **Obstacles:** shifting floor, floor that continues overhead, tall blocks, low bars, short gaps and stepping stones, ring gaps, sliding blocks, launch pads, beams and fans, sprint zones and slow zones.
-- **Sparks** mark the line (over each jump, past each opening). Each is worth points and adds a little speed, up to +15%, which is how a run beats its par time.
+- **Sparks** mark the line (over each jump, past each opening). Each is worth points and adds speed, up to +25%, which is how a run beats its par time.
 - **Helpers:** a shield sits on the route before stretches of things you can run into; slow-mo sits one lane off the route before rhythm sections, because it costs time.
 
 ### Scoring
