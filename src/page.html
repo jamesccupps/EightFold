@@ -400,10 +400,10 @@ function applyTune() {
 // ---------- play recording (temporary: so the game can be tuned from how it is really played) ----------
 // One small record per attempt: where it ended and on what, the time, sparks, how early or late each press came inside
 // the window the course allows for it, and the frame rate. Kept in this browser; see the Play data sheet.
-const BUILD = '2026-11-23b';
+const BUILD = '2026-11-23c';
 // Where play records are sent from the public copy of the game: a small relay that files them on the play-data branch
 // of the game's GitHub repository (see relay/ in the repository). Empty = nothing is sent.
-let RELAY = '', relayAnywhere = false;
+let RELAY = 'https://eightfold-relay.jamesccupps.workers.dev/', relayAnywhere = false;
 const relayOn = () => !!RELAY && tel.on && !relayDead && (relayAnywhere || (location.protocol === 'https:' && !window.claude));
 function browserName() {   // "Chrome 158" and "Windows": enough to tell machines apart, without the full browser string
   const u = String(navigator.userAgent || ''), m = u.match(/(Edg|OPR|Firefox|Chrome|CriOS|FxiOS)\/(\d+)/) || (/Safari/.test(u) && u.match(/(Version)\/(\d+)/));

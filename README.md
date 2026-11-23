@@ -54,7 +54,7 @@ Two tools are in the game for now, to find the right feel and then be taken out 
 
 For the visit as a whole it notes the browser and system by name, screen size, processor count, the options in use, progress so far, which screens were opened, and a one-tap answer to "how does this level feel?" on the result screen. No name, no address, no free text. The sheet has Copy, Download, a switch to stop recording, and Erase. (The copy published as a Claude artifact also saves the same records to that artifact's own storage.)
 
-When a relay address is set in the game (`RELAY` in `src/page.html`), the public copy also sends each session's records to a small Cloudflare Worker, which files them on this repository's `play-data` branch. The menu says so while it is on, and stopping the recording stops the sending. With no address set, nothing is sent anywhere. See [`relay/`](relay/README.md).
+The public copy also sends each session's records to a small Cloudflare Worker, which files them on this repository's [`play-data`](https://github.com/jamesccupps/EightFold/tree/play-data) branch. The menu says so while it is on, and stopping the recording stops the sending. Setting `RELAY` in `src/page.html` to `''` turns the sending off for everyone; a copy opened from a file or run anywhere but the game's own page sends nothing. See [`relay/`](relay/README.md).
 
 ## How the levels are made
 
