@@ -52,7 +52,19 @@ Two tools are in the game for now, to find the right feel and then be taken out 
 - time, score, sparks, shields and slow-mo used, speed gained, pauses, how long before the next try, keyboard / touch / on-screen buttons;
 - frame rate, the longest frame, and any drop in resolution.
 
-For the visit as a whole it notes the browser and system by name, screen size, processor count, the options in use, progress so far, which screens were opened, and a one-tap answer to "how does this level feel?" on the result screen. No name, no address, no free text. The sheet has Copy, Download, a switch to stop recording, and Erase. (The copy published as a Claude artifact also saves the same records to that artifact's own storage.)
+In the tutorial it notes how long each step waited for its key and how many wrong keys came first.
+
+For the visit as a whole it notes:
+
+- a random code kept in the browser, the visit number and the date of the first visit, so returning players can be told from new ones (Erase makes a new code);
+- the browser and system by name, screen size, processor count, the site the player came from, and (added by the relay) the country;
+- the options in use, any keys changed from the defaults, progress so far, and which screens were opened, with times;
+- any error in the page, as short plain text;
+- a one-tap answer to "how does this level feel?" on the result screen.
+
+No name and no address. Runs that could not be sent when a tab was closed are sent on the next visit.
+
+**Feedback** (menu, pause and result screens) is a short form: suggestion, problem or other, and up to 600 characters. It travels with the play data, tagged with where the player was. It is the only free text collected, and the form says it is filed publicly. `node tools/feedback.js <folder>` lists what has come in. The sheet has Copy, Download, a switch to stop recording, and Erase. (The copy published as a Claude artifact also saves the same records to that artifact's own storage.)
 
 The public copy also sends each session's records to a small Cloudflare Worker, which files them on this repository's [`play-data`](https://github.com/jamesccupps/EightFold/tree/play-data) branch. The menu says so while it is on, and stopping the recording stops the sending. Setting `RELAY` in `src/page.html` to `''` turns the sending off for everyone; a copy opened from a file or run anywhere but the game's own page sends nothing. See [`relay/`](relay/README.md).
 
@@ -75,7 +87,7 @@ test/levels.js        every course can be finished; every spark can be collected
 test/shortcuts.js     no course can be finished while skipping its intended moves
 test/curve.js         prints speed, input rate, obstacle variety and difficulty per level
 test/browser/         play-throughs in a real browser (Python + Playwright)
-tools/                seed search used to pick each level's course; replay.js plays recorded runs back
+tools/                seed search used to pick each level's course; replay.js plays recorded runs back; feedback.js lists player feedback
 relay/                the Cloudflare Worker that files play data on the play-data branch, and its test
 ```
 

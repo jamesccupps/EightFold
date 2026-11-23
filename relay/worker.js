@@ -63,6 +63,7 @@ function cleanAttempt(a, sid) {
   if (Array.isArray(a.tr) && a.tr.length % 2 === 0) put(out, 'tr', nums(a.tr, 400, -1000, 1e9));   // the press trace: position, move, position, move ...
   if (Array.isArray(a.in) && a.in.length === 4) put(out, 'in', nums(a.in, 4, 0, 1e5));
   if (Array.isArray(a.pz) && a.pz.length === 2) put(out, 'pz', nums(a.pz, 2, 0, 1e6));
+  if (Array.isArray(a.tt) && a.tt.length % 3 === 0) put(out, 'tt', nums(a.tt, 90, 0, 1e7));   // tutorial: step, ms waited, wrong keys
   return out;
 }
 function cleanSession(s, sid) {
@@ -80,6 +81,24 @@ function cleanSession(s, sid) {
   put(out, 'cores', num(s.cores, 0, 1024)); put(out, 'mem', num(s.mem, 0, 1024)); put(out, 'music', num(s.music, 0, 100)); put(out, 'sfx', num(s.sfx, 0, 100));
   put(out, 'tot', num(s.tot, 0, 1e7)); put(out, 'dur', num(s.dur, 0, 1e7)); put(out, 'skin', str(s.skin, /^[a-z]{1,12}$/));
   put(out, 'st', nums(s.st, 36, 0, 1e6));   // per level: best %, clears, attempts
+  put(out, 'pid', str(s.pid, /^[a-z0-9]{12}$/));   // a random code kept in the player's browser: tells returning players from new ones
+  put(out, 'vn', num(s.vn, 0, 1e6)); put(out, 'first', str(s.first, /^\d{4}-\d{2}-\d{2}$/));
+  put(out, 'ref', str(s.ref, /^[a-z0-9.\-]{1,60}$/));   // the site the player came from, by name only
+  put(out, 'kb', str(s.kb, /^[A-Za-z0-9:|,]{1,240}$/));  // keys changed from the defaults
+  // feedback the player typed: up to ten notes of up to 600 characters, control characters removed. This is the one
+  // place free text is kept. Whoever reads it should treat it as something a stranger wrote.
+  if (Array.isArray(s.notes)) {
+    const notes = [];
+    for (const n of s.notes.slice(0, 10)) {
+      if (!n || typeof n !== 'object' || typeof n.x !== 'string') continue;
+      const x = n.x.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, 600); if (!x) continue;
+      const o = { x }; put(o, 't', num(n.t, 0, 1e7)); put(o, 'k', str(n.k, /^(idea|bug|other)$/)); put(o, 'm', str(n.m, MODE)); put(o, 'pc', num(n.pc, 0, 1e6));
+      notes.push(o);
+    }
+    if (notes.length) out.notes = notes;
+  }
+  // errors in the page: seconds into the visit, short plain text, ...
+  if (Array.isArray(s.err) && s.err.length && s.err.length <= 80 && s.err.length % 2 === 0 && s.err.every((x, i) => i % 2 ? str(x, /^[A-Za-z0-9 .,:_()'\/@\-]{1,160}$/) !== undefined : num(x, 0, 1e7) !== undefined)) out.err = s.err;
   if (s.fb && typeof s.fb === 'object' && !Array.isArray(s.fb)) {   // how each course felt
     const fb = {}; let n = 0;
     for (const k of Object.keys(s.fb)) if (n < 40 && MODE.test(k) && str(s.fb[k], /^(easy|right|hard|unfair)$/)) { fb[k] = s.fb[k]; n++; }
@@ -90,7 +109,7 @@ function cleanSession(s, sid) {
   return out;
 }
 // returns { sid, date, body } or a string saying what is wrong
-function check(data, now) {
+function check(data, now, country) {
   if (!data || typeof data !== 'object' || data.v !== 1) return 'not play data';
   const sid = str(data.session && data.session.id, /^[a-z0-9]{6,16}$/);
   if (!sid) return 'no session id';
@@ -98,8 +117,9 @@ function check(data, now) {
   const attempts = [];
   for (const a of data.attempts.slice(-MAX_ATTEMPTS)) { const c = cleanAttempt(a, sid); if (c) attempts.push(c); }
   const session = cleanSession(data.session, sid);
+  put(session, 'cc', str(country, /^[A-Z]{2}$/));   // country, as Cloudflare reports it for the request; the address itself is never kept
   // a visit with no runs still counts if it left a trail (someone who looked and left is worth knowing about)
-  if (!attempts.length && !session.ev) return 'nothing usable';
+  if (!attempts.length && !session.ev && !session.notes) return 'nothing usable';
   // file the session under the day it started, as long as that is believable; otherwise under today
   const t = session.t && Math.abs(session.t * 1000 - now) < 3 * 86400e3 ? session.t * 1000 : now;
   return { sid, date: new Date(t).toISOString().slice(0, 10), body: { v: 1, session, n: attempts.length, attempts } };
@@ -120,6 +140,8 @@ function merge(old, neu) {
   let attempts = [...by.values()].sort((a, b) => a.i - b.i).slice(-MAX_ATTEMPTS);
   const session = neu.session;
   if (old && old.session && typeof old.session.t === 'number') session.t = old.session.t;
+  // a later post never loses feedback already filed
+  if (old && old.session && Array.isArray(old.session.notes) && (!session.notes || session.notes.length < old.session.notes.length)) session.notes = old.session.notes;
   let body = { v: 1, session, n: attempts.length, attempts };
   while (JSON.stringify(body).length > MAX_FILE && attempts.length > 1) { attempts = attempts.slice(20); body = { v: 1, session, n: attempts.length, attempts }; }
   return body;
@@ -136,8 +158,9 @@ async function save(env, ok) {
       const list = await gh(env, dir + '?ref=' + encodeURIComponent(branch), { method: 'GET' });
       if (list.status === 200) { const files = await list.json(); if (Array.isArray(files) && files.length >= MAX_FILES_PER_DAY) return { status: 429, error: 'enough for today' }; }
     } else return { status: 502, error: 'storage said ' + cur.status };
-    const body = merge(old, ok.body), content = btoa(JSON.stringify(body));   // everything kept above is plain ASCII
-    const res = await gh(env, path, { method: 'PUT', body: JSON.stringify({ message: 'play data ' + ok.sid + ' (' + body.n + ')', content, branch, sha }) });
+    // feedback can hold any script; written as \\uXXXX the file stays plain ASCII, which is what btoa needs
+    const body = merge(old, ok.body), content = btoa(JSON.stringify(body).replace(/[\u0080-\uffff]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')));
+    const res = await gh(env, path, { method: 'PUT', body: JSON.stringify({ message: 'play data ' + ok.sid + ' (' + body.n + ')', content, branch, sha, committer: { name: 'eightfold-relay', email: 'eightfold-relay@users.noreply.github.com' } }) });
     if (res.status === 200 || res.status === 201) return { status: 200, n: body.n };
     if (res.status !== 409 && res.status !== 422) return { status: 502, error: 'storage said ' + res.status };
     // 409/422: the file changed between reading and writing; read it again and try once more
@@ -179,7 +202,7 @@ export default {
     let text; try { text = await request.text(); } catch (e) { return reply(400, { error: 'unreadable' }, okOrigin); }
     if (text.length > MAX_BODY) return reply(413, { error: 'too large' }, okOrigin);
     let data; try { data = JSON.parse(text); } catch (e) { return reply(400, { error: 'not JSON' }, okOrigin); }
-    const ok = check(data, now);
+    const ok = check(data, now, request.cf && request.cf.country);
     if (typeof ok === 'string') return reply(400, { error: ok }, okOrigin);
     let res; try { res = await save(env, ok); } catch (e) { res = { status: 502, error: 'storage unreachable' }; }
     return reply(res.status, res.status === 200 ? { ok: true, n: res.n } : { error: res.error }, okOrigin);

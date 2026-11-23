@@ -9,9 +9,10 @@ game (browser)  --POST one session's records-->  Worker  --commit-->  play-data 
 What it does with a post:
 
 - accepts it only from the game's own page (`https://jamesccupps.github.io`), up to 64 KB;
-- keeps the fields it knows, of the right type and size, and drops everything else;
+- keeps the fields it knows, of the right type and size, and drops everything else. The one piece of free text is player feedback: up to ten notes a visit, 600 characters each, control characters removed;
 - writes one JSON file per session, replacing it as the session goes on, only under `sessions/` on the `play-data` branch;
-- never stores the sender's address, and never sends the token anywhere but GitHub.
+- adds the country Cloudflare reports for the request, and nothing else about the sender: the address is never stored;
+- commits as `eightfold-relay`, and never sends the token anywhere but GitHub.
 
 Limits against misuse: 40 posts per sender per ten minutes, 250 attempts per session, 300 new session files per day in total. The address is public, so junk is possible within those limits; it lands on the data branch only and is easy to delete.
 
@@ -39,6 +40,10 @@ Sign up at cloudflare.com (the free plan is enough), then in the dashboard:
 Open the Worker's address (it looks like `https://eightfold-relay.<your-name>.workers.dev`). It should show `{"ok":true,"what":"Eightfold play-data relay","ready":true}`.
 
 That address goes into `RELAY` near the top of the recording code in `src/page.html`; then `node build.js`, commit and push. From then on the public game sends play data, and says so on its menu.
+
+## Updating the Worker
+
+When `worker.js` changes: Worker > Edit code > replace everything with the new file > Deploy. The secret stays as it is. An older Worker keeps working with a newer game; it just drops the fields it does not know yet.
 
 ## Turning it off
 

@@ -51,8 +51,48 @@ async def main():
             # the stored runs replay to the same endings in Node, from the trace alone
             tmp = os.path.join(HERE, 'out', 'relay-session.json'); os.makedirs(os.path.dirname(tmp), exist_ok=True); json.dump(d, open(tmp, 'w'))
             r['replay'] = subprocess.run(['node', os.path.join(HERE, '..', '..', 'tools', 'replay.js'), tmp], capture_output=True, text=True).stdout.strip()
+            r['player'] = {k: d['session'].get(k) for k in ('pid', 'vn', 'first')}
+            # feedback: from the result screen, typed, sent at once, and listed by the tool
+            await pg.click('#btnNote4'); await pg.wait_for_timeout(200)
+            r['feedback_info'] = await pg.evaluate('document.getElementById("noteInfo").textContent')
+            await pg.click('#noteKind button:nth-of-type(2)'); await pg.fill('#noteText', 'The first turn comes too soon — très vite. p and t and space typed fine.')
+            await pg.screenshot(path=os.path.join(HERE, 'out', 'feedback.png'))
+            await pg.click('#btnNoteSend'); await pg.wait_for_timeout(800)
+            r['feedback_done'] = await pg.evaluate('document.getElementById("noteDone").textContent')
+            f = stored(); d = f['files'][name]['data']; r['feedback_stored'] = d['session'].get('notes')
+            json.dump(d, open(tmp, 'w'))
+            r['feedback_tool'] = subprocess.run(['node', os.path.join(HERE, '..', '..', 'tools', 'feedback.js'), tmp], capture_output=True, text=True).stdout.strip()
+            await pg.keyboard.press('Escape'); await pg.wait_for_timeout(200)
+            # an error in the page is noted and sent; a tutorial run records how long each step waited
+            await pg.keyboard.press('Escape'); await pg.wait_for_timeout(300)
+            await pg.evaluate('window.__eightfold.boom()'); await pg.wait_for_timeout(200)
+            await pg.click('#lvTut'); keys = {'←': 'ArrowLeft', '→': 'ArrowRight', '↑': 'ArrowUp', 'Space': ' ', '↓': 'ArrowDown'}; n = 0
+            for _ in range(600):
+                st = await pg.evaluate(S)
+                if st['state'] != 'play' or n >= 3: break
+                if st['frozen']:
+                    k = await pg.evaluate('document.querySelector("#tip kbd").textContent')
+                    if n == 1: await pg.keyboard.press('ArrowRight' if k != '→' else 'ArrowLeft'); await pg.wait_for_timeout(150)
+                    await pg.keyboard.press(keys.get(k, k.lower())); n += 1; await pg.wait_for_timeout(150)
+                else: await pg.wait_for_timeout(60)
+            # the network drops as the tab is closed: these runs stay unsent
+            await pg.route('**/relay', lambda route: route.abort())
+            await pg.keyboard.press('p'); await pg.click('#btnQuit'); await pg.wait_for_timeout(300)
+            await pg.evaluate('window.dispatchEvent(new Event("pagehide"))'); await pg.wait_for_timeout(500)
+            before = stored(); r['unsent_while_offline'] = len([a for a in before['files'][name]['data']['attempts'] if a['m'] == 'T'])
+            # next visit: same player code, visit 2, and the earlier visit's unsent runs go up
+            await pg.unroute('**/relay'); await pg.reload(); await pg.wait_for_timeout(400)
+            await pg.evaluate('window.__eightfold.relay("%s/relay")' % BASE); await pg.evaluate('window.dispatchEvent(new Event("pagehide"))')
+            pid2 = (await pg.evaluate('window.__eightfold.tel()'))['pid']; r['same_player_code_after_reload'] = pid2 == r['player']['pid']
+            await pg.reload(); await pg.wait_for_timeout(300)   # the catch-up runs at start-up, once the relay address is known
+            r['note'] = 'catch-up needs the relay address at start-up; the test hook sets it after, so it is called by hand below'
+            await pg.evaluate('window.__eightfold.relay("%s/relay")' % BASE); await pg.evaluate('window.__eightfold.catchUp()'); await pg.wait_for_timeout(5500)
+            f = stored(); d1 = f['files'][name]['data']; tut = [a for a in d1['attempts'] if a['m'] == 'T']
+            r['caught_up_on_next_visit'] = (len(tut), tut[0].get('tt') if tut else None, tut[0].get('res') if tut else None)
+            r['error_stored'] = d1['session'].get('err')
+            r['visit_numbers'] = sorted(x['data']['session'].get('vn') for x in f['files'].values() if x['data']['session'].get('pid') == r['player']['pid'])
             # switch recording off: notice goes, nothing more is sent
-            await pg.keyboard.press('Escape'); await pg.click('#btnData')
+            await pg.click('#btnData')
             r['sheet_says'] = (await pg.evaluate('document.getElementById("dataInfo").textContent'))[-230:]
             await pg.click('#btnDataToggle'); await pg.keyboard.press('Escape')
             r['notice_gone_when_off'] = await pg.evaluate('document.getElementById("telNote").hidden')
