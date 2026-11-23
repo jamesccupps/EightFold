@@ -77,7 +77,9 @@ button:focus-visible { outline: 2px solid var(--tile); outline-offset: 2px; }
 .hud .pc, .hud .sp, .hud .tm { font: 600 14px/1.2 var(--body); font-variant-numeric: tabular-nums; }
 .hud .pc { color: var(--tile); min-width: 4ch; }
 .hud .tm { color: var(--dim); }
-.hud .tg { font: 600 11px/1 var(--body); letter-spacing: .1em; padding: 4px 6px; border: 1px solid currentColor; border-radius: 2px; }
+.hud .tg.bump { animation: bump .35s ease-out; }
+@keyframes bump { 0% { transform: scale(1.4); } 100% { transform: scale(1); } }
+.hud .tg { display: inline-block; font: 600 11px/1 var(--body); letter-spacing: .1em; padding: 4px 6px; border: 1px solid currentColor; border-radius: 2px; }
 .bar b { position: absolute; top: 0; bottom: -4px; width: 2px; background: var(--ink); }
 .corner { position: fixed; top: 10px; right: clamp(10px, 3vw, 24px); display: flex; gap: 8px; }
 @media (max-width: 560px) { #btnFull { display: none; } .hud { max-width: calc(100% - 200px); } }
@@ -871,7 +873,7 @@ function syncCss(force) {
 // ================= sound: a small synth, no samples =================
 const Snd = {
   ac: null, out: null, nbuf: null, muted: !!store.get('muted', false), on: false,
-  bpm: 120, root: 55, t0: 0, nextT: 0, stepN: 0, bass: [], lead: [],
+  bpm: 120, rate: 1, beats: [], root: 55, t0: 0, nextT: 0, stepN: 0, bass: [], lead: [],
   init() {
     if (this.ac) return;
     try {
@@ -911,19 +913,19 @@ const Snd = {
     this.bass = []; this.lead = [];
     for (let s = 0; s < 16; s++) this.bass.push(s % 4 === 0 ? 0 : (r() < .45 ? sc[Math.floor(r() * 4)] : null));
     for (let s = 0; s < 16; s++) this.lead.push(r() < .55 ? sc[Math.floor(r() * 6)] : null);
-    this.on = true;
+    this.on = true; this.beats.length = 0;
     if (this.ac) { this.t0 = this.ac.currentTime + .06; this.nextT = this.t0; this.stepN = 0; }
   },
   stop() { this.on = false; },
   pump() {
     const ac = this.ac; if (!ac || !this.on || ac.state !== 'running') return;
-    const sp = 60 / this.bpm / 4;
+    const sp = 60 / (this.bpm * this.rate) / 4;
     if (this.nextT < ac.currentTime - .2) { const k = Math.ceil((ac.currentTime - this.nextT) / sp); this.nextT += k * sp; this.stepN += k; }
     while (this.nextT < ac.currentTime + .14) { this.playStep(this.stepN, this.nextT, sp); this.nextT += sp; this.stepN++; }
   },
   playStep(s, t, sp) {
     const i = s % 16, bar = s >> 4; this.bus = this.mus;
-    if (i % 4 === 0) this.tone('sine', 160, 42, t, .24, .9);
+    if (i % 4 === 0) { this.tone('sine', 160, 42, t, .24, .9); this.beats.push(t); if (this.beats.length > 6) this.beats.shift(); }
     if (i % 4 === 2) this.noise(t, .04, .16, 7000);
     if ((i === 4 || i === 12) && bar > 0) this.noise(t, .13, .2, 1500);
     if (i % 2 === 1 && bar % 2 === 1) this.noise(t, .02, .06, 9000);
@@ -933,8 +935,8 @@ const Snd = {
   },
   pulse() {
     const ac = this.ac; if (calm() || !ac || !this.on || ac.state !== 'running') return 0;
-    const ph = (ac.currentTime - this.t0) * this.bpm / 60;
-    return ph < 0 ? 0 : Math.exp(-(ph % 1) * 5);
+    const now = ac.currentTime; let tb = -1; for (let i = 0; i < this.beats.length; i++) { const b = this.beats[i]; if (b <= now && b > tb) tb = b; }
+    return tb < 0 ? 0 : Math.exp(-(now - tb) * this.bpm * this.rate / 60 * 5);
   },
   fx(name) {
     const ac = this.ac; if (!ac || ac.state !== 'running') return;
@@ -958,7 +960,13 @@ let track, runner, bot = null, deadT = 0, failT = 0, tries = 0, runT = 0, slowT 
 let tutI = 0, tutNote = 0, frozen = false, lastZone = 0;
 let shards = [], ballAt = { x: 0, y: 0, R: 10 }, lastPc = '', lastSp = '', lastTm = '';
 const BOOST_MAX = .25;   // sparks add speed for the rest of the run, up to +25%
-const sparkBoost = () => track.end === Infinity ? .008 : BOOST_MAX / Math.max(15, .8 * track.nSparks);
+// Each spark closes a fixed share of the gap to the cap, so the first few are felt and the rest top it up:
+// about 70% of the cap by a third of a level's sparks, all of it by roughly nine in ten.
+function addBoost() {
+  const k = track.end === Infinity ? .06 : 1 - Math.pow(.28, 3 / Math.max(15, track.nSparks));
+  boost += (BOOST_MAX - boost) * k; if (boost > BOOST_MAX * .97) boost = BOOST_MAX;
+}
+let boostVis = 0, kick = 0;   // eased copy of the boost for the view, music and streaks; kick is a brief pulse on each pickup
 let boost = 0;
 const fmtN = n => Math.round(n).toLocaleString('en-US');
 function parOf(tr) { if (tr.end === Infinity) return 0; if (tr.par == null) { let t = 0; for (let r = 0; r < tr.end; r++) t += 1 / tr.V[r]; tr.par = t; } return tr.par; }
@@ -987,7 +995,7 @@ function attach() {
   runner.on = name => {
     if (state !== 'play') return;
     Snd.fx(name);
-    if (name === 'spark' && mode !== 'tutorial' && boost < BOOST_MAX) { boost = Math.min(BOOST_MAX, boost + sparkBoost()); if (boost >= BOOST_MAX - 1e-9) toast('Top speed'); }
+    if (name === 'spark' && mode !== 'tutorial' && boost < BOOST_MAX) { addBoost(); kick = 1; if (boost >= BOOST_MAX) toast('Top speed'); }
     if (name === 'shield') toast('Shield');
     else if (name === 'slow') { slowT = 3.5; toast('Slow-mo'); }
     else if (name === 'shieldhit') { toast('Shield used'); if (!calm()) shake = .6; burst(10); }
@@ -1004,7 +1012,7 @@ function hidePanels() { for (const id of ['menu', 'pausePanel', 'failPanel', 'wi
 function begin(first, cp) {
   attach(); bot = null; state = 'play';
   if (cp) { runner.z = cp.z; runner.lane = runner.from = runner.cam = cp.lane; } shards.length = 0; shake = 0; flash = 0; lastPc = lastSp = lastTm = '';
-  lastProg = ''; lastPts = ''; lastBoost = -1; lastFlags = -1; boost = 0; runT = 0; slowT = 0; tutI = 0; tutNote = 0; frozen = false; lastZone = cp ? (track.Z[Math.floor(cp.z)] || 0) : 0; tries++;
+  lastProg = ''; lastPts = ''; lastBoost = -1; lastFlags = -1; boost = 0; boostVis = 0; kick = 0; runT = 0; slowT = 0; tutI = 0; tutNote = 0; frozen = false; lastZone = cp ? (track.Z[Math.floor(cp.z)] || 0) : 0; tries++;
   hidePanels(); $('tip').hidden = true;
   $('hud').hidden = false; $('bar').hidden = false; $('btnPause').hidden = false;
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
@@ -1083,7 +1091,7 @@ function showBrief(m, tr, song) {
   $('brAlsoH').hidden = !old.length; const also = $('brAlso'); also.textContent = ''; also.className = fresh.length ? 'chips' : 'cards';
   for (const t of old) { if (fresh.length) { const c = document.createElement('span'); c.className = 'chip'; c.textContent = TYPES[t][0]; also.appendChild(c); } else also.appendChild(card(t, false)); }
   let nSh = 0, nSl = 0; if (tr.end !== Infinity) for (const r in tr.I) { if (tr.I[r].t === 'shield') nSh++; else if (tr.I[r].t === 'slow') nSl++; }
-  $('brNote').textContent = 'Sparks mark the line: over each jump and past each opening. Each is worth 100 points (200 in the air) and adds speed, up to +' + Math.round(BOOST_MAX * 100) + '%, which is how you beat par.'
+  $('brNote').textContent = 'Sparks mark the line: over each jump and past each opening. Each is worth 100 points (200 in the air) and adds speed, most of it from the first few, up to +' + Math.round(BOOST_MAX * 100) + '%. That is how you beat par.'
     + (nSh ? ' ' + (nSh > 1 ? nSh + ' shields sit' : 'A shield sits') + ' on your route before the walls.' : '')
     + (nSl ? ' Slow-mo sits one lane off the route before ' + (nSl > 1 ? 'the rhythm sections' : 'a rhythm section') + ': it helps, but it costs time.' : '')
     + (tr.end === Infinity ? ' Shields and slow-mo turn up before the sections they suit.' : '');
@@ -1315,6 +1323,8 @@ function render(fdt, lead) {
   if (!track.level && Math.abs(z - palZ) > 2) { pal = endlessPal(z); palZ = z; }
   F = Math.min(W * 1.25, H * 1.4);
   if (pal !== pcPal || W !== pcW || H !== pcH) prepPal();
+  const rush = calm() || state !== 'play' && state !== 'dead' ? 0 : boostVis / BOOST_MAX;   // 0..1: how much of the boost is in play
+  F *= 1 - rush * .1 - (calm() ? 0 : kick * .012);   // wider view at speed, with a small punch on each spark
   syncCss(false);
   const pulse = Snd.pulse(), pat = track.level ? track.level.pat : 0;
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
@@ -1324,14 +1334,14 @@ function render(fdt, lead) {
   ctx.drawImage(bgCv, 0, 0, W, H);
 
   if (!calm()) {   // speed streaks outside the tunnel, drawn as three batches by distance
-    ctx.lineWidth = 1.5; ctx.strokeStyle = PC.glow;
+    ctx.lineWidth = 1.5 + rush * 1.5; ctx.strokeStyle = PC.glow;
     const third = VIEW / 3, n = streaks.length;
     for (let b = 0; b < 3; b++) {
-      ctx.globalAlpha = b === 0 ? .6 : b === 1 ? .36 : .14; ctx.beginPath();
+      ctx.globalAlpha = Math.min(1, (b === 0 ? .6 : b === 1 ? .36 : .14) * (1 + rush * 1.6)); ctx.beginPath();
       for (let i = 0; i < n; i++) {
         const s = streaks[i], rel = (((s.z - z) % VIEW) + VIEW) % VIEW;
         if (rel < b * third || rel >= (b + 1) * third) continue;
-        const d = (rel + .4) * RL, a = s.a - cam * Math.PI / 4, x = s.r * Math.cos(a), y = s.r * Math.sin(a) - CAMY, s1 = F / d, s2 = F / (d + s.l * RL);
+        const d = (rel + .4) * RL, a = s.a - cam * Math.PI / 4, x = s.r * Math.cos(a), y = s.r * Math.sin(a) - CAMY, s1 = F / d, s2 = F / (d + s.l * RL * (1 + rush * 4));
         ctx.moveTo(cx + x * s1, cy + y * s1); ctx.lineTo(cx + x * s2, cy + y * s2);
       }
       ctx.stroke();
@@ -1461,7 +1471,7 @@ function hud() {
   if (sp !== lastSp) { lastSp = sp; EL.hudSp.textContent = sp; }
   const tm = fmtT(runT); if (tm !== lastTm) { lastTm = tm; EL.hudTm.textContent = tm; }
   const pts = mode === 'tutorial' ? '' : fmtN(tally(false).total) + ' pts'; if (pts !== lastPts) { lastPts = pts; EL.hudPts.textContent = pts; }
-  const bp = mode === 'tutorial' ? 0 : Math.round(boost * 100); if (bp !== lastBoost) { lastBoost = bp; EL.tgBoost.hidden = !bp; EL.tgBoost.textContent = '+' + bp + '% speed'; }
+  const bp = mode === 'tutorial' ? 0 : Math.round(boost * 100); if (bp !== lastBoost) { lastBoost = bp; EL.tgBoost.hidden = !bp; EL.tgBoost.textContent = '+' + bp + '% speed'; if (bp) { EL.tgBoost.classList.remove('bump'); void EL.tgBoost.offsetWidth; EL.tgBoost.classList.add('bump'); } }
   const flags = (runner.shield ? 1 : 0) | (slowT > 0 ? 2 : 0) | (touchSeen && (state === 'play' || state === 'dead') ? 4 : 0);
   if (flags !== lastFlags) { lastFlags = flags; EL.tgShield.hidden = !(flags & 1); EL.tgSlow.hidden = !(flags & 2); EL.pad.hidden = !(flags & 4); }
   const top = stats.endless[0] ? stats.endless[0].m : 0;
@@ -1674,6 +1684,8 @@ function frame(ts) {
     if (ema > 1 / 45 && qScale > .5) { slowFor += dt; if (slowFor > 1.5) { qScale *= .8; slowFor = 0; ema = 1 / 60; resize(); } } else slowFor = 0;
   }
   if (state === 'fail') failT += dt;
+  boostVis += (boost - boostVis) * Math.min(1, dt * 4); if (kick > 0) kick = Math.max(0, kick - dt * 3);
+  Snd.rate = 1 + (state === 'play' && mode !== 'tutorial' ? boostVis : 0) * .6;   // the music speeds up with you
   // screens where nothing moves (paused, result, briefing, or a sheet covering the tunnel) are drawn for a moment, then left alone
   const still = state === 'pause' || state === 'fail' || state === 'brief' || overlay !== null;
   if (still) idleFor += dt; else idleFor = 0;
