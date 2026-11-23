@@ -428,7 +428,7 @@ function applyTune() {
 // ---------- play recording (temporary: so the game can be tuned from how it is really played) ----------
 // One small record per attempt: where it ended and on what, the time, sparks, how early or late each press came inside
 // the window the course allows for it, and the frame rate. Kept in this browser; see the Play data sheet.
-const BUILD = '2026-11-23g', CORE_ID = '/*COREID*/';   // CORE_ID: which engine (generator + physics) this page was built from
+const BUILD = '2026-11-23h', CORE_ID = '/*COREID*/';   // CORE_ID: which engine (generator + physics) this page was built from
 // Where play records are sent from the public copy of the game: a small relay that files them on the play-data branch
 // of the game's GitHub repository (see relay/ in the repository). Empty = nothing is sent.
 let RELAY = 'https://eightfold-relay.jamesccupps.workers.dev/', relayAnywhere = false;
@@ -493,6 +493,7 @@ function telSession() {
     tut: !!stats.tut, tot: stats.total || 0, st, dur: Math.round((performance.now() - T0) / 1000), tune: tuneFromBase(),
     load: Math.round(T00), ff: Math.round(firstFrame), lang: String(navigator.language || '').slice(0, 12), rmo: RM, ls: storageOk });
   for (const k in XP) { telSess.xp = XP; break; }
+  if (location.hash === '#test') telSess.test = true;   // a visit made to check the game, not to play it: kept, but left out of reports
   return telSess;
 }
 // the display's refresh rate, judged from the gaps between frames while the page is in view

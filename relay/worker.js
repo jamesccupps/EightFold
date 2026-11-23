@@ -17,7 +17,7 @@
 //   ORIGINS       optional, comma-separated pages allowed to post, default "https://jamesccupps.github.io"
 //   OFF           optional. Set to "1" to refuse everything without deleting the Worker.
 
-const VERSION = '2026-11-23.6';   // shown on the status line, so a deploy can be told from the one before
+const VERSION = '2026-11-23.7';   // shown on the status line, so a deploy can be told from the one before
 const DEFAULTS = { REPO: 'jamesccupps/EightFold', BRANCH: 'play-data', ORIGINS: 'https://jamesccupps.github.io' };
 const MAX_BODY = 64 * 1024;        // bytes per post
 const MAX_ATTEMPTS = 400;          // attempts per session file
@@ -79,7 +79,7 @@ function cleanSession(s, sid) {
   put(out, 'os', str(s.os, /^[A-Za-z0-9 ]{1,16}$/));
   put(out, 'w', num(s.w, 0, 20000)); put(out, 'h', num(s.h, 0, 20000)); put(out, 'dpr', num(s.dpr, 0, 16)); put(out, 'qscale', num(s.qscale, 0, 4)); put(out, 'speed', num(s.speed, 0, 4));
   put(out, 'quality', str(s.quality, /^(auto|high|low)$/));
-  for (const k of ['touch', 'cp', 'auto', 'invert', 'calm', 'brief', 'unlockAll', 'muted', 'binds', 'full', 'tut']) put(out, k, bool(s[k]));
+  for (const k of ['touch', 'cp', 'auto', 'invert', 'calm', 'brief', 'unlockAll', 'muted', 'binds', 'full', 'tut', 'test']) put(out, k, bool(s[k]));   // test: a visit made to check the game
   put(out, 'tune', numMap(s.tune, 16));
   put(out, 'hz', num(s.hz, 0, 1000)); if (Array.isArray(s.px) && s.px.length === 2) put(out, 'px', nums(s.px, 2, 0, 40000));   // display refresh rate; the size the picture is drawn at
   put(out, 'gpu', str(s.gpu, /^[A-Za-z0-9 .,:_()\/+\-]{1,100}$/));                                                              // graphics card, as the browser names it

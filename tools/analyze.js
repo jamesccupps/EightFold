@@ -1,6 +1,7 @@
 // A report on how the game is being played, from the session files on the play-data branch.
 //   git fetch origin play-data && git archive origin/play-data sessions | tar -x -C /tmp/pd
 //   node tools/analyze.js /tmp/pd/sessions [--skip id,id,...] [--since 2026-11-24]
+// Visits listed in sessions/exclude.txt on the branch, or opened with #test on the address, are left out.
 // Sections: who played, how far they got, each course, where runs end, press timing per obstacle, the tutorial,
 // how the game ran on each machine, what players said, errors. Feedback text is whatever a stranger typed.
 const fs = require('fs'), path = require('path');
@@ -8,7 +9,9 @@ const { replay, courseFor, engine } = require('./replay.js');
 const args = process.argv.slice(2), opt = k => { const i = args.indexOf(k); return i >= 0 ? args.splice(i, 2)[1] : ''; };
 const skip = new Set(opt('--skip').split(',').filter(Boolean)), since = opt('--since');
 function files(p) { return fs.statSync(p).isDirectory() ? [].concat(...fs.readdirSync(p).map(f => files(path.join(p, f)))) : p.endsWith('.json') ? [p] : []; }
-let visits = [].concat(...args.map(files)).map(f => JSON.parse(fs.readFileSync(f, 'utf8'))).filter(d => d.session && !skip.has(d.session.id));
+// visits to leave out: --skip, any exclude.txt in the folders given (one visit id per line, # for notes), and visits marked as tests
+for (const dir of args) for (const f of [path.join(dir, 'exclude.txt'), path.join(dir, '..', 'exclude.txt')]) if (fs.existsSync(f)) for (const line of fs.readFileSync(f, 'utf8').split('\n')) { const id = line.replace(/#.*/, '').trim(); if (id) skip.add(id); }
+let visits = [].concat(...args.map(files)).map(f => JSON.parse(fs.readFileSync(f, 'utf8'))).filter(d => d.session && !skip.has(d.session.id) && !d.session.test);
 if (since) visits = visits.filter(d => new Date((d.session.t || 0) * 1000).toISOString().slice(0, 10) >= since);
 const ghost = d => !d.attempts.length && !(d.session.notes || []).length && (d.session.dur || 0) < 5;
 const ghosts = visits.filter(ghost).length; visits = visits.filter(d => !ghost(d));
