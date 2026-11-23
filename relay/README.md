@@ -37,7 +37,7 @@ Sign up at cloudflare.com (the free plan is enough), then in the dashboard:
 
 **3. Check it and hand over the address**
 
-Open the Worker's address (it looks like `https://eightfold-relay.<your-name>.workers.dev`). It should show `{"ok":true,"what":"Eightfold play-data relay","ready":true}`.
+Open the Worker's address (it looks like `https://eightfold-relay.<your-name>.workers.dev`). It should show `{"ok":true,"what":"Eightfold play-data relay","version":"...","ready":true}`.
 
 That address goes into `RELAY` near the top of the recording code in `src/page.html`; then `node build.js`, commit and push. From then on the public game sends play data, and says so on its menu.
 

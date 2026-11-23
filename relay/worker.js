@@ -17,6 +17,7 @@
 //   ORIGINS       optional, comma-separated pages allowed to post, default "https://jamesccupps.github.io"
 //   OFF           optional. Set to "1" to refuse everything without deleting the Worker.
 
+const VERSION = '2026-11-23.4';   // shown on the status line, so a deploy can be told from the one before
 const DEFAULTS = { REPO: 'jamesccupps/EightFold', BRANCH: 'play-data', ORIGINS: 'https://jamesccupps.github.io' };
 const MAX_BODY = 64 * 1024;        // bytes per post
 const MAX_ATTEMPTS = 400;          // attempts per session file
@@ -195,7 +196,7 @@ export default {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: okOrigin ? 204 : 403, headers: okOrigin ? { 'Access-Control-Allow-Origin': okOrigin, 'Access-Control-Allow-Methods': 'POST', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400', 'Vary': 'Origin' } : {} });
     }
-    if (request.method === 'GET') return reply(200, { ok: true, what: 'Eightfold play-data relay', ready: !!env.GITHUB_TOKEN && env.OFF !== '1' }, okOrigin);
+    if (request.method === 'GET') return reply(200, { ok: true, what: 'Eightfold play-data relay', version: VERSION, ready: !!env.GITHUB_TOKEN && env.OFF !== '1' }, okOrigin);
     if (request.method !== 'POST') return reply(405, { error: 'POST only' }, okOrigin);
     if (env.OFF === '1') return reply(503, { error: 'switched off' }, okOrigin);
     if (!okOrigin) return reply(403, { error: 'not from the game' }, '');
