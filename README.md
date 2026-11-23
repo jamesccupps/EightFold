@@ -2,12 +2,14 @@
 
 A tunnel runner for the browser. Eight walls, one way through: turn the tunnel under you, jump, flip to the far wall, and do not fall out.
 
-The whole game is one self-contained file, `index.html`. No dependencies, no build step needed to play: open the file in a browser, or serve the repository with GitHub Pages.
+**Play it: https://jamesccupps.github.io/EightFold/**
+
+The whole game is one self-contained file, `index.html`. No dependencies and no build step needed to play.
 
 ## Play
 
-- Open `index.html` locally, or
-- enable GitHub Pages for this repository (Settings → Pages → deploy from the `main` branch, root folder). The game is then at `https://jamesccupps.github.io/EightFold/`.
+- In the browser at https://jamesccupps.github.io/EightFold/ (GitHub Pages serves the `main` branch, so a push updates it), or
+- download `index.html` and open it locally.
 
 Scores, key bindings and options are stored in the browser, per site.
 
@@ -98,4 +100,6 @@ They show that every course is finishable, fair and progressively denser. They d
 
 Inspired by the tunnel runners of early-2010s phones, Octagon in particular. All code, art, sound and level data here are original; nothing is taken from any other game. Fonts are Unbounded and Chivo Mono, loaded from Google Fonts.
 
-No license has been chosen yet, which means all rights are reserved until one is added.
+## License
+
+MIT. See [LICENSE](LICENSE).
