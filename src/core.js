@@ -215,6 +215,16 @@ class Track {
     (this.segs || (this.segs = [])).push([r0, this.S.length, kind]);
     for (let i = e0; i < this.events.length; i++) this.events[i].kind = kind;
   }
+  // A number that changes if the course does. Recorded with each run, so that a recording is only ever played back
+  // against the course it was made on, however the generator changes later.
+  checksum() {
+    if (this._cs == null) {
+      const n = this.end === Infinity ? 300 : this.end; if (this.end === Infinity) this.cell(n - 1, 0);
+      let h = 17; for (let r = 0; r < n; r++) h = (Math.imul(h, 31) + this.S[r] + 7 * this.B[r] + 13 * this.H[r] + 19 * this.PD[r] + 23 * this.X[r]) | 0;
+      this._cs = h >>> 0;
+    }
+    return this._cs;
+  }
   kindAt(row) {   // the obstacle at this row, or the one just behind it, or 'floor'
     const g = this.segs || []; let best = 'floor';
     for (let i = g.length - 1; i >= 0; i--) {

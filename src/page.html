@@ -260,6 +260,7 @@ textarea.out {
   <p class="stat" id="winParts"></p>
   <p id="winText"></p>
   <div class="rate" id="winRate" hidden></div>
+  <div class="rate" id="winFun" hidden></div>
   <div class="row"><button class="btn go" id="btnNext" type="button">Next level</button><button class="btn" id="btnAgain" type="button">Play again</button><button class="btn" id="btnQuit2" type="button">Level select</button><button class="btn" id="btnNote4" type="button">Feedback</button></div>
 </div>
 
@@ -381,7 +382,7 @@ const lvS = i => stats.lv[i] || (stats.lv[i] = { best: 0, clears: 0, tries: 0, s
 const saveStats = () => store.set('stats', stats);
 const SKINS = [['pearl', 'Pearl', 0], ['ember', 'Ember', 30], ['mint', 'Mint', 80], ['void', 'Void', 160], ['prism', 'Prism', 300]];
 const skin = () => { const s = SKINS.find(x => x[0] === opts.skin); return s && (stats.total || 0) >= s[2] ? s[0] : 'pearl'; };
-const TOTALS = LEVELS.map(lv => new Track(lv.seed, lv).nSparks);
+let TOTALS = LEVELS.map(lv => new Track(lv.seed, lv).nSparks);
 const unlocked = i => i === 0 || opts.unlockAll || (stats.lv[i - 1] && (stats.lv[i - 1].clears > 0 || stats.lv[i - 1].pclear));
 
 // ---------- tuning (a temporary tool for finding the right feel) ----------
@@ -403,9 +404,18 @@ const TUNE = [
   ['zoom', 'Zoom', .8, 1.3, .01, 1, 'x', 'cam', 'Narrower or wider view.'],
   ['ball', 'Ball size', .08, .19, .005, .13, '', 'cam', '']
 ];
-const TUNE0 = {}; for (const t of TUNE) if (typeof t !== 'string') TUNE0[t[0]] = t[5];
+const TUNE_BASE = {}; for (const t of TUNE) if (typeof t !== 'string') TUNE_BASE[t[0]] = t[5];   // the game's own defaults
+const TUNE0 = Object.assign({}, TUNE_BASE);   // this player's defaults: the same, unless an experiment puts them in a variant
 let tune = Object.assign({}, TUNE0);
-{ const sv = store.get('tune', null); if (sv && typeof sv === 'object') for (const t of TUNE) if (typeof t !== 'string' && typeof sv[t[0]] === 'number' && isFinite(sv[t[0]])) tune[t[0]] = clamp(sv[t[0]], t[2], t[3]); }
+// what the player changed in the drawer is stored as differences from their defaults
+function loadTune() {
+  tune = Object.assign({}, TUNE0);
+  const sv = store.get('tune', null);
+  if (sv && typeof sv === 'object') for (const t of TUNE) if (typeof t !== 'string') { const v = sv[t[0]]; if (typeof v === 'number' && isFinite(v) && Math.abs(v - TUNE_BASE[t[0]]) > 1e-9) tune[t[0]] = clamp(v, t[2], t[3]); }
+}
+const saveTune = () => store.set('tune', tuneDiff());
+// every value that differs from the game's own defaults, whoever set it: what a recording needs to be played back
+const tuneFromBase = () => { const o = {}; for (const k in TUNE_BASE) if (Math.abs(tune[k] - TUNE_BASE[k]) > 1e-9) o[k] = tune[k]; return o; };
 const tuneSame = k => Math.abs(tune[k] - TUNE0[k]) < 1e-9;
 const tuneDiff = () => { const o = {}; for (const k in TUNE0) if (!tuneSame(k)) o[k] = tune[k]; return o; };
 // changed values that alter how a run plays (not just how it looks): such runs are not scored
@@ -418,7 +428,7 @@ function applyTune() {
 // ---------- play recording (temporary: so the game can be tuned from how it is really played) ----------
 // One small record per attempt: where it ended and on what, the time, sparks, how early or late each press came inside
 // the window the course allows for it, and the frame rate. Kept in this browser; see the Play data sheet.
-const BUILD = '2026-11-23f';
+const BUILD = '2026-11-23g', CORE_ID = '/*COREID*/';   // CORE_ID: which engine (generator + physics) this page was built from
 // Where play records are sent from the public copy of the game: a small relay that files them on the play-data branch
 // of the game's GitHub repository (see relay/ in the repository). Empty = nothing is sent.
 let RELAY = 'https://eightfold-relay.jamesccupps.workers.dev/', relayAnywhere = false;
@@ -439,6 +449,26 @@ if (typeof tel.pid !== 'string' || !/^[a-z0-9]{12}$/.test(tel.pid)) { tel.pid = 
 tel.visits = (tel.visits | 0) + 1;
 store.set('tel', tel);
 const refHost = (() => { try { const h = new URL(document.referrer).hostname; return h && h !== location.hostname ? h.slice(0, 60) : ''; } catch (e) { return ''; } })();
+// ---------- experiments ----------
+// To find out which of two settings plays better, give each to part of the players and compare what the play data says.
+// Each entry: { id: 'jump-1', variants: [{ name: 'a', tune: {} }, { name: 'b', tune: { jump: .48 } }] }. A player stays in
+// one variant (chosen from their player code), its values become that player's defaults, their runs are scored as
+// normal, and every visit records which variant it was. An empty list means no experiment is running.
+const EXPERIMENTS = [];
+const XP = {};   // experiment id -> the variant this player is in
+{
+  const hash = t => { let h = 2166136261; for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 16777619); return h >>> 0; };
+  const dev = store.get('xp', null);   // a list of the same shape under eightfold.xp in this browser's storage tries one out locally
+  for (const x of (Array.isArray(dev) ? dev : EXPERIMENTS)) {
+    if (!x || typeof x.id !== 'string' || !Array.isArray(x.variants) || !x.variants.length) continue;
+    const v = x.variants[hash(tel.pid + ':' + x.id) % x.variants.length]; if (!v) continue;
+    XP[x.id.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 16)] = String(v.name).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 16);
+    for (const t of TUNE) if (typeof t !== 'string' && v.tune && typeof v.tune[t[0]] === 'number' && isFinite(v.tune[t[0]])) { TUNE0[t[0]] = clamp(v.tune[t[0]], t[2], t[3]); t[5] = TUNE0[t[0]]; }
+  }
+}
+loadTune();
+let firstFrame = 0;
+const storageOk = (() => { try { localStorage.setItem('eightfold.ok', '1'); return localStorage.getItem('eightfold.ok') === '1'; } catch (e) { return false; } })();
 function keysChanged() {   // which actions have keys other than the defaults, and what they are
   const out = [], nm = k => k == null ? '' : k === ' ' ? 'Space' : String(k).replace(/[^A-Za-z0-9]/g, '').slice(0, 12) || 'key';
   for (const [a] of ACTIONS) if (JSON.stringify(opts.binds[a]) !== JSON.stringify(DEF_BINDS[a])) out.push(a + ':' + nm(opts.binds[a][0]) + '|' + nm(opts.binds[a][1]));
@@ -454,13 +484,15 @@ function telSession() {
   if (!telSess) {
     const kept = store.get('tel', null); if (kept && typeof kept.pid === 'string' && /^[a-z0-9]{12}$/.test(kept.pid)) { tel.pid = kept.pid; if (kept.first) tel.first = kept.first; }
   }
-  if (!telSess) { telSess = { id: SID, t: Math.round(Date.now() / 1000), build: BUILD, host: String(location.hostname || 'file').slice(0, 60), pid: tel.pid, vn: tel.visits, first: tel.first, ev: [], fb: {} }; if (refHost) telSess.ref = refHost; tel.sessions.push(telSess); if (tel.sessions.length > 30) tel.sessions.shift(); }
+  if (!telSess) { telSess = { id: SID, t: Math.round(Date.now() / 1000), build: BUILD, core: CORE_ID, host: String(location.hostname || 'file').slice(0, 60), fun: {}, pid: tel.pid, vn: tel.visits, first: tel.first, ev: [], fb: {} }; if (refHost) telSess.ref = refHost; tel.sessions.push(telSess); if (tel.sessions.length > 30) tel.sessions.shift(); }
   const st = []; LEVELS.forEach((lv, i) => { const x = stats.lv[i] || {}; st.push(x.best || 0, x.clears || 0, x.tries || 0); });
   Object.assign(telSess, browserName(), { w: W, h: H, dpr: +(window.devicePixelRatio || 1).toFixed(2), touch: touchSeen, cores: navigator.hardwareConcurrency | 0, mem: +navigator.deviceMemory || 0,
     quality: opts.quality, qscale: +qScale.toFixed(2), speed: opts.speed, cp: !!opts.cp, auto: !!opts.auto, invert: !!opts.invert, calm: !!opts.calm, brief: opts.brief !== false, unlockAll: !!opts.unlockAll,
     err: errLog.slice(), kb: keysChanged(), hz: dispHz(), px: [cv.width | 0, cv.height | 0], gpu: gpuName(),
     music: opts.music | 0, sfx: opts.sfx | 0, muted: !!Snd.muted, skin: skin(), binds: JSON.stringify(opts.binds) !== JSON.stringify(cloneBinds(DEF_BINDS)), full: fullUsed,
-    tut: !!stats.tut, tot: stats.total || 0, st, dur: Math.round((performance.now() - T0) / 1000), tune: tuneDiff() });
+    tut: !!stats.tut, tot: stats.total || 0, st, dur: Math.round((performance.now() - T0) / 1000), tune: tuneFromBase(),
+    load: Math.round(T00), ff: Math.round(firstFrame), lang: String(navigator.language || '').slice(0, 12), rmo: RM, ls: storageOk });
+  for (const k in XP) { telSess.xp = XP; break; }
   return telSess;
 }
 // the display's refresh rate, judged from the gaps between frames while the page is in view
@@ -490,11 +522,11 @@ const telMode = () => typeof mode === 'number' ? 'L' + (mode + 1) : mode === 'da
 function telStart(cp) {
   const now = performance.now();
   telCur = tel.on && !bot ? { cp: cp ? Math.floor(cp.z) : 0, pr: 0, px: 0, ei: 0, hit: {}, fh: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], kk: {}, sh: 0, sl: 0, sg: 0, fn: 0, ft: 0, fj: 0, fx: 0, fb: [0, 0, 0, 0, 0, 0, 0], rs: 0, rn: 0,
-    tr: [], inp: [0, 0, 0, 0], tt: [], tw: 0, th: 0, pzN: 0, pzT: 0, rt: telLast && mode != null && telLast.m === telMode() ? Math.min(600, +((now - telLast.at) / 1000).toFixed(1)) : -1 } : null;
+    tr: [], inp: [0, 0, 0, 0, 0], tt: [], tw: 0, th: 0, pzN: 0, pzT: 0, rt: telLast && mode != null && telLast.m === telMode() ? Math.min(600, +((now - telLast.at) / 1000).toFixed(1)) : -1 } : null;
   pauseAt = 0;
 }
 // a press: find the move on the course's own route it belongs to, and note where in that move's window it came.
-// src: 0 keyboard, 1 touch on the tunnel, 2 on-screen button, 3 mouse
+// src: 0 keyboard, 1 tap on the tunnel, 2 on-screen button, 3 mouse, 4 swipe on the tunnel
 function telPress(m, src) {
   const c = telCur; if (!c) return; c.pr++; c.inp[src | 0]++;
   const ev = track.events, z = runner.z, v = track.speedAt(z), slack = v * .3;
@@ -517,7 +549,7 @@ function telEnd(res) {
   if (mode == null || !track || !runner || bot) return;
   const z = c.dz != null ? c.dz : runner.z, row = Math.floor(z), v = track.speedAt(z), ev = track.events, win = res === 'win';   // dz: where the ball was when the run ended
   if (pauseAt) { c.pzT += performance.now() - pauseAt; pauseAt = 0; }
-  const rec = { s: SID, i: telSeq++, t: Math.round(Date.now() / 1000), m: telMode(), a: tries, res, pc: score(), z: row, d: +runT.toFixed(1), sp: runner.sparks, pts: tally(win).total, pr: c.pr, px: c.px, fh: c.fh,
+  const rec = { s: SID, i: telSeq++, cs: track.checksum(), t: Math.round(Date.now() / 1000), m: telMode(), a: tries, res, pc: score(), z: row, d: +runT.toFixed(1), sp: runner.sparks, pts: tally(win).total, pr: c.pr, px: c.px, fh: c.fh,
     fps: c.ft > 0 ? Math.round(c.fn / c.ft) : 0, fj: c.fj, fx: Math.min(9999, Math.round(c.fx)),
     ft: c.fb, rm: c.rn ? +(c.rs / c.rn).toFixed(2) : 0 };   // ft: frames taking under 9, 13, 18, 25, 35, 50 and over 50 ms; rm: ms spent drawing each frame
   if (!win) {
@@ -539,7 +571,7 @@ function telEnd(res) {
   if (c.rt >= 0) rec.rt = c.rt;                                     // seconds between the last run ending and this one starting
   if (qScale < 1) rec.q = +qScale.toFixed(2);
   if (practice()) rec.prac = 1;
-  const td = tuneDiff(); for (const k in td) { rec.tu = td; break; }
+  const td = tuneFromBase(); for (const k in td) { rec.tu = td; break; }
   telLast = { m: rec.m, at: performance.now() };
   tel.log.push(rec); if (tel.log.length > 400) tel.log.splice(0, tel.log.length - 400);
   telSession(); saveTel(); telSync(); telSend(false);
@@ -547,7 +579,7 @@ function telEnd(res) {
 // Send what is new to the relay: at most every 30 seconds, and once more when the page is put away.
 function telSend(last) {
   if (!relayOn() || !telSess) return;
-  const s = telSess, fresh = tel.log.filter(r => r.s === SID && r.i >= relayAck), marks = s.ev.length + Object.keys(s.fb).length + (s.notes ? s.notes.length : 0);
+  const s = telSess, fresh = tel.log.filter(r => r.s === SID && r.i >= relayAck), marks = s.ev.length + Object.keys(s.fb).length + Object.keys(s.fun || {}).length + (s.notes ? s.notes.length : 0);
   if (!fresh.length && marks === relayEv) return;
   if (!fresh.length && !(s.notes && s.notes.length) && !Object.keys(s.fb).length && performance.now() - T0 < 5000) return;   // opened and gone at once: not a visit
   const now = Date.now(), wait = 30000 - (now - relayAt);
@@ -596,20 +628,22 @@ function telTune() {   // the values currently set in the tuning drawer, saved t
   if (!telDb || !tel.on) return;
   try { Promise.resolve(telDb.doc('tune/current').set({ t: Math.round(Date.now() / 1000), build: BUILD, values: Object.assign({}, tune), changed: tuneDiff() })).catch(() => {}); } catch (e) {}
 }
-// one tap on the result screen: how the level felt. Asked once per course per visit.
+// one tap on the result screen, asked once per course per visit: how hard the level felt, and (after clearing it) whether it was fun
 const FEEL = [['easy', 'Too easy'], ['right', 'About right'], ['hard', 'Too hard'], ['unfair', 'Unfair']];
-function rateRow(el, show) {
+const FUN = [['love', 'Loved it'], ['ok', 'It was fine'], ['no', 'Not for me']];
+function rateRow(el, show, field, question, choices) {
   el.textContent = ''; el.hidden = true;
   if (!show || !tel.on || mode == null || mode === 'tutorial') return;
-  const key = telMode(), s = telSess || telSession(); if (s.fb[key]) return;
-  const l = document.createElement('span'); l.textContent = typeof mode === 'number' ? 'How does this level feel?' : 'How does this course feel?'; el.appendChild(l);
-  for (const [v, text] of FEEL) {
+  const key = telMode(), s = telSess || telSession(); if (!s[field]) s[field] = {}; if (s[field][key]) return;
+  const l = document.createElement('span'); l.textContent = question; el.appendChild(l);
+  for (const [v, text] of choices) {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'btn sm'; b.textContent = text;
-    b.addEventListener('click', () => { s.fb[key] = v; telEv('fb:' + key + '=' + v); saveTel(); telSync(); telSend(false); el.textContent = 'Noted, thanks.'; });
+    b.addEventListener('click', () => { s[field][key] = v; telEv(field + ':' + key + '=' + v); saveTel(); telSync(); telSend(false); el.textContent = 'Noted, thanks.'; });
     el.appendChild(b);
   }
   el.hidden = false;
 }
+const feelQ = () => typeof mode === 'number' ? 'How hard did this level feel?' : 'How hard did this course feel?';
 try {
   if (window.claude && typeof window.claude.use === 'function') Promise.resolve(window.claude.use('db')).then(d => { telDb = d || null; telSync(); if (overlay === 'dataSheet') buildData(); }, () => {});
 } catch (e) {}
@@ -945,7 +979,7 @@ function showFail() {
   $('failStat').textContent = bits.join('  ·  ');
   $('btnNew').hidden = mode !== 'endless';
   $('failHint').textContent = (practice() && mode !== 'tutorial' ? 'Practice run: not recorded. ' : '') + (touchSeen ? 'Restart replays' : 'Press ' + labelFor('restart') + ' or ' + labelFor('jump') + ' to restart') + (resumeCp ? ' from the checkpoint.' : ' the same course.');
-  rateRow($('failRate'), tries >= 4);
+  rateRow($('failRate'), tries >= 4, 'fb', feelQ(), FEEL);
   $('failPanel').hidden = false; $('btnRetry').focus();
 }
 function onWin() {
@@ -962,7 +996,7 @@ function onWin() {
   $('btnNext').hidden = !(tut || (lv && mode < LEVELS.length - 1));
   $('btnNext').textContent = tut ? 'Start level 1' : 'Next level';
   $('btnAgain').hidden = tut;
-  rateRow($('winRate'), true);
+  rateRow($('winRate'), true, 'fb', feelQ(), FEEL); rateRow($('winFun'), true, 'fun', 'Was it fun?', FUN);
   $('winPanel').hidden = false; ($('btnNext').hidden ? $('btnAgain') : $('btnNext')).focus();
 }
 function toMenu() {
@@ -1014,6 +1048,7 @@ const RC = 1 / Math.cos(Math.PI / 8);   // corner radius of an octagon with apot
 const RL = .86, NEAR = .3, TH = .09;
 let CAMBACK = 4.4, CAMY = -.5, BR = .13;   // camera distance and height, ball size: the tuning drawer can change these
 applyTune();
+if (Object.keys(XP).length) TOTALS = LEVELS.map(lv => new Track(lv.seed, lv).nSparks);   // a variant may lay the courses out differently
 let VIEW = 36, qScale = 1, slowFor = 0, ema = 1 / 60, idleFor = 0;   // draw distance and resolution adapt to the machine
 const cxr = new Float64Array(9), cyr = new Float64Array(9), shade = new Float64Array(8);
 let W = 0, H = 0, DPR = 1, cx = 0, cy = 0, F = 1, camNow = 0;
@@ -1422,7 +1457,7 @@ function buildTune() {
     l.htmlFor = id; l.textContent = label; r.type = 'range'; r.id = id; r.min = min; r.max = max; r.step = step; r.value = tune[key]; sm.textContent = hint;
     const show = () => { o.textContent = fmtTune(unit, tune[key]) + (tuneSame(key) ? '' : '  (was ' + fmtTune(unit, def) + ')'); o.className = tuneSame(key) ? 'same' : ''; };
     r.addEventListener('input', () => { tune[key] = +r.value; tuneTouched = true; if (kind === 'course') tuneDirty = true; applyTune(); show(); tuneText(); idleFor = 0; });
-    r.addEventListener('change', () => { store.set('tune', tune); if (kind === 'course') tuneCheck(); });
+    r.addEventListener('change', () => { saveTune(); if (kind === 'course') tuneCheck(); });
     show(); box.appendChild(l); box.appendChild(o); box.appendChild(r); box.appendChild(sm);
   }
   tuneText(); tuneCheck();
@@ -1438,7 +1473,7 @@ function openTune() {
 // play: go straight into a run with the new values. Otherwise go back to where the drawer was opened from.
 function closeTune(play) {
   if (overlay !== 'tuneSheet') return;
-  $('tuneSheet').hidden = true; overlay = null; idleFor = 0; store.set('tune', tune);
+  $('tuneSheet').hidden = true; overlay = null; idleFor = 0; saveTune();
   if (tuneTouched) telTune();
   const dirty = tuneDirty; tuneDirty = false;
   if (state === 'menu') {
@@ -1504,7 +1539,7 @@ function buildData() {
   $('dataInfo').textContent = (tel.on ? 'Recording is on. ' : 'Recording is off. ') + log.length + (log.length === 1 ? ' attempt' : ' attempts') + ' kept in this browser' + (first ? ', the oldest from ' + first : '') + '. '
     + 'Each one notes where the run ended and on what, the time, score and sparks, every press and how early or late it came, pauses, and the frame rate; the visit as a whole notes the options in use, which screens were opened, and any error in the page. It is here for a while so the game can be tuned from real play. '
     + (telDb ? 'In this Claude artifact the same records are also saved to the artifact’s own storage, where Claude can read them when you ask it to tune the game.'
-      : relayOn() ? 'While recording is on they are also sent to the game’s developer and filed in its public GitHub repository, with a random code kept in this browser (so your visits can be told from other players’), a rough description of the machine (browser and system by name, screen size and refresh rate, processor count, graphics card), the site you came from and your country: no name, no address. Stop recording stops the sending; Erase clears this browser’s copy only.'
+      : relayOn() ? 'While recording is on they are also sent to the game’s developer and filed in its public GitHub repository, with a random code kept in this browser (so your visits can be told from other players’), a rough description of the machine (browser and system by name, screen size and refresh rate, processor count, graphics card), the browser’s language, the site you came from and your country: no name, no address. Stop recording stops the sending; Erase clears this browser’s copy only.'
       : 'Nothing is sent anywhere: use Copy or Download to pass it on.');
   $('btnDataToggle').textContent = tel.on ? 'Stop recording' : 'Start recording';
   dataArmed = false; $('btnDataClear').textContent = 'Erase play data'; $('dataOut').hidden = true;
@@ -1514,7 +1549,7 @@ function buildData() {
     a.n++; if (r.res === 'win') a.win++; else if (r.res === 'fall' || r.res === 'crash') { a.ends.push(r.pc); const k = kindName(r.k || 'floor'); a.at[k] = (a.at[k] || 0) + 1; (ob[k] || (ob[k] = { dead: 0, n: 0, f: 0, late: 0, min: 1e9 })).dead++; }
     for (const k in r.kk || {}) { const q = r.kk[k], o = ob[kindName(k)] || (ob[kindName(k)] = { dead: 0, n: 0, f: 0, late: 0, min: 1e9 }); o.n += q[0]; o.f += q[1] * q[0]; o.late += q[2]; if (q[4] < o.min) o.min = q[4]; }
   }
-  const felt = {}; for (const x of tel.sessions) for (const m in (x && x.fb) || {}) { const t = (FEEL.find(f => f[0] === x.fb[m]) || [0, x.fb[m]])[1]; (felt[m] || (felt[m] = [])).push(t); }
+  const felt = {}; for (const x of tel.sessions) for (const [map, names] of [[x && x.fb, FEEL], [x && x.fun, FUN]]) for (const m in map || {}) { const t = (names.find(f => f[0] === map[m]) || [0, map[m]])[1]; (felt[m] || (felt[m] = [])).push(t); }
   const empty = (tb, cols) => { const tr = document.createElement('tr'); cell(tr, 'Nothing recorded yet'); for (let i = 1; i < cols; i++) cell(tr, ''); tb.appendChild(tr); };
   const a = $('dataLv'); a.textContent = ''; order.sort();
   for (const m of order) {
@@ -1571,14 +1606,14 @@ window.addEventListener('keydown', e => {
   else if (a === 'restart' && !e.repeat && state === 'play') { record(false); retry(true); }
 });
 let ptr = null;
-cv.addEventListener('pointerdown', e => { if (e.pointerType === 'touch') touchSeen = true; if (state === 'menu' || overlay) return; ptr = { x: e.clientX, y: e.clientY, t: performance.now(), done: false, src: e.pointerType === 'touch' ? 1 : 3 }; Snd.wake(); });
+cv.addEventListener('pointerdown', e => { if (e.pointerType === 'touch') touchSeen = true; if (state === 'menu' || overlay) return; ptr = { x: e.clientX, y: e.clientY, t: performance.now(), done: false, touch: e.pointerType === 'touch' }; Snd.wake(); });
 cv.addEventListener('pointermove', e => {
   if (!ptr || ptr.done) return;
   const dx = e.clientX - ptr.x, dy = e.clientY - ptr.y;
   if (Math.abs(dx) < 22 && Math.abs(dy) < 22) return;
-  ptr.done = true; act(Math.abs(dx) > Math.abs(dy) ? turn(dx < 0) : dy < 0 ? 'F' : 'J', ptr.src);
+  ptr.done = true; act(Math.abs(dx) > Math.abs(dy) ? turn(dx < 0) : dy < 0 ? 'F' : 'J', ptr.touch ? 4 : 3);
 });
-const ptrEnd = e => { if (ptr && !ptr.done && performance.now() - ptr.t < 350) act(turn(e.clientX < W / 2), ptr.src); ptr = null; };
+const ptrEnd = e => { if (ptr && !ptr.done && performance.now() - ptr.t < 350) act(turn(e.clientX < W / 2), ptr.touch ? 1 : 3); ptr = null; };
 cv.addEventListener('pointerup', ptrEnd);
 cv.addEventListener('pointercancel', () => { ptr = null; });
 cv.addEventListener('contextmenu', e => e.preventDefault());
@@ -1613,7 +1648,7 @@ on('btnDefaults', () => { opts.binds = cloneBinds(DEF_BINDS); saveOpts(); buildC
 on('btnTut', startTutorial);
 on('btnTune', openTune); on('btnTune2', openTune);
 on('btnCloseTune', () => closeTune(false)); on('btnTuneTry', () => closeTune(true));
-on('btnTuneReset', () => { for (const t of TUNE) if (typeof t !== 'string' && !tuneSame(t[0])) { if (t[7] === 'course') tuneDirty = true; tuneTouched = true; tune[t[0]] = t[5]; } applyTune(); store.set('tune', tune); buildTune(); idleFor = 0; });
+on('btnTuneReset', () => { for (const t of TUNE) if (typeof t !== 'string' && !tuneSame(t[0])) { if (t[7] === 'course') tuneDirty = true; tuneTouched = true; tune[t[0]] = t[5]; } applyTune(); saveTune(); buildTune(); idleFor = 0; });
 on('btnTuneCopy', e => { tuneText(); copyText($('tuneOut').value, $('tuneOut'), e.currentTarget, 'Copy values'); });
 on('btnData', () => { buildData(); openSheet('dataSheet'); });
 on('btnCloseData', closeSheet);
@@ -1649,6 +1684,7 @@ const STEP = 1 / 240, pf = { ms: 0, n: 0 };
 let frameNo = 0;
 let last = 0, acc = 0;
 function frame(ts) {
+  if (!firstFrame) firstFrame = performance.now();
   const now = ts / 1000; let dt = now - last; last = now;
   if (!document.hidden && dt > .002 && dt < .1 && hzGaps.length < 240) hzGaps.push(dt * 1000);
   if (telCur && state === 'play' && dt > 0) {

@@ -49,7 +49,8 @@ Two tools are in the game for now, to find the right feel and then be taken out 
 - the course, how the run ended, where, on which obstacle, and what the ball was doing (on the floor, mid turn, flip or jump);
 - every press as a position and a move, so the run can be replayed against its course (`node tools/replay.js`), and where each press fell inside the window the course allows;
 - the required move that was due and not made, and by how much;
-- time, score, sparks, shields and slow-mo used, speed gained, pauses, how long before the next try, keyboard / touch / on-screen buttons;
+- time, score, sparks, shields and slow-mo used, speed gained, pauses, how long before the next try, and how it was played (keyboard, taps, swipes, on-screen buttons, mouse);
+- a checksum of the course, so a recording is only ever played back against the course it was made on;
 - frame rate, how long frames took (in seven bands), the longest frame, the time spent drawing, and any drop in resolution.
 
 In the tutorial it notes how long each step waited for its key and how many wrong keys came first.
@@ -58,15 +59,21 @@ For the visit as a whole it notes:
 
 - a random code kept in the browser, the visit number and the date of the first visit, so returning players can be told from new ones (Erase makes a new code);
 - the browser and system by name, screen size and refresh rate, the size the picture is drawn at, processor count, graphics card, the site the player came from, and (added by the relay) the country;
+- which version of the engine the page was built from, how long the page took to start, the browser's language, and whether storage works;
 - the options in use, any keys changed from the defaults, progress so far, and every screen opened and button pressed in the menus, with times;
 - any error in the page, as short plain text;
-- a one-tap answer to "how does this level feel?" on the result screen.
+- two one-tap answers on the result screen: how hard the level felt and, after a clear, whether it was fun;
+- which variant of any running experiment the player is in.
 
 No name and no address. Runs that could not be sent when a tab was closed are sent on the next visit.
 
 **Feedback** (menu, pause and result screens) is a short form: suggestion, problem or other, and up to 600 characters. It travels with the play data, tagged with where the player was. It is the only free text collected, and the form says it is filed publicly. `node tools/feedback.js <folder>` lists what has come in.
 
-`node tools/analyze.js <folder>` turns the session files into a report: who played and who came back, how far they got, attempts and clear times per course, where runs end and on what, press timing per obstacle, the tutorial step by step, how the game ran on each machine, feedback, errors, and menu use. The sheet has Copy, Download, a switch to stop recording, and Erase. (The copy published as a Claude artifact also saves the same records to that artifact's own storage.)
+`node tools/analyze.js <folder>` turns the session files into a report: who played and who came back, how far they got, attempts and clear times per course, sparks collected and replays after a clear, where runs end and on what, every obstacle of each level in order with how many reached it and how many ended there, press timing per obstacle, the tutorial step by step, how the game ran on each machine, experiments by variant, feedback, ratings, errors, and menu use.
+
+**Experiments.** `EXPERIMENTS` in `src/page.html` is a list, empty unless one is running. An entry names two or more variants, each with tuning values; every player is put in one variant for good (from their player code), plays it as the normal, scored game, and has the variant recorded with each visit, so the report can compare them. A list in the same shape under `eightfold.xp` in a browser's local storage tries one out on that browser only.
+
+**Keeping old data usable.** The generator will change as levels are tuned. Each visit records an id for the engine it ran on and each run a checksum of its course; `tools/replay.js` fetches the matching engine from this repository's history, so old runs still play back on the courses they were made on. The sheet has Copy, Download, a switch to stop recording, and Erase. (The copy published as a Claude artifact also saves the same records to that artifact's own storage.)
 
 The public copy also sends each session's records to a small Cloudflare Worker, which files them on this repository's [`play-data`](https://github.com/jamesccupps/EightFold/tree/play-data) branch. The menu says so while it is on, and stopping the recording stops the sending. Setting `RELAY` in `src/page.html` to `''` turns the sending off for everyone; a copy opened from a file or run anywhere but the game's own page sends nothing. See [`relay/`](relay/README.md).
 

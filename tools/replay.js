@@ -1,28 +1,49 @@
 // Plays recorded runs back against the course they were played on, from the press trace in the play data.
 //   node tools/replay.js <file-or-folder> [...]     session files from the play-data branch, or a Play data download
 // For each attempt it rebuilds the course (level, daily or endless seed, and any tuning in force), presses the same
-// moves at the same places, and reports whether the run ends the way it was recorded. Also used by the browser tests.
-const fs = require('fs'), path = require('path');
-const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'core.js'), 'utf8');
-const { LEVELS, DAILY, TUTORIAL, Track, Runner, setFeel } = new Function(src + '; return {LEVELS,DAILY,TUTORIAL,Track,Runner,setFeel};')();
-
-function courseFor(rec) {
-  const m = rec.m;
-  if (m[0] === 'L') { const lv = LEVELS[+m.slice(1) - 1]; return lv ? new Track(lv.seed, lv) : null; }
-  if (m[0] === 'D') { const p = m.slice(1).split('-').map(Number), seed = p[0] * 10000 + p[1] * 100 + p[2]; return new Track(seed, Object.assign({}, DAILY, { pat: seed % 5 })); }
-  if (m === 'E') return rec.seed != null ? new Track(rec.seed, null) : null;
-  return new Track(1, TUTORIAL);
+// moves at the same places, and reports whether the run ends the way it was recorded. Each visit names the engine it
+// was played on, so runs made on an earlier version of the generator are played back on that version, taken from git.
+const fs = require('fs'), path = require('path'), crypto = require('crypto'), { execFileSync } = require('child_process');
+const ROOT = path.join(__dirname, '..');
+const NAMES = 'LEVELS,DAILY,TUTORIAL,Track,Runner';
+const compile = src => new Function(src + `; return {${NAMES}, setFeel: typeof setFeel === 'function' ? setFeel : null};`)();
+const idOf = src => crypto.createHash('sha1').update(src).digest('hex').slice(0, 10);
+const nowSrc = fs.readFileSync(path.join(ROOT, 'src', 'core.js'), 'utf8'), NOW = idOf(nowSrc);
+const engines = { [NOW]: compile(nowSrc) };
+let history = null;
+function engine(id) {   // the engine with this id: today's, or an earlier one from the repository's history
+  if (!id || engines[id] !== undefined) return engines[id || NOW];
+  if (!history) {
+    history = {};
+    try {
+      for (const c of execFileSync('git', ['log', '--format=%H', '--', 'src/core.js'], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean)) {
+        try { const src = execFileSync('git', ['show', c + ':src/core.js'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 1 << 26 }); const k = idOf(src); if (!history[k]) history[k] = src; } catch (e) {}
+      }
+    } catch (e) {}
+  }
+  let e = null; try { if (history[id]) e = compile(history[id]); } catch (err) { e = null; }
+  return engines[id] = e;
 }
-// returns { res, z, sparks, exact } or null when the run cannot be replayed (no trace, or too long for its trace)
-function replay(rec) {
+function courseFor(rec, E) {
+  E = E || engines[NOW]; const m = rec.m;
+  if (m[0] === 'L') { const lv = E.LEVELS[+m.slice(1) - 1]; return lv ? new E.Track(lv.seed, lv) : null; }
+  if (m[0] === 'D') { const p = m.slice(1).split('-').map(Number), seed = p[0] * 10000 + p[1] * 100 + p[2]; return new E.Track(seed, Object.assign({}, E.DAILY, { pat: seed % 5 })); }
+  if (m === 'E') return rec.seed != null ? new E.Track(rec.seed, null) : null;
+  return new E.Track(1, E.TUTORIAL);
+}
+// returns { res, z, sparks, exact } or null when the run cannot be replayed: no trace, a trace too short for the run,
+// an engine that cannot be found, or a course that does not match the one recorded
+function replay(rec, core) {
   const tr = rec.tr || [];
   if ((rec.pr || 0) * 2 !== tr.length || rec.m === 'T') return null;
+  const E = engine(core || rec._core); if (!E) return null;
   const tu = rec.tu || {};
-  setFeel({ hop: tu.hop, flip: tu.flip, jump: tu.jump, coyote: tu.coyote, buffer: tu.buffer });
+  if (E.setFeel) E.setFeel({ hop: tu.hop, flip: tu.flip, jump: tu.jump, coyote: tu.coyote, buffer: tu.buffer });
   let out = null;
   try {
-    const track = courseFor(rec); if (!track) return null;
-    const r = new Runner(track);
+    const track = courseFor(rec, E); if (!track) return null;
+    if (rec.cs != null && track.checksum && track.checksum() !== rec.cs) return null;   // not the course this run was made on
+    const r = new E.Runner(track);
     if (rec.cp) { const cp = track.cps.find(c => Math.floor(c.z) === rec.cp); if (!cp) return null; r.z = cp.z; r.lane = r.from = r.cam = cp.lane; }
     const ended = rec.res === 'fall' || rec.res === 'crash' || rec.res === 'win', stopAt = ended ? Infinity : rec.z + 1;
     let i = 0, guard = 0;
@@ -31,17 +52,19 @@ function replay(rec) {
       r.step(1 / 240);
     }
     const res = r.dead ? r.dead.kind : r.z >= track.end ? 'win' : rec.res;
-    out = { res, z: Math.floor(r.z), sparks: r.sparks, exact: res === rec.res && (!ended || res === 'win' || Math.abs(Math.floor(r.z) - rec.z) <= 1) };
-  } finally { setFeel({}); }
+    out = { res, z: Math.floor(r.z), sparks: r.sparks, track, exact: res === rec.res && (!ended || res === 'win' || Math.abs(Math.floor(r.z) - rec.z) <= 1) };
+  } finally { if (E.setFeel) E.setFeel({}); }
   return out;
 }
-function load(p) {   // -> list of attempts
+function load(p) {   // -> list of attempts, each knowing which engine its visit ran on
   if (fs.statSync(p).isDirectory()) return [].concat(...fs.readdirSync(p).map(f => load(path.join(p, f))));
   if (!p.endsWith('.json')) return [];
   const d = JSON.parse(fs.readFileSync(p, 'utf8'));
-  return d.attempts || d.log || [];
+  if (d.attempts) return d.attempts.map(a => Object.assign({ _core: d.session && d.session.core }, a));
+  const cores = {}; for (const s of d.sessions || []) cores[s.id] = s.core;
+  return (d.log || []).map(a => Object.assign({ _core: cores[a.s] }, a));
 }
-module.exports = { replay, courseFor, load };
+module.exports = { replay, courseFor, load, engine, NOW };
 if (require.main === module) {
   const all = [].concat(...process.argv.slice(2).map(load));
   let can = 0, same = 0; const off = [];

@@ -17,7 +17,7 @@
 //   ORIGINS       optional, comma-separated pages allowed to post, default "https://jamesccupps.github.io"
 //   OFF           optional. Set to "1" to refuse everything without deleting the Worker.
 
-const VERSION = '2026-11-23.4';   // shown on the status line, so a deploy can be told from the one before
+const VERSION = '2026-11-23.6';   // shown on the status line, so a deploy can be told from the one before
 const DEFAULTS = { REPO: 'jamesccupps/EightFold', BRANCH: 'play-data', ORIGINS: 'https://jamesccupps.github.io' };
 const MAX_BODY = 64 * 1024;        // bytes per post
 const MAX_ATTEMPTS = 400;          // attempts per session file
@@ -40,7 +40,7 @@ function put(out, key, v) { if (v !== undefined) out[key] = v; }
 
 const MODE = /^(L[1-9]|D\d{4}-\d{2}-\d{2}|E|T)$/;
 const nums = (v, len, lo, hi) => Array.isArray(v) && v.length <= len && v.every(x => num(x, lo, hi) !== undefined) ? v : undefined;
-const ATTEMPT_NUMS = { i: [0, 1e5], ln: [0, 7], am: [0, 3], pts: [0, 1e8], rt: [0, 600], fx: [0, 9999], sg: [0, 1e4], q: [0, 4], t: [1.6e9, 4e9], a: [0, 1e5], pc: [0, 1e6], z: [-10, 1e7], d: [0, 1e5], sp: [0, 1e5], pr: [0, 1e5], px: [0, 1e5], fps: [0, 1000], fj: [0, 1e6],
+const ATTEMPT_NUMS = { cs: [0, 4294967296], i: [0, 1e5], ln: [0, 7], am: [0, 3], pts: [0, 1e8], rt: [0, 600], fx: [0, 9999], sg: [0, 1e4], q: [0, 4], t: [1.6e9, 4e9], a: [0, 1e5], pc: [0, 1e6], z: [-10, 1e7], d: [0, 1e5], sp: [0, 1e5], pr: [0, 1e5], px: [0, 1e5], fps: [0, 1000], fj: [0, 1e6],
   ns: [0, 1e4], seed: [0, 4294967296], bo: [0, 100], cp: [0, 1e7], sh: [0, 1e4], sl: [0, 1e4], prac: [0, 1] };
 function cleanAttempt(a, sid) {
   if (!a || typeof a !== 'object') return null;
@@ -62,7 +62,7 @@ function cleanAttempt(a, sid) {
   if (Array.isArray(a.nx) && a.nx.length === 3 && str(a.nx[0], KIND) && str(a.nx[1], /^[LRFJ]$/) && num(a.nx[2], -1e6, 1e6) !== undefined) out.nx = a.nx;
   put(out, 'tu', numMap(a.tu, 16));
   if (Array.isArray(a.tr) && a.tr.length % 2 === 0) put(out, 'tr', nums(a.tr, 400, -1000, 1e9));   // the press trace: position, move, position, move ...
-  if (Array.isArray(a.in) && a.in.length === 4) put(out, 'in', nums(a.in, 4, 0, 1e5));
+  if (Array.isArray(a.in) && (a.in.length === 4 || a.in.length === 5)) put(out, 'in', nums(a.in, 5, 0, 1e5));   // presses by keyboard, tap, on-screen button, mouse, swipe
   if (Array.isArray(a.pz) && a.pz.length === 2) put(out, 'pz', nums(a.pz, 2, 0, 1e6));
   if (Array.isArray(a.ft) && a.ft.length === 7) put(out, 'ft', nums(a.ft, 7, 0, 1e7));   // frames by how long they took
   put(out, 'rm', num(a.rm, 0, 1000));                                                      // ms spent drawing a frame
@@ -73,7 +73,7 @@ function cleanSession(s, sid) {
   const out = { id: sid };
   if (!s || typeof s !== 'object') return out;
   put(out, 't', num(s.t, 1.6e9, 4e9));
-  put(out, 'build', str(s.build, /^[A-Za-z0-9.\-]{1,24}$/));
+  put(out, 'build', str(s.build, /^[A-Za-z0-9.\-]{1,24}$/)); put(out, 'core', str(s.core, /^[a-f0-9]{10}$/));   // core: which engine the page was built from
   put(out, 'host', str(s.host, /^[a-z0-9.\-]{1,60}$/));
   put(out, 'br', str(s.br, /^[A-Za-z0-9 .]{1,24}$/));
   put(out, 'os', str(s.os, /^[A-Za-z0-9 ]{1,16}$/));
@@ -83,6 +83,13 @@ function cleanSession(s, sid) {
   put(out, 'tune', numMap(s.tune, 16));
   put(out, 'hz', num(s.hz, 0, 1000)); if (Array.isArray(s.px) && s.px.length === 2) put(out, 'px', nums(s.px, 2, 0, 40000));   // display refresh rate; the size the picture is drawn at
   put(out, 'gpu', str(s.gpu, /^[A-Za-z0-9 .,:_()\/+\-]{1,100}$/));                                                              // graphics card, as the browser names it
+  put(out, 'load', num(s.load, 0, 1e7)); put(out, 'ff', num(s.ff, 0, 1e7));   // ms from opening the page to the script running, and to the first frame
+  put(out, 'lang', str(s.lang, /^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8}){0,3}$/)); put(out, 'rmo', bool(s.rmo)); put(out, 'ls', bool(s.ls));   // browser language; reduced-motion setting; whether storage works
+  if (s.xp && typeof s.xp === 'object' && !Array.isArray(s.xp)) {   // experiments: which variant this player is in
+    const xp = {}; let n = 0;
+    for (const k of Object.keys(s.xp)) if (n < 8 && /^[A-Za-z0-9_-]{1,16}$/.test(k) && str(s.xp[k], /^[A-Za-z0-9_-]{1,16}$/)) { xp[k] = s.xp[k]; n++; }
+    if (n) out.xp = xp;
+  }
   put(out, 'cores', num(s.cores, 0, 1024)); put(out, 'mem', num(s.mem, 0, 1024)); put(out, 'music', num(s.music, 0, 100)); put(out, 'sfx', num(s.sfx, 0, 100));
   put(out, 'tot', num(s.tot, 0, 1e7)); put(out, 'dur', num(s.dur, 0, 1e7)); put(out, 'skin', str(s.skin, /^[a-z]{1,12}$/));
   put(out, 'st', nums(s.st, 36, 0, 1e6));   // per level: best %, clears, attempts
@@ -108,6 +115,11 @@ function cleanSession(s, sid) {
     const fb = {}; let n = 0;
     for (const k of Object.keys(s.fb)) if (n < 40 && MODE.test(k) && str(s.fb[k], /^(easy|right|hard|unfair)$/)) { fb[k] = s.fb[k]; n++; }
     if (n) out.fb = fb;
+  }
+  if (s.fun && typeof s.fun === 'object' && !Array.isArray(s.fun)) {   // whether each course was fun
+    const fun = {}; let n = 0;
+    for (const k of Object.keys(s.fun)) if (n < 40 && MODE.test(k) && str(s.fun[k], /^(love|ok|no)$/)) { fun[k] = s.fun[k]; n++; }
+    if (n) out.fun = fun;
   }
   // the trail through the menus: seconds into the visit, what happened, seconds, what happened ...
   if (Array.isArray(s.ev) && s.ev.length && s.ev.length <= 1600 && s.ev.length % 2 === 0 && s.ev.every((x, i) => i % 2 ? str(x, /^[A-Za-z0-9:=.\-]{1,32}$/) !== undefined : num(x, 0, 1e7) !== undefined)) out.ev = s.ev;

@@ -4,7 +4,7 @@
 // Sections: who played, how far they got, each course, where runs end, press timing per obstacle, the tutorial,
 // how the game ran on each machine, what players said, errors. Feedback text is whatever a stranger typed.
 const fs = require('fs'), path = require('path');
-const { replay, courseFor } = require('./replay.js');
+const { replay, courseFor, engine } = require('./replay.js');
 const args = process.argv.slice(2), opt = k => { const i = args.indexOf(k); return i >= 0 ? args.splice(i, 2)[1] : ''; };
 const skip = new Set(opt('--skip').split(',').filter(Boolean)), since = opt('--since');
 function files(p) { return fs.statSync(p).isDirectory() ? [].concat(...fs.readdirSync(p).map(f => files(path.join(p, f)))) : p.endsWith('.json') ? [p] : []; }
@@ -12,7 +12,7 @@ let visits = [].concat(...args.map(files)).map(f => JSON.parse(fs.readFileSync(f
 if (since) visits = visits.filter(d => new Date((d.session.t || 0) * 1000).toISOString().slice(0, 10) >= since);
 const ghost = d => !d.attempts.length && !(d.session.notes || []).length && (d.session.dur || 0) < 5;
 const ghosts = visits.filter(ghost).length; visits = visits.filter(d => !ghost(d));
-const runs = [].concat(...visits.map(d => d.attempts.map(a => Object.assign({ _s: d.session }, a))));
+const runs = [].concat(...visits.map(d => d.attempts.map(a => Object.assign({ _s: d.session, _core: d.session.core }, a))));
 const who = s => s.pid || s.id, uniq = a => [...new Set(a)];
 const med = a => { if (!a.length) return NaN; const b = a.slice().sort((x, y) => x - y); return b[b.length >> 1]; };
 const pct = (a, b) => b ? Math.round(100 * a / b) + '%' : '-';
@@ -21,7 +21,7 @@ const pad = (s, n) => String(s).padEnd(n), lpad = (s, n) => String(s).padStart(n
 const out = s => console.log(s), head = s => out('\n== ' + s + ' ==');
 const NAME = { step: 'shifting floor', stairs: 'shifting floor (stairs)', zigzag: 'zigzag', spiral: 'spiral', flipGate: 'floor overhead', pingpong: 'floor overhead (repeated)', dodge1: 'tall block', dodge2: 'two tall blocks',
   slalom: 'slalom', blockFlip: 'blocked side', hurdle: 'low bar', hurdles: 'low bars', laneGap: 'short gap', stones: 'stepping stones', ringGap: 'ring gap', sweep: 'sliding block', beam: 'beam', fan: 'fan', fans: 'fans',
-  launch: 'launch pad', sprint: 'sprint zone', crawl: 'slow zone', floor: 'open floor', detour: 'spark detour', other: 'other' };
+  launch: 'launch pad', sprint: 'sprint zone', crawl: 'slow zone', field: 'scattered floor', floor: 'open floor', detour: 'spark detour', other: 'other' };
 const nm = k => NAME[k] || k;
 const course = m => m[0] === 'L' ? 'Level ' + m.slice(1) : m[0] === 'D' ? 'Daily ' + m.slice(1) : m === 'E' ? 'Endless' : 'Tutorial';
 const order = m => m[0] === 'T' ? '0' : m[0] === 'L' ? '1' + m : m === 'E' ? '3' : '2' + m;
@@ -34,7 +34,7 @@ const back = players.filter(p => visits.filter(d => who(d.session) === p).some(d
 out(`came back for another visit: ${back.length} of ${players.length}`);
 out('never started a run: ' + visits.filter(d => !d.attempts.length).length + ' visits');
 out('from: ' + (count(visits.map(d => d.session.ref || 'direct')).map(e => e[0] + ' ' + e[1]).join(', ') || '-') + '   countries: ' + (count(visits.map(d => d.session.cc || '?')).map(e => e[0] + ' ' + e[1]).join(', ')));
-out('playing with: ' + count(runs.filter(a => a.in).map(a => ['keyboard', 'touch', 'on-screen buttons', 'mouse'][a.in.indexOf(Math.max(...a.in))])).map(e => e[0] + ' ' + e[1] + ' runs').join(', '));
+out('playing with: ' + count(runs.filter(a => a.in).map(a => ['keyboard', 'taps', 'on-screen buttons', 'mouse', 'swipes'][a.in.indexOf(Math.max(...a.in))])).map(e => e[0] + ' ' + e[1] + ' runs').join(', '));
 
 head('How far players got');
 const modes = uniq(runs.map(a => a.m)).sort((a, b) => order(a) < order(b) ? -1 : 1);
@@ -44,16 +44,20 @@ for (const m of modes) {
 }
 
 head('Each course');
-out(pad('', 18) + ['runs', 'clears', 'tries to 1st clear', 'typical end', 'clear time / par', 'gave up', 'felt'].map((h, i) => lpad(h, [6, 8, 20, 13, 18, 9, 6][i])).join(''));
+out(pad('', 18) + ['runs', 'clears', 'tries to 1st clear', 'typical end', 'clear time / par', 'sparks', 'replays', 'gave up'].map((h, i) => lpad(h, [6, 8, 20, 13, 18, 8, 9, 9][i])).join('') + '   felt / fun');
 for (const m of modes) {
   const r = runs.filter(a => a.m === m), wins = r.filter(a => a.res === 'win'), fails = r.filter(a => a.res === 'fall' || a.res === 'crash');
   const firsts = []; for (const p of uniq(r.map(a => who(a._s)))) { const mine = r.filter(a => who(a._s) === p).sort((a, b) => a.t - b.t || a.i - b.i), k = mine.findIndex(a => a.res === 'win'); if (k >= 0) firsts.push(k + 1); }
   let par = NaN; try { const tr = courseFor({ m, seed: 1 }); if (tr && tr.end !== Infinity) { par = 0; for (let i = 0; i < tr.end; i++) par += 1 / tr.V[i]; } } catch (e) {}
   const felt = count([].concat(...visits.map(d => d.session.fb && d.session.fb[m] ? [d.session.fb[m]] : []))).map(e => e[0] + ' ' + e[1]).join(', ');
+  const fun = count([].concat(...visits.map(d => d.session.fun && d.session.fun[m] ? [({ love: 'loved it', ok: 'fine', no: 'not for me' })[d.session.fun[m]]] : []))).map(e => e[0] + ' ' + e[1]).join(', ');
+  // runs a player chose to make after they had already cleared the course: the plainest sign they liked it
+  let again = 0; for (const p of uniq(r.map(a => who(a._s)))) { const mine = r.filter(a => who(a._s) === p).sort((a, b) => a.t - b.t || a.i - b.i), k = mine.findIndex(a => a.res === 'win'); if (k >= 0) again += mine.length - k - 1; }
+  const sparks = wins.filter(a => a.ns).map(a => Math.round(100 * a.sp / a.ns));
   // gave up: the player's last run on this course in a visit ended in a fall or crash, and they never cleared it
   const gave = visits.filter(d => { const mine = d.attempts.filter(a => a.m === m); return mine.length && !mine.some(a => a.res === 'win') && mine[mine.length - 1].res !== 'win'; }).length;
   out(pad(course(m), 18) + lpad(r.length, 6) + lpad(wins.length, 8) + lpad(firsts.length ? 'median ' + med(firsts) : '-', 20) + lpad(fails.length ? med(fails.map(a => a.pc)) + (m === 'E' ? ' m' : '%') : '-', 13)
-    + lpad(wins.length ? med(wins.map(a => a.d)).toFixed(1) + (par ? ' / ' + par.toFixed(1) : '') : '-', 18) + lpad(gave, 9) + '   ' + (felt || '-'));
+    + lpad(wins.length ? med(wins.map(a => a.d)).toFixed(1) + (par ? ' / ' + par.toFixed(1) : '') : '-', 18) + lpad(sparks.length ? med(sparks) + '%' : '-', 8) + lpad(again, 9) + lpad(gave, 9) + '   ' + (felt || '-') + ' / ' + (fun || '-'));
 }
 
 head('Where runs end');
@@ -65,6 +69,19 @@ for (const m of modes) {
   const miss = count(f.filter(a => a.nx).map(a => nm(a.nx[0]) + ' needs ' + ({ L: 'a turn', R: 'a turn', F: 'a flip', J: 'a jump' })[a.nx[1]])).slice(0, 4);
   if (miss.length) out('   move not made: ' + miss.map(e => `${e[0]} ${e[1]}`).join(', ') + `   (run ended a median ${med(f.filter(a => a.nx).map(a => a.nx[2]))} ms after its last moment)`);
   const air = f.filter(a => a.am > 0).length; if (air) out(`   ${air} of them ended in the air (mid turn, flip or jump)`);
+}
+
+head('Level profile: every obstacle in order, who reached it, who ended there');
+for (const m of modes.filter(x => x[0] === 'L')) {
+  // only runs made on today's version of the course are counted here; older ones are still in the tables above
+  let tr; try { tr = courseFor({ m }); } catch (e) { tr = null; } if (!tr || !tr.segs) continue;
+  const cs = tr.checksum ? tr.checksum() : null, r = runs.filter(a => a.m === m && !a.tu && (a.cs == null || cs == null || a.cs === cs)); if (!r.length) continue;
+  out(course(m) + ` (${r.length} runs on the current course)`);
+  for (const [r0, r1, kind] of tr.segs) {
+    const reached = r.filter(a => a.res === 'win' || a.z >= r0).length, ended = r.filter(a => (a.res === 'fall' || a.res === 'crash') && a.z >= r0 && a.z < r1 + 5).length;
+    if (!reached) break;
+    out(`   ${lpad(Math.round(100 * r0 / tr.end), 3)}%  ${pad(nm(kind), 26)} reached ${lpad(reached, 4)}   ended here ${lpad(ended, 4)}  ${ended ? '#'.repeat(Math.max(1, Math.round(20 * ended / reached))) + ' ' + pct(ended, reached) : ''}`);
+  }
 }
 
 head('Press timing by obstacle  (0% = first moment a press works, 100% = last)');
@@ -109,6 +126,22 @@ head('Menus');
 const ui = count([].concat(...visits.map(d => (d.session.ev || []).filter((x, i) => i % 2 && /^(ui|open|opt|bind|full|mute|unmute)/.test(x)).map(x => x.replace(/=.*/, '')))));
 out('   ' + (ui.slice(0, 24).map(e => e[0] + ' ' + e[1]).join(', ') || '-'));
 
+const xps = uniq([].concat(...visits.map(d => Object.keys(d.session.xp || {}))));
+if (xps.length) {
+  head('Experiments');
+  for (const id of xps) {
+    out(id);
+    for (const v of uniq(visits.map(d => (d.session.xp || {})[id]).filter(Boolean)).sort()) {
+      const vs = visits.filter(d => (d.session.xp || {})[id] === v), rr = [].concat(...vs.map(d => d.attempts)), fails = rr.filter(a => a.res === 'fall' || a.res === 'crash');
+      const fb = count([].concat(...vs.map(d => Object.values(d.session.fb || {})))).map(e => e[0] + ' ' + e[1]).join(', '), fun = count([].concat(...vs.map(d => Object.values(d.session.fun || {})))).map(e => e[0] + ' ' + e[1]).join(', ');
+      out(`   ${pad(v, 10)} ${uniq(vs.map(d => who(d.session))).length} players, ${rr.length} runs, ${pct(rr.filter(a => a.res === 'win').length, rr.length)} cleared, ${(rr.length ? fails.length / Math.max(1, rr.filter(a => a.res === 'win').length) : 0).toFixed(1)} failed runs per clear, `
+        + `${Math.round(rr.reduce((t, a) => t + (a.d || 0), 0) / 60 / Math.max(1, uniq(vs.map(d => who(d.session))).length))} min played per player   felt: ${fb || '-'}   fun: ${fun || '-'}`);
+    }
+  }
+}
+
 head('Replay check');
 let can = 0, same = 0; for (const a of runs) { const r = replay(a); if (r) { can++; if (r.exact) same++; } }
 out(`${can} runs have a full press trace; ${same} play back to the recorded ending`);
+const lost = uniq(runs.map(a => a._core).filter(c => c && !engine(c)));
+if (lost.length) out('engine versions not found in this repository: ' + lost.join(', '));
