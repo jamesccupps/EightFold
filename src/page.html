@@ -183,6 +183,9 @@ td.done { color: var(--tile); }
 .seg button { padding: 8px 11px; font: 600 12px/1 var(--body); }
 .seg button[aria-pressed="true"] { background: var(--tile); color: rgb(var(--bgc)); }
 @media (max-width: 520px) { .optrow { grid-template-columns: 1fr; } }
+.rate { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; justify-content: center; font-size: 12.5px; color: var(--dim); }
+.btn.sm { padding: 6px 9px; font-size: 11px; }
+.menu .note { margin: 0; max-width: 46ch; font-size: 11.5px; line-height: 1.4; color: var(--dim); }
 /* ---------- tuning drawer and play data (temporary tools) ---------- */
 .drawer {
   position: fixed; top: 0; right: 0; bottom: 0; width: min(360px, 100vw); box-sizing: border-box; display: flex; flex-direction: column; gap: 12px;
@@ -236,6 +239,7 @@ textarea.out {
   <p class="tag" id="tagline">Eight walls, one way through. Turn the tunnel, jump, flip to the far wall, and do not fall out.</p>
   <ol class="levels" id="levels"></ol>
   <div class="menu-row"><button class="btn" id="btnScores" type="button">Scores</button><button class="btn" id="btnControls" type="button">Controls &amp; options</button><button class="btn" id="btnTune" type="button">Tuning</button><button class="btn" id="btnData" type="button">Play data</button></div>
+  <p class="note" id="telNote" hidden>While the game is being tuned, how each run goes is recorded and sent to its developer: no name, nothing personal. See Play data to look at it or switch it off.</p>
 </div></nav>
 
 <div class="panel" id="pausePanel" hidden>
@@ -248,12 +252,14 @@ textarea.out {
   <p class="stat" id="failStat"></p>
   <div class="row"><button class="btn go" id="btnRetry" type="button">Restart</button><button class="btn" id="btnFromStart" type="button" hidden>From the start</button><button class="btn" id="btnNew" type="button" hidden>New course</button><button class="btn" id="btnQuit3" type="button">Level select</button></div>
   <p id="failHint"></p>
+  <div class="rate" id="failRate" hidden></div>
 </div>
 <div class="panel" id="winPanel" hidden>
   <h2 id="winTitle">Through.</h2>
   <p class="stat" id="winStat"></p>
   <p class="stat" id="winParts"></p>
   <p id="winText"></p>
+  <div class="rate" id="winRate" hidden></div>
   <div class="row"><button class="btn go" id="btnNext" type="button">Next level</button><button class="btn" id="btnAgain" type="button">Play again</button><button class="btn" id="btnQuit2" type="button">Level select</button></div>
 </div>
 
@@ -308,7 +314,7 @@ textarea.out {
   <div class="menu-row"><button class="btn" id="btnDataCopy" type="button">Copy</button><button class="btn" id="btnDataSave" type="button">Download</button><button class="btn" id="btnDataToggle" type="button">Stop recording</button><button class="btn" id="btnDataClear" type="button">Erase play data</button></div>
   <textarea class="out" id="dataOut" readonly rows="5" hidden aria-label="Play data"></textarea>
   <h3>By level</h3>
-  <div class="tablewrap"><table><thead><tr><th>Course</th><th>Attempts</th><th>Clears</th><th>Typical end</th><th>Most runs end at</th></tr></thead><tbody id="dataLv"></tbody></table></div>
+  <div class="tablewrap"><table><thead><tr><th>Course</th><th>Attempts</th><th>Clears</th><th>Typical end</th><th>Most runs end at</th><th>Felt</th></tr></thead><tbody id="dataLv"></tbody></table></div>
   <h3>By obstacle</h3>
   <div class="tablewrap"><table><thead><tr><th>Obstacle</th><th>Runs ended</th><th>Presses</th><th>Typical timing</th><th>Late</th><th>Tightest</th></tr></thead><tbody id="dataOb"></tbody></table></div>
   <p>Timing is where in the allowed window a press came: 0% is the first moment it works, 100% the last. Tightest is the least time a press had to spare.</p>
@@ -394,26 +400,55 @@ function applyTune() {
 // ---------- play recording (temporary: so the game can be tuned from how it is really played) ----------
 // One small record per attempt: where it ended and on what, the time, sparks, how early or late each press came inside
 // the window the course allows for it, and the frame rate. Kept in this browser; see the Play data sheet.
-const BUILD = '2026-11-23';
+const BUILD = '2026-11-23b';
+// Where play records are sent from the public copy of the game: a small relay that files them on the play-data branch
+// of the game's GitHub repository (see relay/ in the repository). Empty = nothing is sent.
+let RELAY = '', relayAnywhere = false;
+const relayOn = () => !!RELAY && tel.on && !relayDead && (relayAnywhere || (location.protocol === 'https:' && !window.claude));
+function browserName() {   // "Chrome 158" and "Windows": enough to tell machines apart, without the full browser string
+  const u = String(navigator.userAgent || ''), m = u.match(/(Edg|OPR|Firefox|Chrome|CriOS|FxiOS)\/(\d+)/) || (/Safari/.test(u) && u.match(/(Version)\/(\d+)/));
+  const names = { Edg: 'Edge', OPR: 'Opera', CriOS: 'Chrome', FxiOS: 'Firefox', Version: 'Safari' };
+  return { br: m ? (names[m[1]] || m[1]) + ' ' + m[2] : 'Other',
+    os: /Android/.test(u) ? 'Android' : /iPhone|iPad|iPod/.test(u) ? 'iOS' : /CrOS/.test(u) ? 'ChromeOS' : /Windows/.test(u) ? 'Windows' : /Mac OS X/.test(u) ? 'Mac' : /Linux/.test(u) ? 'Linux' : 'Other' };
+}
 let tel = store.get('tel', null);
 if (!tel || tel.v !== 1 || !Array.isArray(tel.log) || !Array.isArray(tel.sessions)) tel = { v: 1, on: true, sessions: [], log: [] };
+for (const x of tel.sessions) if (x && x.ua) delete x.ua;
 const SID = Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36);
-let telCur = null, telSess = null, telDb = null, telBusy = false, telAgain = false;
+let telCur = null, telSess = null, telDb = null, telBusy = false, telAgain = false, relayDead = false, relayAt = 0, relayTimer = 0;
 const saveTel = () => store.set('tel', tel);
+const T0 = performance.now();
+let telSeq = 0, telLast = null, relayAck = 0, relayEv = 0, pauseAt = 0, fullUsed = false;
+// the visit: the machine in broad terms, the options in use, progress so far, and a trail of what was opened and started
 function telSession() {
-  if (!telSess) { telSess = { id: SID, t: Math.round(Date.now() / 1000), build: BUILD, host: String(location.hostname || 'file').slice(0, 60) }; tel.sessions.push(telSess); if (tel.sessions.length > 30) tel.sessions.shift(); }
-  Object.assign(telSess, { ua: String(navigator.userAgent).slice(0, 160), w: W, h: H, dpr: +(window.devicePixelRatio || 1).toFixed(2), touch: touchSeen,
-    quality: opts.quality, qscale: +qScale.toFixed(2), speed: opts.speed, cp: !!opts.cp, auto: !!opts.auto, invert: !!opts.invert, calm: !!opts.calm, tune: tuneDiff() });
+  if (!telSess) { telSess = { id: SID, t: Math.round(Date.now() / 1000), build: BUILD, host: String(location.hostname || 'file').slice(0, 60), ev: [], fb: {} }; tel.sessions.push(telSess); if (tel.sessions.length > 30) tel.sessions.shift(); }
+  const st = []; LEVELS.forEach((lv, i) => { const x = stats.lv[i] || {}; st.push(x.best || 0, x.clears || 0, x.tries || 0); });
+  Object.assign(telSess, browserName(), { w: W, h: H, dpr: +(window.devicePixelRatio || 1).toFixed(2), touch: touchSeen, cores: navigator.hardwareConcurrency | 0, mem: +navigator.deviceMemory || 0,
+    quality: opts.quality, qscale: +qScale.toFixed(2), speed: opts.speed, cp: !!opts.cp, auto: !!opts.auto, invert: !!opts.invert, calm: !!opts.calm, brief: opts.brief !== false, unlockAll: !!opts.unlockAll,
+    music: opts.music | 0, sfx: opts.sfx | 0, muted: !!Snd.muted, skin: skin(), binds: JSON.stringify(opts.binds) !== JSON.stringify(cloneBinds(DEF_BINDS)), full: fullUsed,
+    tut: !!stats.tut, tot: stats.total || 0, st, dur: Math.round((performance.now() - T0) / 1000), tune: tuneDiff() });
   return telSess;
+}
+// one step of the trail: seconds into the visit, then what happened (menu, brief:L3, run:L3, open:score, opt:speed=0.75 ...)
+function telEv(code) {
+  if (!tel.on) return;
+  const s = telSess || telSession();
+  if (s.ev.length < 600) s.ev.push(Math.round((performance.now() - T0) / 1000), String(code).slice(0, 32));
 }
 const telMode = () => typeof mode === 'number' ? 'L' + (mode + 1) : mode === 'daily' ? 'D' + today().key : mode === 'endless' ? 'E' : 'T';
 function telStart(cp) {
-  telCur = tel.on && !bot ? { cp: cp ? Math.floor(cp.z) : 0, pr: 0, px: 0, ei: 0, hit: {}, fh: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], kk: {}, sh: 0, sl: 0, fn: 0, ft: 0, fj: 0 } : null;
+  const now = performance.now();
+  telCur = tel.on && !bot ? { cp: cp ? Math.floor(cp.z) : 0, pr: 0, px: 0, ei: 0, hit: {}, fh: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], kk: {}, sh: 0, sl: 0, sg: 0, fn: 0, ft: 0, fj: 0, fx: 0,
+    tr: [], inp: [0, 0, 0, 0], pzN: 0, pzT: 0, rt: telLast && mode != null && telLast.m === telMode() ? Math.min(600, +((now - telLast.at) / 1000).toFixed(1)) : -1 } : null;
+  pauseAt = 0;
 }
-// a press: find the move on the course's own route it belongs to, and note where in that move's window it came
-function telPress(m) {
-  const c = telCur; if (!c) return; c.pr++;
+// a press: find the move on the course's own route it belongs to, and note where in that move's window it came.
+// src: 0 keyboard, 1 touch on the tunnel, 2 on-screen button, 3 mouse
+function telPress(m, src) {
+  const c = telCur; if (!c) return; c.pr++; c.inp[src | 0]++;
   const ev = track.events, z = runner.z, v = track.speedAt(z), slack = v * .3;
+  // the trace: every press as position (hundredths of a row) and move, so the run can be replayed against its course
+  if (c.tr.length >= 400) c.tr.splice(0, 2); c.tr.push(Math.floor(z * 100), 'LRFJ'.indexOf(m));
   while (c.ei < ev.length && ev[c.ei].z1 + slack < z) c.ei++;
   for (let j = c.ei; j < ev.length && ev[j].z0 - slack <= z; j++) {
     const e = ev[j]; if (c.hit[j] || e.key !== m) continue;
@@ -430,39 +465,78 @@ function telEnd(res) {
   const c = telCur; if (!c) return; telCur = null;
   if (mode == null || !track || !runner || bot) return;
   const z = c.dz != null ? c.dz : runner.z, row = Math.floor(z), v = track.speedAt(z), ev = track.events, win = res === 'win';   // dz: where the ball was when the run ended
-  const rec = { s: SID, t: Math.round(Date.now() / 1000), m: telMode(), a: tries, res, pc: score(), z: row, d: +runT.toFixed(1), sp: runner.sparks, pr: c.pr, px: c.px, fh: c.fh,
-    fps: c.ft > 0 ? Math.round(c.fn / c.ft) : 0, fj: c.fj };
+  if (pauseAt) { c.pzT += performance.now() - pauseAt; pauseAt = 0; }
+  const rec = { s: SID, i: telSeq++, t: Math.round(Date.now() / 1000), m: telMode(), a: tries, res, pc: score(), z: row, d: +runT.toFixed(1), sp: runner.sparks, pts: tally(win).total, pr: c.pr, px: c.px, fh: c.fh,
+    fps: c.ft > 0 ? Math.round(c.fn / c.ft) : 0, fj: c.fj, fx: Math.min(9999, Math.round(c.fx)) };
   if (!win) {
-    rec.k = track.kindAt(row);
+    rec.k = track.kindAt(row); rec.ln = runner.lane & 7;
+    if (runner.dead) rec.am = Math.max(0, ['ground', 'hop', 'flip', 'jump'].indexOf(runner.dead.was));   // on the floor, or mid turn / flip / jump
     // the required move that was due and never made, and how long past its last moment the run ended (ms; negative = still time)
     let j = c.ei; while (j > 0 && ev[j - 1].z1 + v * 1.2 >= z) j--;
     for (; j < ev.length && ev[j].z0 <= z + v * .3; j++) if (!c.hit[j] && !ev[j].opt && ev[j].z1 + v * 1.2 >= z) { rec.nx = [ev[j].kind || 'other', ev[j].key, Math.round((z - ev[j].z1) / v * 1000)]; break; }
   }
   const kk = {}; let any = false; for (const k in c.kk) { const a = c.kk[k]; kk[k] = [a[0], Math.round(a[1] / a[0] * 100), a[2], a[3], a[4]]; any = true; }
   if (any) rec.kk = kk;
+  if (c.tr.length) rec.tr = c.tr;
+  if (c.pr) rec.in = c.inp;
   if (track.end !== Infinity) rec.ns = track.nSparks; else rec.seed = track.seed;
   if (boost > 0) rec.bo = Math.round(boost * 100);
-  if (c.cp) rec.cp = c.cp; if (c.sh) rec.sh = c.sh; if (c.sl) rec.sl = c.sl;
+  if (c.cp) rec.cp = c.cp; if (c.sh) rec.sh = c.sh; if (c.sl) rec.sl = c.sl; if (c.sg) rec.sg = c.sg;
+  if (c.pzN) rec.pz = [c.pzN, Math.round(c.pzT / 1000)];          // pauses, and seconds spent paused
+  if (c.rt >= 0) rec.rt = c.rt;                                     // seconds between the last run ending and this one starting
+  if (qScale < 1) rec.q = +qScale.toFixed(2);
   if (practice()) rec.prac = 1;
   const td = tuneDiff(); for (const k in td) { rec.tu = td; break; }
+  telLast = { m: rec.m, at: performance.now() };
   tel.log.push(rec); if (tel.log.length > 400) tel.log.splice(0, tel.log.length - 400);
-  telSession(); saveTel(); telSync();
+  telSession(); saveTel(); telSync(); telSend(false);
+}
+// Send what is new to the relay: at most every 30 seconds, and once more when the page is put away.
+function telSend(last) {
+  if (!relayOn() || !telSess) return;
+  const s = telSess, fresh = tel.log.filter(r => r.s === SID && r.i >= relayAck), marks = s.ev.length + Object.keys(s.fb).length;
+  if (!fresh.length && marks === relayEv) return;
+  const now = Date.now(), wait = 30000 - (now - relayAt);
+  if (!last && wait > 0) { if (!relayTimer) relayTimer = setTimeout(() => { relayTimer = 0; telSend(false); }, wait + 100); return; }
+  relayAt = now; telSession();
+  let take = fresh.slice(0, 60), body;
+  for (;;) { body = JSON.stringify({ v: 1, session: s, attempts: take }); if (body.length <= 60000 || take.length <= 1) break; take = take.slice(0, take.length >> 1); }
+  const ack = take.length ? take[take.length - 1].i + 1 : relayAck;
+  // plain text keeps this a simple request; keepalive lets the last one finish after the page is gone
+  try {
+    fetch(RELAY, { method: 'POST', body, keepalive: true, headers: { 'Content-Type': 'text/plain;charset=UTF-8' } })
+      .then(r => { if (r.ok) { relayAck = Math.max(relayAck, ack); relayEv = marks; } else if (r.status !== 429 && r.status !== 502) relayDead = true; }, () => {});
+  } catch (e) {}
 }
 // Inside Claude's artifact viewer the same records also go to the artifact's own storage, so they can be read back
-// for tuning without copying anything by hand. Everywhere else there is no such storage and nothing is sent.
+// for tuning without copying anything by hand. Forty attempts to a document.
 function telSync() {
-  if (!telDb || !tel.on) return;
+  if (!telDb || !tel.on || !telSess) return;
   if (telBusy) { telAgain = true; return; }
-  const mine = tel.log.filter(r => r.s === SID).slice(-250);
-  if (!mine.length || !telSess) return;
+  const mine = tel.log.filter(r => r.s === SID);
+  const part = mine.length ? Math.floor(mine[mine.length - 1].i / 40) : 0, rows = mine.filter(r => Math.floor(r.i / 40) === part);
   telBusy = true; telAgain = false;
   let p;
-  try { p = telDb.doc('play/' + SID).set({ t: telSess.t, session: telSess, n: mine.length, attempts: mine }); } catch (e) { telDb = null; telBusy = false; return; }
+  try { p = telDb.doc('play/' + SID + '-' + part).set({ t: telSess.t, session: telSess, part, n: rows.length, attempts: rows }); } catch (e) { telDb = null; telBusy = false; return; }
   Promise.resolve(p).then(() => { telBusy = false; if (telAgain) telSync(); }, e => { telBusy = false; if (!e || e.code !== 'unavailable') telDb = null; });
 }
 function telTune() {   // the values currently set in the tuning drawer, saved the same way
   if (!telDb || !tel.on) return;
   try { Promise.resolve(telDb.doc('tune/current').set({ t: Math.round(Date.now() / 1000), build: BUILD, values: Object.assign({}, tune), changed: tuneDiff() })).catch(() => {}); } catch (e) {}
+}
+// one tap on the result screen: how the level felt. Asked once per course per visit.
+const FEEL = [['easy', 'Too easy'], ['right', 'About right'], ['hard', 'Too hard'], ['unfair', 'Unfair']];
+function rateRow(el, show) {
+  el.textContent = ''; el.hidden = true;
+  if (!show || !tel.on || mode == null || mode === 'tutorial') return;
+  const key = telMode(), s = telSess || telSession(); if (s.fb[key]) return;
+  const l = document.createElement('span'); l.textContent = typeof mode === 'number' ? 'How does this level feel?' : 'How does this course feel?'; el.appendChild(l);
+  for (const [v, text] of FEEL) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'btn sm'; b.textContent = text;
+    b.addEventListener('click', () => { s.fb[key] = v; telEv('fb:' + key + '=' + v); saveTel(); telSync(); telSend(false); el.textContent = 'Noted, thanks.'; });
+    el.appendChild(b);
+  }
+  el.hidden = false;
 }
 try {
   if (window.claude && typeof window.claude.use === 'function') Promise.resolve(window.claude.use('db')).then(d => { telDb = d || null; telSync(); if (overlay === 'dataSheet') buildData(); }, () => {});
@@ -637,7 +711,7 @@ function attach() {
   runner = new Runner(track);
   runner.on = name => {
     if (state !== 'play') return;
-    if (telCur) { if (name === 'shieldhit') telCur.sh++; else if (name === 'slow') telCur.sl++; }
+    if (telCur) { if (name === 'shieldhit') telCur.sh++; else if (name === 'slow') telCur.sl++; else if (name === 'shield') telCur.sg++; }
     Snd.fx(name);
     if (name === 'spark' && mode !== 'tutorial' && boost < BOOST_MAX) { addBoost(); kick = 1; if (boost >= BOOST_MAX) toast('Top speed'); }
     if (name === 'shield') toast('Shield');
@@ -679,7 +753,7 @@ function begin(first, cp) {
 }
 let bestRow = -1;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-function launchRun(m, tr, song) { mode = m; track = tr; tries = 0; resumeCp = null; Snd.wake(); Snd.song(song); begin(true); }
+function launchRun(m, tr, song) { mode = m; track = tr; tries = 0; resumeCp = null; telEv('run:' + telMode()); Snd.wake(); Snd.song(song); begin(true); }
 function startLevel(i, skip) { if (!unlocked(i)) return; store.set('last', i); pal = PALS[i]; enter(i, new Track(LEVELS[i].seed, LEVELS[i]), i, skip); }
 function startEndless(skip) { hue0 = Math.random() * 360; palZ = -99; enter('endless', new Track((Math.random() * 1e9) | 0, null), 3 + ((Math.random() * 5) | 0), skip); }
 function startDaily(skip) { const d = today(); pal = PALS[d.seed % 8]; enter('daily', new Track(d.seed, Object.assign({}, DAILY, { pat: d.seed % 5 })), d.seed % 8, skip); }
@@ -714,7 +788,7 @@ function card(t, isNew) {
   return el;
 }
 function showBrief(m, tr, song) {
-  mode = m; track = tr; attach(); bot = null; state = 'brief'; pending = { m, tr, song }; hidePanels();
+  mode = m; track = tr; attach(); bot = null; state = 'brief'; pending = { m, tr, song }; hidePanels(); telEv('brief:' + telMode());
   $('hud').hidden = true; $('bar').hidden = true; $('btnPause').hidden = true; $('big').className = 'big'; $('tip').hidden = true; $('hint').className = 'hint';
   const lv = typeof m === 'number', types = lv || m === 'daily' ? typesOf(tr.kinds || tr.level.mix) : ORDER;
   let seen = {}; if (lv) for (let i = 0; i < m; i++) for (const t of typesOf(LEVELS[i].mix)) seen[t] = 1;
@@ -799,10 +873,11 @@ function showFail() {
   $('failStat').textContent = bits.join('  ·  ');
   $('btnNew').hidden = mode !== 'endless';
   $('failHint').textContent = (practice() && mode !== 'tutorial' ? 'Practice run: not recorded. ' : '') + (touchSeen ? 'Restart replays' : 'Press ' + labelFor('restart') + ' or ' + labelFor('jump') + ' to restart') + (resumeCp ? ' from the checkpoint.' : ' the same course.');
+  rateRow($('failRate'), tries >= 4);
   $('failPanel').hidden = false; $('btnRetry').focus();
 }
 function onWin() {
-  state = 'win'; Snd.fx('win'); $('big').className = 'big'; $('tip').hidden = true; $('btnPause').hidden = true;
+  state = 'win'; Snd.fx('win'); telEv('win:' + telMode()); $('big').className = 'big'; $('tip').hidden = true; $('btnPause').hidden = true;
   const res = record(true);
   const tut = mode === 'tutorial', lv = typeof mode === 'number', perfect = runner.sparks >= track.nSparks;
   if (tut) { stats.tut = true; saveStats(); }
@@ -815,16 +890,17 @@ function onWin() {
   $('btnNext').hidden = !(tut || (lv && mode < LEVELS.length - 1));
   $('btnNext').textContent = tut ? 'Start level 1' : 'Next level';
   $('btnAgain').hidden = tut;
+  rateRow($('winRate'), true);
   $('winPanel').hidden = false; ($('btnNext').hidden ? $('btnAgain') : $('btnNext')).focus();
 }
 function toMenu() {
-  telEnd('quit'); state = 'menu'; mode = null; Snd.stop(); startAttract(); hidePanels(); buildMenu();
+  telEnd('quit'); telEv('menu'); state = 'menu'; mode = null; Snd.stop(); startAttract(); hidePanels(); buildMenu();
   $('menu').hidden = false; $('hud').hidden = true; $('bar').hidden = true; $('btnPause').hidden = true;
   $('big').className = 'big'; $('tip').hidden = true;
 }
 function setPause(p) {
-  if (p && state === 'play') { state = 'pause'; $('pausePanel').hidden = false; Snd.sleep(); $('btnResume').focus(); }
-  else if (!p && state === 'pause') { hidePanels(); state = 'play'; Snd.wake(); if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); }
+  if (p && state === 'play') { state = 'pause'; if (telCur) { telCur.pzN++; pauseAt = performance.now(); } $('pausePanel').hidden = false; Snd.sleep(); $('btnResume').focus(); }
+  else if (!p && state === 'pause') { hidePanels(); state = 'play'; if (telCur && pauseAt) { telCur.pzT += performance.now() - pauseAt; pauseAt = 0; } Snd.wake(); if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); }
 }
 
 // ---------- tutorial: the run freezes at each obstacle until the right key is pressed ----------
@@ -1135,6 +1211,7 @@ function menuRow(id, n, name, meta, done, onClick, cls, locked, hint) {
   if (hint) { const on = () => { $('tagline').textContent = hint; }, off = () => { $('tagline').textContent = TAG; }; li.addEventListener('mouseenter', on); li.addEventListener('mouseleave', off); b.addEventListener('focus', on); b.addEventListener('blur', off); }
 }
 function buildMenu() {
+  $('telNote').hidden = !relayOn();
   $('levels').textContent = '';
   $('tagline').textContent = TAG;
   menuRow('lvTut', '?', 'How to play', stats.tut ? 'done' : 'start here', !!stats.tut, startTutorial, 'alt', false, 'Every move, one at a time. The run waits for you at each obstacle.');
@@ -1149,11 +1226,11 @@ function buildMenu() {
   menuRow('lvDaily', '☀', 'Daily · ' + today().label, d.cleared ? 'cleared' : d.best ? d.best + '%' : '—', !!d.cleared, () => startDaily(), 'alt', false, DAILY.hint + ' Sixty seconds, a bit of everything.');
 }
 function soundLabel() { $('btnSound').textContent = Snd.muted ? 'Sound off' : 'Sound on'; $('btnSound').setAttribute('aria-pressed', String(!Snd.muted)); }
-function toggleSound() { Snd.setMuted(!Snd.muted); soundLabel(); }
+function toggleSound() { Snd.setMuted(!Snd.muted); soundLabel(); telEv(Snd.muted ? 'mute' : 'unmute'); }
 
 // ---------- scores sheet ----------
 let overlay = null, wipeArmed = false;
-function openSheet(id) { overlay = id; $(id).hidden = false; $(id).scrollTop = 0; const b = $(id).querySelector('header button'); if (b) b.focus(); }
+function openSheet(id) { telEv('open:' + id.replace('Sheet', '')); overlay = id; $(id).hidden = false; $(id).scrollTop = 0; const b = $(id).querySelector('header button'); if (b) b.focus(); }
 function closeSheet() { if (!overlay) return; if (overlay === 'tuneSheet') return closeTune(false); $(overlay).hidden = true; overlay = null; listening = null; if (state === 'menu') buildMenu(); else if (state === 'pause') $('btnResume').focus(); }
 function cell(tr, t, cls) { const td = document.createElement('td'); td.textContent = t; if (cls) td.className = cls; tr.appendChild(td); }
 function buildScores() {
@@ -1195,7 +1272,7 @@ function buildControls() {
     const g = document.createElement('span'); g.className = 'seg'; g.setAttribute('role', 'group'); g.setAttribute('aria-label', label);
     for (const [val, text] of choices) {
       const b = document.createElement('button'); b.type = 'button'; b.textContent = text; b.setAttribute('aria-pressed', String(opts[key] === val));
-      b.addEventListener('click', () => { opts[key] = val; saveOpts(); buildControls(); if (key === 'quality') { qScale = 1; resize(); } });
+      b.addEventListener('click', () => { opts[key] = val; saveOpts(); telEv('opt:' + key + '=' + val); buildControls(); if (key === 'quality') { qScale = 1; resize(); } });
       g.appendChild(b);
     }
     rows.appendChild(g);
@@ -1204,6 +1281,7 @@ function buildControls() {
     const l = document.createElement('label'); l.textContent = label; l.htmlFor = 'opt-' + key; rows.appendChild(l);
     const r = document.createElement('input'); r.type = 'range'; r.min = 0; r.max = 100; r.step = 5; r.value = opts[key]; r.id = 'opt-' + key;
     r.addEventListener('input', () => { opts[key] = +r.value; saveOpts(); Snd.levels(); });
+    r.addEventListener('change', () => telEv('opt:' + key + '=' + r.value));
     rows.appendChild(r);
   };
   seg('Turn keys', 'invert', [[false, 'Move the ball'], [true, 'Spin the tunnel']]);
@@ -1221,14 +1299,14 @@ function buildControls() {
     for (const [id, name, need] of SKINS) {
       const b = document.createElement('button'); b.type = 'button'; b.disabled = total < need; b.textContent = total < need ? name + ' \u25C6' + need : name;
       b.setAttribute('aria-pressed', String(skin() === id));
-      b.addEventListener('click', () => { opts.skin = id; saveOpts(); buildControls(); });
+      b.addEventListener('click', () => { opts.skin = id; saveOpts(); telEv('opt:skin=' + id); buildControls(); });
       g.appendChild(b);
     }
     rows.appendChild(g);
   }
 }
 function setBind(k) {
-  const { a, s } = listening; listening = null;
+  const { a, s } = listening; listening = null; telEv('bind:' + a);
   if (k !== 'Escape') {
     if (k === 'Backspace' || k === 'Delete') opts.binds[a][s] = null;
     else { for (const x in opts.binds) opts.binds[x] = opts.binds[x].map(v => v === k ? null : v); opts.binds[a][s] = k; }
@@ -1278,7 +1356,7 @@ function buildTune() {
 }
 function openTune() {
   if (overlay || !(state === 'menu' || state === 'play' || state === 'pause' || state === 'fail')) return false;
-  tuneFrom = state; tuneTouched = false;
+  tuneFrom = state; tuneTouched = false; telEv('open:tune');
   if (state === 'play') setPause(true);
   $('pausePanel').hidden = true; $('failPanel').hidden = true; $('menu').hidden = true;
   buildTune(); overlay = 'tuneSheet'; $('tuneSheet').hidden = false; $('tuneSheet').scrollTop = 0; $('btnCloseTune').focus(); idleFor = 0;
@@ -1316,8 +1394,10 @@ const dataExport = () => JSON.stringify({ eightfold: 'play-data', build: BUILD, 
 function buildData() {
   const log = tel.log, first = log.length ? new Date(log[0].t * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
   $('dataInfo').textContent = (tel.on ? 'Recording is on. ' : 'Recording is off. ') + log.length + (log.length === 1 ? ' attempt' : ' attempts') + ' kept in this browser' + (first ? ', the oldest from ' + first : '') + '. '
-    + 'Each one notes where the run ended and on what, the time, sparks, how early or late each press came, and the frame rate. It is here for a while so the game can be tuned from real play. '
-    + (telDb ? 'In this Claude artifact the same records are also saved to the artifact’s own storage, where Claude can read them when you ask it to tune the game.' : 'Nothing is sent anywhere: use Copy or Download to pass it on.');
+    + 'Each one notes where the run ended and on what, the time, score and sparks, every press and how early or late it came, pauses, and the frame rate; the visit as a whole notes the options in use and which screens were opened. It is here for a while so the game can be tuned from real play. '
+    + (telDb ? 'In this Claude artifact the same records are also saved to the artifact’s own storage, where Claude can read them when you ask it to tune the game.'
+      : relayOn() ? 'While recording is on they are also sent to the game’s developer and filed in its public GitHub repository, with a random code for this visit and a rough description of the machine (browser and system by name, screen size, processor count): no name, no address. Stop recording stops the sending; Erase clears this browser’s copy only.'
+      : 'Nothing is sent anywhere: use Copy or Download to pass it on.');
   $('btnDataToggle').textContent = tel.on ? 'Stop recording' : 'Start recording';
   dataArmed = false; $('btnDataClear').textContent = 'Erase play data'; $('dataOut').hidden = true;
   const lv = {}, ob = {}, order = [];
@@ -1326,14 +1406,15 @@ function buildData() {
     a.n++; if (r.res === 'win') a.win++; else if (r.res === 'fall' || r.res === 'crash') { a.ends.push(r.pc); const k = kindName(r.k || 'floor'); a.at[k] = (a.at[k] || 0) + 1; (ob[k] || (ob[k] = { dead: 0, n: 0, f: 0, late: 0, min: 1e9 })).dead++; }
     for (const k in r.kk || {}) { const q = r.kk[k], o = ob[kindName(k)] || (ob[kindName(k)] = { dead: 0, n: 0, f: 0, late: 0, min: 1e9 }); o.n += q[0]; o.f += q[1] * q[0]; o.late += q[2]; if (q[4] < o.min) o.min = q[4]; }
   }
+  const felt = {}; for (const x of tel.sessions) for (const m in (x && x.fb) || {}) { const t = (FEEL.find(f => f[0] === x.fb[m]) || [0, x.fb[m]])[1]; (felt[m] || (felt[m] = [])).push(t); }
   const empty = (tb, cols) => { const tr = document.createElement('tr'); cell(tr, 'Nothing recorded yet'); for (let i = 1; i < cols; i++) cell(tr, ''); tb.appendChild(tr); };
   const a = $('dataLv'); a.textContent = ''; order.sort();
   for (const m of order) {
     const d = lv[m], tr = document.createElement('tr'), e = d.ends.slice().sort((x, y) => x - y), top = Object.keys(d.at).sort((x, y) => d.at[y] - d.at[x]).slice(0, 2);
     cell(tr, courseName(m)); cell(tr, String(d.n)); cell(tr, String(d.win), d.win ? 'done' : '');
-    cell(tr, e.length ? e[e.length >> 1] + (m === 'E' ? ' m' : '%') : '—'); cell(tr, top.length ? top.map(k => k + ' ×' + d.at[k]).join(', ') : '—'); a.appendChild(tr);
+    cell(tr, e.length ? e[e.length >> 1] + (m === 'E' ? ' m' : '%') : '—'); cell(tr, top.length ? top.map(k => k + ' ×' + d.at[k]).join(', ') : '—'); cell(tr, felt[m] ? felt[m].join(', ') : '—'); a.appendChild(tr);
   }
-  if (!order.length) empty(a, 5);
+  if (!order.length) empty(a, 6);
   const b = $('dataOb'); b.textContent = ''; const keys = Object.keys(ob).sort((x, y) => ob[y].dead - ob[x].dead || ob[y].n - ob[x].n);
   for (const k of keys) {
     const o = ob[k], tr = document.createElement('tr');
@@ -1344,14 +1425,14 @@ function buildData() {
 }
 
 // ================= input =================
-function act(m) {   // m: 'L' | 'R' | 'F' | 'J'
+function act(m, src) {   // m: 'L' | 'R' | 'F' | 'J'; src: 0 keyboard, 1 touch on the tunnel, 2 on-screen button, 3 mouse
   if (state !== 'play') return;
   if (mode === 'tutorial') {
     const e = track.events[tutI];
     if (e && m === e.key && runner.z >= e.z0) { runner.press(m); tutI++; frozen = false; }
     return;
   }
-  telPress(m); runner.press(m);
+  telPress(m, src); runner.press(m);
 }
 const turn = left => (left !== opts.invert) ? 'L' : 'R';
 window.addEventListener('keydown', e => {
@@ -1372,26 +1453,26 @@ window.addEventListener('keydown', e => {
     else if (a === 'left' || a === 'right') e.preventDefault();
     return;
   }
-  if (a === 'left' || a === 'right' || a === 'flip' || a === 'jump') { e.preventDefault(); if (!e.repeat) act(a === 'flip' ? 'F' : a === 'jump' ? 'J' : turn(a === 'left')); return; }
+  if (a === 'left' || a === 'right' || a === 'flip' || a === 'jump') { e.preventDefault(); if (!e.repeat) act(a === 'flip' ? 'F' : a === 'jump' ? 'J' : turn(a === 'left'), 0); return; }
   if (a === 'pause') { e.preventDefault(); setPause(true); }
   else if (a === 'restart' && !e.repeat && state === 'play') { record(false); retry(true); }
 });
 let ptr = null;
-cv.addEventListener('pointerdown', e => { if (e.pointerType === 'touch') touchSeen = true; if (state === 'menu' || overlay) return; ptr = { x: e.clientX, y: e.clientY, t: performance.now(), done: false }; Snd.wake(); });
+cv.addEventListener('pointerdown', e => { if (e.pointerType === 'touch') touchSeen = true; if (state === 'menu' || overlay) return; ptr = { x: e.clientX, y: e.clientY, t: performance.now(), done: false, src: e.pointerType === 'touch' ? 1 : 3 }; Snd.wake(); });
 cv.addEventListener('pointermove', e => {
   if (!ptr || ptr.done) return;
   const dx = e.clientX - ptr.x, dy = e.clientY - ptr.y;
   if (Math.abs(dx) < 22 && Math.abs(dy) < 22) return;
-  ptr.done = true; act(Math.abs(dx) > Math.abs(dy) ? turn(dx < 0) : dy < 0 ? 'F' : 'J');
+  ptr.done = true; act(Math.abs(dx) > Math.abs(dy) ? turn(dx < 0) : dy < 0 ? 'F' : 'J', ptr.src);
 });
-const ptrEnd = e => { if (ptr && !ptr.done && performance.now() - ptr.t < 350) act(turn(e.clientX < W / 2)); ptr = null; };
+const ptrEnd = e => { if (ptr && !ptr.done && performance.now() - ptr.t < 350) act(turn(e.clientX < W / 2), ptr.src); ptr = null; };
 cv.addEventListener('pointerup', ptrEnd);
 cv.addEventListener('pointercancel', () => { ptr = null; });
 cv.addEventListener('contextmenu', e => e.preventDefault());
 
 const on = (id, fn) => $(id).addEventListener('click', fn);
 on('btnSound', e => { toggleSound(); e.currentTarget.blur(); });
-for (const b of $('pad').querySelectorAll('button')) b.addEventListener('pointerdown', e => { e.preventDefault(); const m = b.dataset.m; act(m === 'flip' ? 'F' : m === 'jump' ? 'J' : turn(m === 'left')); });
+for (const b of $('pad').querySelectorAll('button')) b.addEventListener('pointerdown', e => { e.preventDefault(); const m = b.dataset.m; act(m === 'flip' ? 'F' : m === 'jump' ? 'J' : turn(m === 'left'), 2); });
 on('btnFull', e => {
   const b = e.currentTarget; b.blur();
   try {
@@ -1399,7 +1480,7 @@ on('btnFull', e => {
     else { const p = document.documentElement.requestFullscreen(); if (p && p.catch) p.catch(() => { b.hidden = true; }); }
   } catch (err) { b.hidden = true; }
 });
-document.addEventListener('fullscreenchange', () => { $('btnFull').textContent = document.fullscreenElement ? 'Exit full screen' : 'Full screen'; });
+document.addEventListener('fullscreenchange', () => { if (document.fullscreenElement) { fullUsed = true; telEv('full'); } $('btnFull').textContent = document.fullscreenElement ? 'Exit full screen' : 'Full screen'; });
 on('btnPause', () => setPause(state !== 'pause'));
 on('btnResume', () => setPause(false));
 on('btnRestart', () => { Snd.wake(); record(false); retry(true); });
@@ -1430,7 +1511,7 @@ on('btnDataSave', () => {
   } catch (err) { $('dataOut').hidden = false; $('dataOut').value = dataExport(); $('dataOut').select(); }
 });
 if (window.claude) $('btnDataSave').hidden = true;   // Claude's artifact viewer does not allow downloads; Copy still works there
-on('btnDataToggle', () => { tel.on = !tel.on; if (!tel.on) telCur = null; saveTel(); buildData(); });
+on('btnDataToggle', () => { tel.on = !tel.on; if (!tel.on) telCur = null; saveTel(); buildData(); $('telNote').hidden = !relayOn(); });
 on('btnDataClear', () => {
   if (!dataArmed) { dataArmed = true; $('btnDataClear').textContent = 'Erase it all? Click again'; return; }
   tel.log = []; tel.sessions = []; telSess = null; saveTel();
@@ -1441,11 +1522,11 @@ on('btnWipe', () => {
   if (!wipeArmed) { wipeArmed = true; $('btnWipe').textContent = 'Erase everything? Click again'; return; }
   stats = { lv: [], endless: [], daily: {} }; saveStats(); store.set('best', null); buildScores();
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden) setPause(true); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { setPause(true); telEv('hide'); saveTel(); telSend(true); } else telEv('show'); });
 window.addEventListener('blur', () => setPause(true));
 window.addEventListener('pointerdown', e => { if (e.pointerType === 'touch') touchSeen = true; }, true);
 window.addEventListener('resize', resize);
-window.addEventListener('pagehide', () => { if (state === 'play' || state === 'pause' || state === 'dead') telEnd('left'); });
+window.addEventListener('pagehide', () => { if (state === 'play' || state === 'pause' || state === 'dead') telEnd('left'); telEv('leave'); saveTel(); telSend(true); });
 
 // ================= main loop =================
 const STEP = 1 / 240, pf = { ms: 0, n: 0 };
@@ -1453,6 +1534,7 @@ let frameNo = 0;
 let last = 0, acc = 0;
 function frame(ts) {
   const now = ts / 1000; let dt = now - last; last = now;
+  if (telCur && state === 'play' && dt * 1000 > telCur.fx) telCur.fx = dt * 1000;   // the longest single frame of the run
   if (!(dt > 0)) dt = 0; if (dt > .05) dt = .05;
   if (cv.clientWidth !== W || cv.clientHeight !== H) resize();
   if (opts.quality === 'auto' && dt > 0 && dt < .05) {   // drop resolution a notch if the machine cannot hold ~45 fps
@@ -1496,6 +1578,7 @@ window.__eightfold = {
   kill() { runner.die('fall'); },
   tune(o) { if (o) { Object.assign(tune, o); applyTune(); } return Object.assign({}, tune); },
   tel() { return tel; },
+  relay(url) { RELAY = url; relayAnywhere = true; relayDead = false; relayAt = 0; $('telNote').hidden = !relayOn(); },
   // benchmark: n full frames (4 physics steps + draw); flush forces the canvas to finish rasterising each one
   bench(n, flush) { const t0 = performance.now(); for (let i = 0; i < n; i++) { for (let k = 0; k < 4; k++) tick(STEP); render(1 / 60, 0); if ((i & 3) === 0) hud(); if (flush) ctx.getImageData(0, 0, 1, 1); } return (performance.now() - t0) / n; },
   perf() { const r = { renderMs: pf.n ? pf.ms / pf.n : 0, frames: pf.n, scale: qScale }; pf.ms = 0; pf.n = 0; return r; },

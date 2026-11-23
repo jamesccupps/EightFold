@@ -4,7 +4,8 @@
 let HOP = 0.10, FLIP = 0.40, JUMP = 0.44, LAUNCH = 0.70, COYOTE = 0.06, LANDGRACE = 0.03, PEND = 0.45;
 const FEEL0 = { hop: HOP, flip: FLIP, jump: JUMP, coyote: COYOTE, buffer: PEND };
 function setFeel(o) {
-  o = Object.assign({}, FEEL0, o || {});
+  const src = o || {}; o = Object.assign({}, FEEL0);
+  for (const k in FEEL0) if (typeof src[k] === 'number' && isFinite(src[k])) o[k] = src[k];   // anything missing keeps its default
   HOP = o.hop; FLIP = o.flip; JUMP = o.jump; COYOTE = Math.max(LANDGRACE + .005, o.coyote); PEND = o.buffer;
 }
 const HZ0 = .38, HZ1 = .62;   // the slice of a row a low bar occupies
@@ -443,7 +444,7 @@ class Runner {
     this.q.push({ k, age: 0 });
   }
   emit(n) { if (this.on) this.on(n); }
-  die(kind) { this.mode = 'ground'; this.dead = { kind, t: 0 }; this.emit(kind); }
+  die(kind) { this.dead = { kind, t: 0, was: this.mode }; this.mode = 'ground'; this.emit(kind); }   // was: what the ball was doing when it ended
   hit() {   // ran into something solid; true if that ended the run
     if (this.inv > 0) return false;
     if (this.shield) { this.shield = false; this.inv = .7; this.emit('shieldhit'); return false; }

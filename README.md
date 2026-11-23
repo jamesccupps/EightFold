@@ -44,7 +44,17 @@ Two tools are in the game for now, to find the right feel and then be taken out 
 
 **Tuning** (the menu or pause screen, or press `T`) is a drawer of sliders beside the tunnel: overall pace, how long a jump, flip and turn take, edge forgiveness, how long an early press is remembered, the top speed sparks give, and the camera distance, height, zoom and ball size. The view changes as you drag. Changing a move time lays the courses out again for it, and the drawer checks that the built-in pilot can still finish all eight levels. Runs with changed pace, moves or forgiveness are not scored; camera changes do not affect scoring. *Copy values* gives the numbers to bake in as defaults.
 
-**Play data** records one small entry per attempt in the browser's local storage: the course, how the run ended, where and on which obstacle, the time, sparks, how early or late each press came inside the window the course allows, and the frame rate. Nothing is sent anywhere from the GitHub Pages copy: the sheet has Copy, Download, a switch to stop recording, and Erase. (The copy published as a Claude artifact also saves the same records to that artifact's own storage.)
+**Play data** records one small entry per attempt in the browser's local storage:
+
+- the course, how the run ended, where, on which obstacle, and what the ball was doing (on the floor, mid turn, flip or jump);
+- every press as a position and a move, so the run can be replayed against its course (`node tools/replay.js`), and where each press fell inside the window the course allows;
+- the required move that was due and not made, and by how much;
+- time, score, sparks, shields and slow-mo used, speed gained, pauses, how long before the next try, keyboard / touch / on-screen buttons;
+- frame rate, the longest frame, and any drop in resolution.
+
+For the visit as a whole it notes the browser and system by name, screen size, processor count, the options in use, progress so far, which screens were opened, and a one-tap answer to "how does this level feel?" on the result screen. No name, no address, no free text. The sheet has Copy, Download, a switch to stop recording, and Erase. (The copy published as a Claude artifact also saves the same records to that artifact's own storage.)
+
+When a relay address is set in the game (`RELAY` in `src/page.html`), the public copy also sends each session's records to a small Cloudflare Worker, which files them on this repository's `play-data` branch. The menu says so while it is on, and stopping the recording stops the sending. With no address set, nothing is sent anywhere. See [`relay/`](relay/README.md).
 
 ## How the levels are made
 
@@ -65,7 +75,8 @@ test/levels.js        every course can be finished; every spark can be collected
 test/shortcuts.js     no course can be finished while skipping its intended moves
 test/curve.js         prints speed, input rate, obstacle variety and difficulty per level
 test/browser/         play-throughs in a real browser (Python + Playwright)
-tools/                seed search used to pick each level's course
+tools/                seed search used to pick each level's course; replay.js plays recorded runs back
+relay/                the Cloudflare Worker that files play data on the play-data branch, and its test
 ```
 
 ## Build
@@ -97,6 +108,7 @@ node build.js --test                    # a build with a small test hook, not co
 python3 test/browser/play.py 1,2,3      # play levels with human-like timing error
 python3 test/browser/flows.py           # tutorial, restart, pause, unlock, rebinding, endless, phone layout
 python3 test/browser/tuning.py          # the tuning drawer and the play recording
+python3 test/browser/relay.py           # play data from the page, through the relay, to a stand-in for GitHub
 ```
 
 They need Python with Playwright and its Chromium (`pip install playwright && playwright install chromium`).
