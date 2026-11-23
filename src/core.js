@@ -1,5 +1,12 @@
 // ===== Core: track generator + physics (shared by the game and the solvability tests) =====
-const HOP = 0.10, FLIP = 0.40, JUMP = 0.44, LAUNCH = 0.70, COYOTE = 0.06, LANDGRACE = 0.03, PEND = 0.45;
+// Move timings in seconds. They are variables so the tuning panel can try other values: the generator
+// reads the same numbers, so a course built after a change is laid out for the new timings.
+let HOP = 0.10, FLIP = 0.40, JUMP = 0.44, LAUNCH = 0.70, COYOTE = 0.06, LANDGRACE = 0.03, PEND = 0.45;
+const FEEL0 = { hop: HOP, flip: FLIP, jump: JUMP, coyote: COYOTE, buffer: PEND };
+function setFeel(o) {
+  o = Object.assign({}, FEEL0, o || {});
+  HOP = o.hop; FLIP = o.flip; JUMP = o.jump; COYOTE = Math.max(LANDGRACE + .005, o.coyote); PEND = o.buffer;
+}
 const HZ0 = .38, HZ1 = .62;   // the slice of a row a low bar occupies
 
 function rng(a) {
@@ -60,7 +67,7 @@ const TUTORIAL = { name: 'How to play', tutorial: true, speed: 6, secs: 0, react
 class Track {
   // cfg: a level config, or null for the endless run
   constructor(seed, cfg) {
-    this.rnd = rng(seed);
+    this.rnd = rng(seed); this.seed = seed;
     // per row: solid lanes, tall-block lanes, low-bar lanes, launch-pad lanes, no-flip flag, speed, zone (1 sprint, 2 slow)
     this.S = []; this.B = []; this.H = []; this.PD = []; this.X = []; this.V = []; this.Z = [];
     this.G = {};                       // per row: moving-obstacle drawing info
@@ -197,11 +204,23 @@ class Track {
   runKind(kind) {
     this.P = this.params(this.S.length);
     (this.kinds || (this.kinds = {}))[kind] = (this.kinds[kind] || 0) + 1;
+    const r0 = this.S.length, e0 = this.events.length;
     this.noDecor = true;
     if (kind === 'dodge1') this.dodge(1); else if (kind === 'dodge2') this.dodge(2);
     else if (kind === 'sweep') this.dodge(1, 'sweep'); else if (kind === 'beam') this.dodge(1, 'beam'); else if (kind === 'fan') this.dodge(1, 'fan');
     else this[kind]();
     this.noDecor = false;
+    // which rows and presses belong to this obstacle (the play recording reads these)
+    (this.segs || (this.segs = [])).push([r0, this.S.length, kind]);
+    for (let i = e0; i < this.events.length; i++) this.events[i].kind = kind;
+  }
+  kindAt(row) {   // the obstacle at this row, or the one just behind it, or 'floor'
+    const g = this.segs || []; let best = 'floor';
+    for (let i = g.length - 1; i >= 0; i--) {
+      if (row >= g[i][0] && row < g[i][1] + 5) { best = g[i][2]; break; }
+      if (g[i][1] + 5 <= row) break;
+    }
+    return best;
   }
   // the stretch of floor before an obstacle. prog 0..1 through the level shortens it; offer puts a helper in it.
   lead(prog, offer) {

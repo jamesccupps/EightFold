@@ -183,6 +183,28 @@ td.done { color: var(--tile); }
 .seg button { padding: 8px 11px; font: 600 12px/1 var(--body); }
 .seg button[aria-pressed="true"] { background: var(--tile); color: rgb(var(--bgc)); }
 @media (max-width: 520px) { .optrow { grid-template-columns: 1fr; } }
+/* ---------- tuning drawer and play data (temporary tools) ---------- */
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(360px, 100vw); box-sizing: border-box; display: flex; flex-direction: column; gap: 12px;
+  padding: 16px 16px 22px; overflow-y: auto; text-align: left; background: rgb(var(--bgc) / .93); border-left: 1px solid var(--line);
+}
+.drawer header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.drawer h2 { margin: 0; font: 900 24px/1 var(--display); color: var(--tile); }
+.drawer p { margin: 0; color: var(--dim); font-size: 12.5px; }
+.drawer p.ok { color: var(--ink); } .drawer p.bad { color: var(--hazard); }
+.tune { display: grid; grid-template-columns: 1fr auto; gap: 0 10px; align-items: baseline; }
+.tune h3 { grid-column: 1 / -1; margin: 10px 0 8px; font: 600 11px/1 var(--body); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+.tune h3:first-child { margin-top: 0; }
+.tune label { font-size: 13px; }
+.tune output { font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--tile); }
+.tune output.same { color: var(--dim); }
+.tune input { grid-column: 1 / -1; width: 100%; margin: 3px 0 0; }
+.tune small { grid-column: 1 / -1; margin: 0 0 10px; font-size: 11.5px; line-height: 1.35; color: var(--dim); }
+textarea.out {
+  width: 100%; box-sizing: border-box; min-height: 70px; padding: 8px; border: 1px solid var(--line); border-radius: 3px; resize: vertical;
+  background: rgb(247 244 255 / .06); color: var(--ink); font: 400 11.5px/1.4 var(--body); -webkit-user-select: text; user-select: text;
+}
+@media (max-width: 700px) { .drawer { top: auto; width: 100vw; max-height: 46vh; border-left: 0; border-top: 1px solid var(--line); background: rgb(var(--bgc) / .84); } }
 @media (prefers-reduced-motion: reduce) { .big.show, .toast.show { animation-duration: 2s; } .lv { transition: none; } }
 </style>
 </head>
@@ -213,12 +235,12 @@ td.done { color: var(--tile); }
   <h1 class="title" aria-label="Eightfold"><span>EIGHT</span><span>F<svg viewBox="0 0 100 100" aria-hidden="true"><polygon points="92.5,32.4 92.5,67.6 67.6,92.5 32.4,92.5 7.5,67.6 7.5,32.4 32.4,7.5 67.6,7.5" fill="none" stroke="currentColor" stroke-width="17"/></svg>LD</span></h1>
   <p class="tag" id="tagline">Eight walls, one way through. Turn the tunnel, jump, flip to the far wall, and do not fall out.</p>
   <ol class="levels" id="levels"></ol>
-  <div class="menu-row"><button class="btn" id="btnScores" type="button">Scores</button><button class="btn" id="btnControls" type="button">Controls &amp; options</button></div>
+  <div class="menu-row"><button class="btn" id="btnScores" type="button">Scores</button><button class="btn" id="btnControls" type="button">Controls &amp; options</button><button class="btn" id="btnTune" type="button">Tuning</button><button class="btn" id="btnData" type="button">Play data</button></div>
 </div></nav>
 
 <div class="panel" id="pausePanel" hidden>
   <h2>Paused</h2>
-  <div class="row"><button class="btn go" id="btnResume" type="button">Resume</button><button class="btn" id="btnRestart" type="button">Restart</button><button class="btn" id="btnControls2" type="button">Controls</button><button class="btn" id="btnQuit" type="button">Level select</button></div>
+  <div class="row"><button class="btn go" id="btnResume" type="button">Resume</button><button class="btn" id="btnRestart" type="button">Restart</button><button class="btn" id="btnControls2" type="button">Controls</button><button class="btn" id="btnTune2" type="button">Tuning</button><button class="btn" id="btnQuit" type="button">Level select</button></div>
 </div>
 <div class="panel" id="failPanel" hidden>
   <h2 id="failBig">0%</h2>
@@ -256,7 +278,7 @@ td.done { color: var(--tile); }
   <div class="tablewrap"><table><thead><tr><th>Run</th><th>Distance</th><th>Score</th><th>Sparks</th><th>Date</th></tr></thead><tbody id="endBody"></tbody></table></div>
   <h3>Daily</h3>
   <p id="dailyText"></p>
-  <p>Scores are kept in this browser. Practice runs (75% speed or checkpoints) are not recorded.</p>
+  <p>Scores are kept in this browser. Practice runs (75% speed, checkpoints, or changed tuning) are not recorded.</p>
   <div><button class="btn" id="btnWipe" type="button">Erase scores</button></div>
 </div></div>
 
@@ -268,6 +290,28 @@ td.done { color: var(--tile); }
   <h3>Options</h3>
   <div class="optrow" id="optrows"></div>
   <div class="menu-row"><button class="btn" id="btnDefaults" type="button">Reset keys</button><button class="btn" id="btnTut" type="button">Play the tutorial</button></div>
+</div></div>
+
+<aside class="drawer" id="tuneSheet" hidden aria-label="Tuning">
+  <header><h2>Tuning</h2><button class="btn" id="btnCloseTune" type="button">Close</button></header>
+  <p>Try other values for how the game feels, then play with them. The view changes as you drag. Runs with changed pace, moves or forgiveness are not scored.</p>
+  <div class="tune" id="tuneRows"></div>
+  <p id="tuneCheck"></p>
+  <div class="menu-row"><button class="btn go" id="btnTuneTry" type="button">Play with these</button><button class="btn" id="btnTuneReset" type="button">Reset all</button><button class="btn" id="btnTuneCopy" type="button">Copy values</button></div>
+  <textarea class="out" id="tuneOut" readonly rows="3" aria-label="Tuning values to send back"></textarea>
+  <p>When it feels right, send these values back and they become the game's defaults.</p>
+</aside>
+
+<div class="sheet" id="dataSheet" hidden><div class="sheet-in">
+  <header><h2>Play data</h2><button class="btn" id="btnCloseData" type="button">Close</button></header>
+  <p id="dataInfo"></p>
+  <div class="menu-row"><button class="btn" id="btnDataCopy" type="button">Copy</button><button class="btn" id="btnDataSave" type="button">Download</button><button class="btn" id="btnDataToggle" type="button">Stop recording</button><button class="btn" id="btnDataClear" type="button">Erase play data</button></div>
+  <textarea class="out" id="dataOut" readonly rows="5" hidden aria-label="Play data"></textarea>
+  <h3>By level</h3>
+  <div class="tablewrap"><table><thead><tr><th>Course</th><th>Attempts</th><th>Clears</th><th>Typical end</th><th>Most runs end at</th></tr></thead><tbody id="dataLv"></tbody></table></div>
+  <h3>By obstacle</h3>
+  <div class="tablewrap"><table><thead><tr><th>Obstacle</th><th>Runs ended</th><th>Presses</th><th>Typical timing</th><th>Late</th><th>Tightest</th></tr></thead><tbody id="dataOb"></tbody></table></div>
+  <p>Timing is where in the allowed window a press came: 0% is the first moment it works, 100% the last. Tightest is the least time a press had to spare.</p>
 </div></div>
 
 <script>
@@ -315,6 +359,115 @@ const SKINS = [['pearl', 'Pearl', 0], ['ember', 'Ember', 30], ['mint', 'Mint', 8
 const skin = () => { const s = SKINS.find(x => x[0] === opts.skin); return s && (stats.total || 0) >= s[2] ? s[0] : 'pearl'; };
 const TOTALS = LEVELS.map(lv => new Track(lv.seed, lv).nSparks);
 const unlocked = i => i === 0 || opts.unlockAll || (stats.lv[i - 1] && (stats.lv[i - 1].clears > 0 || stats.lv[i - 1].pclear));
+
+// ---------- tuning (a temporary tool for finding the right feel) ----------
+// [key, label, min, max, step, default, unit, what it touches, hint]. 'course' values re-lay the courses, 'play' ones change
+// how a run goes, 'cam' ones only change the picture. A bare string starts a group.
+const TUNE = [
+  'Pace and moves',
+  ['pace', 'Overall pace', .8, 1.25, .01, 1, 'x', 'play', 'Everything faster or slower. Courses keep their shape.'],
+  ['jump', 'Jump', .30, .60, .01, .44, 's', 'course', 'Time in the air. Longer jumps carry further.'],
+  ['flip', 'Flip', .28, .56, .01, .40, 's', 'course', 'Time to cross to the far wall.'],
+  ['hop', 'Turn', .06, .18, .01, .10, 's', 'course', 'Time to hop one lane over.'],
+  'Forgiveness',
+  ['coyote', 'Edge forgiveness', .03, .14, .005, .06, 's', 'play', 'How long you can run past the end of the floor and still act.'],
+  ['buffer', 'Early-press memory', .15, .80, .01, .45, 's', 'play', 'How long a press made in the air waits for you to land.'],
+  ['boost', 'Top speed from sparks', 0, .5, .01, .25, '%', 'play', 'How much faster a full run of sparks makes you.'],
+  'View',
+  ['camBack', 'Camera distance', 3, 6.5, .1, 4.4, '', 'cam', 'How far behind the ball the camera sits.'],
+  ['camUp', 'Camera height', 0, .9, .02, .5, '', 'cam', 'How far above the centre of the tunnel.'],
+  ['zoom', 'Zoom', .8, 1.3, .01, 1, 'x', 'cam', 'Narrower or wider view.'],
+  ['ball', 'Ball size', .08, .19, .005, .13, '', 'cam', '']
+];
+const TUNE0 = {}; for (const t of TUNE) if (typeof t !== 'string') TUNE0[t[0]] = t[5];
+let tune = Object.assign({}, TUNE0);
+{ const sv = store.get('tune', null); if (sv && typeof sv === 'object') for (const t of TUNE) if (typeof t !== 'string' && typeof sv[t[0]] === 'number' && isFinite(sv[t[0]])) tune[t[0]] = clamp(sv[t[0]], t[2], t[3]); }
+const tuneSame = k => Math.abs(tune[k] - TUNE0[k]) < 1e-9;
+const tuneDiff = () => { const o = {}; for (const k in TUNE0) if (!tuneSame(k)) o[k] = tune[k]; return o; };
+// changed values that alter how a run plays (not just how it looks): such runs are not scored
+const tunedPlay = () => TUNE.some(t => typeof t !== 'string' && t[7] !== 'cam' && !tuneSame(t[0]));
+function applyTune() {
+  setFeel({ hop: tune.hop, flip: tune.flip, jump: tune.jump, coyote: tune.coyote, buffer: tune.buffer });
+  CAMBACK = tune.camBack; CAMY = -tune.camUp; BR = tune.ball; BOOST_MAX = tune.boost;
+}
+
+// ---------- play recording (temporary: so the game can be tuned from how it is really played) ----------
+// One small record per attempt: where it ended and on what, the time, sparks, how early or late each press came inside
+// the window the course allows for it, and the frame rate. Kept in this browser; see the Play data sheet.
+const BUILD = '2026-11-23';
+let tel = store.get('tel', null);
+if (!tel || tel.v !== 1 || !Array.isArray(tel.log) || !Array.isArray(tel.sessions)) tel = { v: 1, on: true, sessions: [], log: [] };
+const SID = Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36);
+let telCur = null, telSess = null, telDb = null, telBusy = false, telAgain = false;
+const saveTel = () => store.set('tel', tel);
+function telSession() {
+  if (!telSess) { telSess = { id: SID, t: Math.round(Date.now() / 1000), build: BUILD, host: String(location.hostname || 'file').slice(0, 60) }; tel.sessions.push(telSess); if (tel.sessions.length > 30) tel.sessions.shift(); }
+  Object.assign(telSess, { ua: String(navigator.userAgent).slice(0, 160), w: W, h: H, dpr: +(window.devicePixelRatio || 1).toFixed(2), touch: touchSeen,
+    quality: opts.quality, qscale: +qScale.toFixed(2), speed: opts.speed, cp: !!opts.cp, auto: !!opts.auto, invert: !!opts.invert, calm: !!opts.calm, tune: tuneDiff() });
+  return telSess;
+}
+const telMode = () => typeof mode === 'number' ? 'L' + (mode + 1) : mode === 'daily' ? 'D' + today().key : mode === 'endless' ? 'E' : 'T';
+function telStart(cp) {
+  telCur = tel.on && !bot ? { cp: cp ? Math.floor(cp.z) : 0, pr: 0, px: 0, ei: 0, hit: {}, fh: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], kk: {}, sh: 0, sl: 0, fn: 0, ft: 0, fj: 0 } : null;
+}
+// a press: find the move on the course's own route it belongs to, and note where in that move's window it came
+function telPress(m) {
+  const c = telCur; if (!c) return; c.pr++;
+  const ev = track.events, z = runner.z, v = track.speedAt(z), slack = v * .3;
+  while (c.ei < ev.length && ev[c.ei].z1 + slack < z) c.ei++;
+  for (let j = c.ei; j < ev.length && ev[j].z0 - slack <= z; j++) {
+    const e = ev[j]; if (c.hit[j] || e.key !== m) continue;
+    c.hit[j] = 1;
+    const f = (z - e.z0) / Math.max(.01, e.z1 - e.z0), ms = Math.round((e.z1 - z) / v / timeScale() * 1000);
+    c.fh[f < 0 ? 0 : f >= 1 ? 11 : 1 + Math.floor(f * 10)]++;
+    const k = e.kind || (e.opt ? 'detour' : 'other'), a = c.kk[k] || (c.kk[k] = [0, 0, 0, 0, 1e9]);
+    a[0]++; a[1] += clamp(f, -1, 2); if (f >= 1) a[2]++; else if (f < 0) a[3]++; if (ms < a[4]) a[4] = ms;
+    return;
+  }
+  c.px++;   // a press the route did not call for
+}
+function telEnd(res) {
+  const c = telCur; if (!c) return; telCur = null;
+  if (mode == null || !track || !runner || bot) return;
+  const z = c.dz != null ? c.dz : runner.z, row = Math.floor(z), v = track.speedAt(z), ev = track.events, win = res === 'win';   // dz: where the ball was when the run ended
+  const rec = { s: SID, t: Math.round(Date.now() / 1000), m: telMode(), a: tries, res, pc: score(), z: row, d: +runT.toFixed(1), sp: runner.sparks, pr: c.pr, px: c.px, fh: c.fh,
+    fps: c.ft > 0 ? Math.round(c.fn / c.ft) : 0, fj: c.fj };
+  if (!win) {
+    rec.k = track.kindAt(row);
+    // the required move that was due and never made, and how long past its last moment the run ended (ms; negative = still time)
+    let j = c.ei; while (j > 0 && ev[j - 1].z1 + v * 1.2 >= z) j--;
+    for (; j < ev.length && ev[j].z0 <= z + v * .3; j++) if (!c.hit[j] && !ev[j].opt && ev[j].z1 + v * 1.2 >= z) { rec.nx = [ev[j].kind || 'other', ev[j].key, Math.round((z - ev[j].z1) / v * 1000)]; break; }
+  }
+  const kk = {}; let any = false; for (const k in c.kk) { const a = c.kk[k]; kk[k] = [a[0], Math.round(a[1] / a[0] * 100), a[2], a[3], a[4]]; any = true; }
+  if (any) rec.kk = kk;
+  if (track.end !== Infinity) rec.ns = track.nSparks; else rec.seed = track.seed;
+  if (boost > 0) rec.bo = Math.round(boost * 100);
+  if (c.cp) rec.cp = c.cp; if (c.sh) rec.sh = c.sh; if (c.sl) rec.sl = c.sl;
+  if (practice()) rec.prac = 1;
+  const td = tuneDiff(); for (const k in td) { rec.tu = td; break; }
+  tel.log.push(rec); if (tel.log.length > 400) tel.log.splice(0, tel.log.length - 400);
+  telSession(); saveTel(); telSync();
+}
+// Inside Claude's artifact viewer the same records also go to the artifact's own storage, so they can be read back
+// for tuning without copying anything by hand. Everywhere else there is no such storage and nothing is sent.
+function telSync() {
+  if (!telDb || !tel.on) return;
+  if (telBusy) { telAgain = true; return; }
+  const mine = tel.log.filter(r => r.s === SID).slice(-250);
+  if (!mine.length || !telSess) return;
+  telBusy = true; telAgain = false;
+  let p;
+  try { p = telDb.doc('play/' + SID).set({ t: telSess.t, session: telSess, n: mine.length, attempts: mine }); } catch (e) { telDb = null; telBusy = false; return; }
+  Promise.resolve(p).then(() => { telBusy = false; if (telAgain) telSync(); }, e => { telBusy = false; if (!e || e.code !== 'unavailable') telDb = null; });
+}
+function telTune() {   // the values currently set in the tuning drawer, saved the same way
+  if (!telDb || !tel.on) return;
+  try { Promise.resolve(telDb.doc('tune/current').set({ t: Math.round(Date.now() / 1000), build: BUILD, values: Object.assign({}, tune), changed: tuneDiff() })).catch(() => {}); } catch (e) {}
+}
+try {
+  if (window.claude && typeof window.claude.use === 'function') Promise.resolve(window.claude.use('db')).then(d => { telDb = d || null; telSync(); if (overlay === 'dataSheet') buildData(); }, () => {});
+} catch (e) {}
+
 function today() {
   const d = new Date(), y = d.getFullYear(), m = d.getMonth() + 1, dd = d.getDate();
   return { key: y + '-' + pad2(m) + '-' + pad2(dd), seed: y * 10000 + m * 100 + dd, label: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) };
@@ -447,7 +600,7 @@ let mode = null;               // level index, 'endless', 'daily' or 'tutorial'
 let track, runner, bot = null, deadT = 0, failT = 0, tries = 0, runT = 0, slowT = 0, shake = 0, flash = 0;
 let tutI = 0, tutNote = 0, frozen = false, lastZone = 0;
 let shards = [], ballAt = { x: 0, y: 0, R: 10 }, lastPc = '', lastSp = '', lastTm = '';
-const BOOST_MAX = .25;   // sparks add speed for the rest of the run, up to +25%
+let BOOST_MAX = .25;     // sparks add speed for the rest of the run, up to +25% (the tuning drawer can change it)
 // Each spark closes a fixed share of the gap to the cap, so the first few are felt and the rest top it up:
 // about 70% of the cap by a third of a level's sparks, all of it by roughly nine in ten.
 function addBoost() {
@@ -472,7 +625,9 @@ function tally(win) {
   let total = 0; for (const p of parts) total += p[1];
   return { total, parts };
 }
-const practice = () => opts.speed < 1 || opts.cp;
+const practice = () => opts.speed < 1 || opts.cp || tunedPlay();
+// how much faster or slower than real time the run is going right now
+const timeScale = () => state === 'menu' || mode === 'tutorial' ? 1 : opts.speed * tune.pace * (1 + boost) * (slowT > 0 && state === 'play' ? .6 : 1);
 let resumeCp = null, touchSeen = false;
 const scored = () => mode !== 'tutorial' && !practice();
 
@@ -482,6 +637,7 @@ function attach() {
   runner = new Runner(track);
   runner.on = name => {
     if (state !== 'play') return;
+    if (telCur) { if (name === 'shieldhit') telCur.sh++; else if (name === 'slow') telCur.sl++; }
     Snd.fx(name);
     if (name === 'spark' && mode !== 'tutorial' && boost < BOOST_MAX) { addBoost(); kick = 1; if (boost >= BOOST_MAX) toast('Top speed'); }
     if (name === 'shield') toast('Shield');
@@ -496,9 +652,9 @@ function startAttract() {
   track = new Track((Math.random() * 1e9) | 0, null); attach(); bot = new Bot(track, .5, false);
 }
 function modeName() { return mode === 'endless' ? 'Endless' : mode === 'daily' ? 'Daily' : mode === 'tutorial' ? 'How to play' : LEVELS[mode].name; }
-function hidePanels() { for (const id of ['menu', 'pausePanel', 'failPanel', 'winPanel', 'scoreSheet', 'ctrlSheet', 'briefSheet']) $(id).hidden = true; overlay = null; }
+function hidePanels() { for (const id of ['menu', 'pausePanel', 'failPanel', 'winPanel', 'scoreSheet', 'ctrlSheet', 'briefSheet', 'tuneSheet', 'dataSheet']) $(id).hidden = true; overlay = null; }
 function begin(first, cp) {
-  attach(); bot = null; state = 'play';
+  telEnd('restart'); attach(); bot = null; state = 'play'; telStart(cp);
   if (cp) { runner.z = cp.z; runner.lane = runner.from = runner.cam = cp.lane; } shards.length = 0; shake = 0; flash = 0; lastPc = lastSp = lastTm = '';
   lastProg = ''; lastPts = ''; lastBoost = -1; lastFlags = -1; boost = 0; boostVis = 0; kick = 0; runT = 0; slowT = 0; tutI = 0; tutNote = 0; frozen = false; lastZone = cp ? (track.Z[Math.floor(cp.z)] || 0) : 0; tries++;
   hidePanels(); $('tip').hidden = true;
@@ -506,7 +662,7 @@ function begin(first, cp) {
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   $('hudNo').textContent = typeof mode === 'number' ? pad2(mode + 1) : mode === 'endless' ? '∞' : mode === 'daily' ? today().label : '?';
   $('hudNm').textContent = modeName();
-  $('tgPrac').hidden = !practice() || mode === 'tutorial';
+  $('tgPrac').hidden = !practice() || mode === 'tutorial'; $('tgPrac').textContent = tunedPlay() ? 'Tuned' : 'Practice';
   if (scored()) { if (typeof mode === 'number') lvS(mode).tries++; else if (mode === 'daily') dailyS().tries++; saveStats(); }
   if (first && mode !== 'tutorial') {
     const hint = mode === 'endless' ? 'How far can you get? Restart replays the same course.' : track.level.hint;
@@ -599,6 +755,7 @@ function score() { return track.end === Infinity ? Math.floor(runner.z) : Math.m
 const fmtT = t => t.toFixed(1) + ' s';
 
 function record(win) {   // returns { best, rec, total, parts, newScore, newTime }
+  telEnd(win ? 'win' : runner.dead ? runner.dead.kind : 'restart');
   const s = score(), sp = runner.sparks, tl = tally(win); let best = s, rec = false, newScore = false, newTime = false;
   if (!scored()) {
     if (win && typeof mode === 'number' && !lvS(mode).pclear) { lvS(mode).pclear = true; saveStats(); }
@@ -661,7 +818,7 @@ function onWin() {
   $('winPanel').hidden = false; ($('btnNext').hidden ? $('btnAgain') : $('btnNext')).focus();
 }
 function toMenu() {
-  state = 'menu'; mode = null; Snd.stop(); startAttract(); hidePanels(); buildMenu();
+  telEnd('quit'); state = 'menu'; mode = null; Snd.stop(); startAttract(); hidePanels(); buildMenu();
   $('menu').hidden = false; $('hud').hidden = true; $('bar').hidden = true; $('btnPause').hidden = true;
   $('big').className = 'big'; $('tip').hidden = true;
 }
@@ -694,7 +851,7 @@ function tick(dt) {
   runner.step(dt);
   if (state === 'menu') { if (runner.dead || runner.z > 700) startAttract(); }
   else if (state === 'play') {
-    if (runner.dead) { state = 'dead'; deadT = 0; if (!calm()) { shake = 1; flash = .5; } }
+    if (runner.dead) { state = 'dead'; deadT = 0; if (telCur) telCur.dz = runner.z; if (!calm()) { shake = 1; flash = .5; } }
     else if (runner.z >= track.end) onWin();
     else {
       const zn = track.Z[Math.floor(runner.z)] || 0;
@@ -705,7 +862,9 @@ function tick(dt) {
 
 // ================= rendering =================
 const RC = 1 / Math.cos(Math.PI / 8);   // corner radius of an octagon with apothem 1
-const RL = .86, CAMBACK = 4.4, NEAR = .3, CAMY = -.5, BR = .13, TH = .09;
+const RL = .86, NEAR = .3, TH = .09;
+let CAMBACK = 4.4, CAMY = -.5, BR = .13;   // camera distance and height, ball size: the tuning drawer can change these
+applyTune();
 let VIEW = 36, qScale = 1, slowFor = 0, ema = 1 / 60, idleFor = 0;   // draw distance and resolution adapt to the machine
 const cxr = new Float64Array(9), cyr = new Float64Array(9), shade = new Float64Array(8);
 let W = 0, H = 0, DPR = 1, cx = 0, cy = 0, F = 1, camNow = 0;
@@ -809,9 +968,9 @@ const GAPL = .007, GAPZ = .007 * RL;   // tiles are drawn slightly inset; the ga
 function render(fdt, lead) {
   const z = runner.z + track.speedAt(runner.z) * lead, v = runner.vis(lead), cam = camNow = runner.cam;
   if (!track.level && Math.abs(z - palZ) > 2) { pal = endlessPal(z); palZ = z; }
-  F = Math.min(W * 1.25, H * 1.4);
+  F = Math.min(W * 1.25, H * 1.4) * tune.zoom;
   if (pal !== pcPal || W !== pcW || H !== pcH) prepPal();
-  const rush = calm() || state !== 'play' && state !== 'dead' ? 0 : boostVis / BOOST_MAX;   // 0..1: how much of the boost is in play
+  const rush = calm() || BOOST_MAX <= 0 || state !== 'play' && state !== 'dead' ? 0 : Math.min(1, boostVis / BOOST_MAX);   // 0..1: how much of the boost is in play
   F *= 1 - rush * .1 - (calm() ? 0 : kick * .012);   // wider view at speed, with a small punch on each spark
   syncCss(false);
   const pulse = Snd.pulse(), pat = track.level ? track.level.pat : 0;
@@ -995,7 +1154,7 @@ function toggleSound() { Snd.setMuted(!Snd.muted); soundLabel(); }
 // ---------- scores sheet ----------
 let overlay = null, wipeArmed = false;
 function openSheet(id) { overlay = id; $(id).hidden = false; $(id).scrollTop = 0; const b = $(id).querySelector('header button'); if (b) b.focus(); }
-function closeSheet() { if (!overlay) return; $(overlay).hidden = true; overlay = null; listening = null; if (state === 'menu') buildMenu(); else if (state === 'pause') $('btnResume').focus(); }
+function closeSheet() { if (!overlay) return; if (overlay === 'tuneSheet') return closeTune(false); $(overlay).hidden = true; overlay = null; listening = null; if (state === 'menu') buildMenu(); else if (state === 'pause') $('btnResume').focus(); }
 function cell(tr, t, cls) { const td = document.createElement('td'); td.textContent = t; if (cls) td.className = cls; tr.appendChild(td); }
 function buildScores() {
   const tb = $('scoreBody'); tb.textContent = '';
@@ -1078,6 +1237,112 @@ function setBind(k) {
   buildControls();
 }
 
+// ---------- tuning drawer ----------
+// It sits beside the tunnel rather than over it, with the run paused, so camera changes show as you drag.
+let tuneFrom = null, tuneDirty = false, tuneTouched = false;
+const fmtTune = (unit, v) => unit === 'x' ? '×' + v.toFixed(2) : unit === 's' ? v.toFixed(3).replace(/0$/, '') + ' s' : unit === '%' ? '+' + Math.round(v * 100) + '%' : String(+v.toFixed(3));
+function tuneText() { $('tuneOut').value = JSON.stringify({ eightfold: 'tuning', build: BUILD, changed: tuneDiff(), all: tune }); }
+// can the built-in pilot still finish every level, pressing early, on time and late?
+function tuneCheck() {
+  const bad = [], el = $('tuneCheck');
+  LEVELS.forEach((lv, i) => {
+    let ok = true;
+    try {
+      const tr = new Track(lv.seed, lv);
+      for (const f of [.05, .5, .95]) {
+        const r = new Runner(tr), b = new Bot(tr, f, false); let g = 0;
+        while (r.z < tr.end + 1 && !r.dead && g++ < 4e5) { b.update(r); r.step(1 / 240); }
+        if (r.dead) { ok = false; break; }
+      }
+    } catch (e) { ok = false; }
+    if (!ok) bad.push(i + 1);
+  });
+  el.className = bad.length ? 'bad' : 'ok';
+  el.textContent = bad.length ? 'With these values level ' + bad.join(', ') + ' cannot be finished. Move jump, flip or turn back towards where they were.'
+    : 'Checked: all ' + LEVELS.length + ' levels can be finished with these values.' + (tuneDirty ? ' The courses are laid out again for the new move times, so a run in progress starts over.' : '');
+  return !bad.length;
+}
+function buildTune() {
+  const box = $('tuneRows'); box.textContent = '';
+  for (const t of TUNE) {
+    if (typeof t === 'string') { const h = document.createElement('h3'); h.textContent = t; box.appendChild(h); continue; }
+    const [key, label, min, max, step, def, unit, kind, hint] = t, id = 'tu-' + key;
+    const l = document.createElement('label'), o = document.createElement('output'), r = document.createElement('input'), sm = document.createElement('small');
+    l.htmlFor = id; l.textContent = label; r.type = 'range'; r.id = id; r.min = min; r.max = max; r.step = step; r.value = tune[key]; sm.textContent = hint;
+    const show = () => { o.textContent = fmtTune(unit, tune[key]) + (tuneSame(key) ? '' : '  (was ' + fmtTune(unit, def) + ')'); o.className = tuneSame(key) ? 'same' : ''; };
+    r.addEventListener('input', () => { tune[key] = +r.value; tuneTouched = true; if (kind === 'course') tuneDirty = true; applyTune(); show(); tuneText(); idleFor = 0; });
+    r.addEventListener('change', () => { store.set('tune', tune); if (kind === 'course') tuneCheck(); });
+    show(); box.appendChild(l); box.appendChild(o); box.appendChild(r); box.appendChild(sm);
+  }
+  tuneText(); tuneCheck();
+}
+function openTune() {
+  if (overlay || !(state === 'menu' || state === 'play' || state === 'pause' || state === 'fail')) return false;
+  tuneFrom = state; tuneTouched = false;
+  if (state === 'play') setPause(true);
+  $('pausePanel').hidden = true; $('failPanel').hidden = true; $('menu').hidden = true;
+  buildTune(); overlay = 'tuneSheet'; $('tuneSheet').hidden = false; $('tuneSheet').scrollTop = 0; $('btnCloseTune').focus(); idleFor = 0;
+  return true;
+}
+// play: go straight into a run with the new values. Otherwise go back to where the drawer was opened from.
+function closeTune(play) {
+  if (overlay !== 'tuneSheet') return;
+  $('tuneSheet').hidden = true; overlay = null; idleFor = 0; store.set('tune', tune);
+  if (tuneTouched) telTune();
+  const dirty = tuneDirty; tuneDirty = false;
+  if (state === 'menu') {
+    if (play) { startLevel(unlocked(store.get('last', 0) | 0) ? store.get('last', 0) | 0 : 0, true); return; }
+    if (dirty) startAttract();
+    buildMenu(); $('menu').hidden = false; return;
+  }
+  if (dirty) {   // move times changed: the course is laid out again for them, and the run starts over
+    if (state === 'pause') record(false);
+    track = new Track(track.seed, track.level); resumeCp = null; Snd.wake(); begin(false); return;
+  }
+  if (state === 'fail') { if (play) retry(); else { $('failPanel').hidden = false; $('btnRetry').focus(); } return; }
+  if (play || tuneFrom === 'play') setPause(false); else { $('pausePanel').hidden = false; $('btnResume').focus(); }
+}
+function copyText(text, area, btn, label) {   // clipboard if allowed; otherwise show the text selected, ready to copy by hand
+  const done = ok => { btn.textContent = ok ? 'Copied' : 'Select all and copy'; setTimeout(() => { btn.textContent = label; }, 1800); };
+  const byHand = () => { area.hidden = false; area.value = text; area.focus(); area.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (e) {} done(ok); };
+  try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => done(true), byHand); else byHand(); } catch (e) { byHand(); }
+}
+
+// ---------- play data sheet ----------
+const kindName = k => k === 'floor' ? 'Open floor' : k === 'detour' ? 'Spark detour' : GROUP[k] && TYPES[GROUP[k]] ? TYPES[GROUP[k]][0] : k === 'other' ? 'Other' : k;
+const courseName = m => m[0] === 'L' ? pad2(+m.slice(1)) + '  ' + (LEVELS[+m.slice(1) - 1] ? LEVELS[+m.slice(1) - 1].name : '') : m[0] === 'D' ? 'Daily ' + m.slice(1) : m === 'E' ? 'Endless' : 'Tutorial';
+let dataArmed = false;
+const dataExport = () => JSON.stringify({ eightfold: 'play-data', build: BUILD, exported: new Date().toISOString(), tune, sessions: tel.sessions, log: tel.log });
+function buildData() {
+  const log = tel.log, first = log.length ? new Date(log[0].t * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+  $('dataInfo').textContent = (tel.on ? 'Recording is on. ' : 'Recording is off. ') + log.length + (log.length === 1 ? ' attempt' : ' attempts') + ' kept in this browser' + (first ? ', the oldest from ' + first : '') + '. '
+    + 'Each one notes where the run ended and on what, the time, sparks, how early or late each press came, and the frame rate. It is here for a while so the game can be tuned from real play. '
+    + (telDb ? 'In this Claude artifact the same records are also saved to the artifact’s own storage, where Claude can read them when you ask it to tune the game.' : 'Nothing is sent anywhere: use Copy or Download to pass it on.');
+  $('btnDataToggle').textContent = tel.on ? 'Stop recording' : 'Start recording';
+  dataArmed = false; $('btnDataClear').textContent = 'Erase play data'; $('dataOut').hidden = true;
+  const lv = {}, ob = {}, order = [];
+  for (const r of log) {
+    const a = lv[r.m] || (order.push(r.m), lv[r.m] = { n: 0, win: 0, ends: [], at: {} });
+    a.n++; if (r.res === 'win') a.win++; else if (r.res === 'fall' || r.res === 'crash') { a.ends.push(r.pc); const k = kindName(r.k || 'floor'); a.at[k] = (a.at[k] || 0) + 1; (ob[k] || (ob[k] = { dead: 0, n: 0, f: 0, late: 0, min: 1e9 })).dead++; }
+    for (const k in r.kk || {}) { const q = r.kk[k], o = ob[kindName(k)] || (ob[kindName(k)] = { dead: 0, n: 0, f: 0, late: 0, min: 1e9 }); o.n += q[0]; o.f += q[1] * q[0]; o.late += q[2]; if (q[4] < o.min) o.min = q[4]; }
+  }
+  const empty = (tb, cols) => { const tr = document.createElement('tr'); cell(tr, 'Nothing recorded yet'); for (let i = 1; i < cols; i++) cell(tr, ''); tb.appendChild(tr); };
+  const a = $('dataLv'); a.textContent = ''; order.sort();
+  for (const m of order) {
+    const d = lv[m], tr = document.createElement('tr'), e = d.ends.slice().sort((x, y) => x - y), top = Object.keys(d.at).sort((x, y) => d.at[y] - d.at[x]).slice(0, 2);
+    cell(tr, courseName(m)); cell(tr, String(d.n)); cell(tr, String(d.win), d.win ? 'done' : '');
+    cell(tr, e.length ? e[e.length >> 1] + (m === 'E' ? ' m' : '%') : '—'); cell(tr, top.length ? top.map(k => k + ' ×' + d.at[k]).join(', ') : '—'); a.appendChild(tr);
+  }
+  if (!order.length) empty(a, 5);
+  const b = $('dataOb'); b.textContent = ''; const keys = Object.keys(ob).sort((x, y) => ob[y].dead - ob[x].dead || ob[y].n - ob[x].n);
+  for (const k of keys) {
+    const o = ob[k], tr = document.createElement('tr');
+    cell(tr, k); cell(tr, String(o.dead)); cell(tr, String(o.n)); cell(tr, o.n ? Math.round(o.f / o.n) + '%' : '—');
+    cell(tr, o.n ? Math.round(100 * o.late / o.n) + '%' : '—'); cell(tr, o.n && o.min < 1e9 ? o.min + ' ms' : '—'); b.appendChild(tr);
+  }
+  if (!keys.length) empty(b, 6);
+}
+
 // ================= input =================
 function act(m) {   // m: 'L' | 'R' | 'F' | 'J'
   if (state !== 'play') return;
@@ -1086,15 +1351,16 @@ function act(m) {   // m: 'L' | 'R' | 'F' | 'J'
     if (e && m === e.key && runner.z >= e.z0) { runner.press(m); tutI++; frozen = false; }
     return;
   }
-  runner.press(m);
+  telPress(m); runner.press(m);
 }
 const turn = left => (left !== opts.invert) ? 'L' : 'R';
 window.addEventListener('keydown', e => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const k = keyNorm(e);
   if (listening) { e.preventDefault(); setBind(k); return; }
-  if (overlay) { if (k === 'Escape') { e.preventDefault(); closeSheet(); } return; }
+  if (overlay) { if (k === 'Escape' || (k === 't' && overlay === 'tuneSheet')) { e.preventDefault(); closeSheet(); } return; }
   const a = actionOf(k);
+  if (k === 't' && a == null && !e.repeat && openTune()) { e.preventDefault(); return; }
   if (state === 'menu') { if (k.length === 1 && k >= '1' && k <= '8') startLevel(+k - 1); else if (a === 'sound') toggleSound(); return; }
   if (a === 'sound') { toggleSound(); return; }
   if (state === 'brief') { if (k === 'Escape') { e.preventDefault(); toMenu(); } else if ((k === 'Enter' || a === 'jump' || a === 'flip') && !e.repeat) { e.preventDefault(); go(); } return; }
@@ -1111,7 +1377,7 @@ window.addEventListener('keydown', e => {
   else if (a === 'restart' && !e.repeat && state === 'play') { record(false); retry(true); }
 });
 let ptr = null;
-cv.addEventListener('pointerdown', e => { if (e.pointerType === 'touch') touchSeen = true; if (state === 'menu') return; ptr = { x: e.clientX, y: e.clientY, t: performance.now(), done: false }; Snd.wake(); });
+cv.addEventListener('pointerdown', e => { if (e.pointerType === 'touch') touchSeen = true; if (state === 'menu' || overlay) return; ptr = { x: e.clientX, y: e.clientY, t: performance.now(), done: false }; Snd.wake(); });
 cv.addEventListener('pointermove', e => {
   if (!ptr || ptr.done) return;
   const dx = e.clientX - ptr.x, dy = e.clientY - ptr.y;
@@ -1150,6 +1416,26 @@ on('btnControls2', () => { buildControls(); openSheet('ctrlSheet'); });
 on('btnCloseScores', closeSheet); on('btnCloseCtrl', closeSheet);
 on('btnDefaults', () => { opts.binds = cloneBinds(DEF_BINDS); saveOpts(); buildControls(); });
 on('btnTut', startTutorial);
+on('btnTune', openTune); on('btnTune2', openTune);
+on('btnCloseTune', () => closeTune(false)); on('btnTuneTry', () => closeTune(true));
+on('btnTuneReset', () => { for (const t of TUNE) if (typeof t !== 'string' && !tuneSame(t[0])) { if (t[7] === 'course') tuneDirty = true; tuneTouched = true; tune[t[0]] = t[5]; } applyTune(); store.set('tune', tune); buildTune(); idleFor = 0; });
+on('btnTuneCopy', e => { tuneText(); copyText($('tuneOut').value, $('tuneOut'), e.currentTarget, 'Copy values'); });
+on('btnData', () => { buildData(); openSheet('dataSheet'); });
+on('btnCloseData', closeSheet);
+on('btnDataCopy', e => copyText(dataExport(), $('dataOut'), e.currentTarget, 'Copy'));
+on('btnDataSave', () => {
+  try {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([dataExport()], { type: 'application/json' })); a.download = 'eightfold-play-data.json';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  } catch (err) { $('dataOut').hidden = false; $('dataOut').value = dataExport(); $('dataOut').select(); }
+});
+on('btnDataToggle', () => { tel.on = !tel.on; if (!tel.on) telCur = null; saveTel(); buildData(); });
+on('btnDataClear', () => {
+  if (!dataArmed) { dataArmed = true; $('btnDataClear').textContent = 'Erase it all? Click again'; return; }
+  tel.log = []; tel.sessions = []; telSess = null; saveTel();
+  if (telDb) { try { Promise.resolve(telDb.collection('play').get()).then(q => { for (const d of (q && q.docs) || []) { try { telDb.doc('play/' + d.id).delete(); } catch (e) {} } }, () => {}); } catch (e) {} }
+  buildData();
+});
 on('btnWipe', () => {
   if (!wipeArmed) { wipeArmed = true; $('btnWipe').textContent = 'Erase everything? Click again'; return; }
   stats = { lv: [], endless: [], daily: {} }; saveStats(); store.set('best', null); buildScores();
@@ -1158,6 +1444,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) setPa
 window.addEventListener('blur', () => setPause(true));
 window.addEventListener('pointerdown', e => { if (e.pointerType === 'touch') touchSeen = true; }, true);
 window.addEventListener('resize', resize);
+window.addEventListener('pagehide', () => { if (state === 'play' || state === 'pause' || state === 'dead') telEnd('left'); });
 
 // ================= main loop =================
 const STEP = 1 / 240, pf = { ms: 0, n: 0 };
@@ -1172,6 +1459,7 @@ function frame(ts) {
     if (ema > 1 / 45 && qScale > .5) { slowFor += dt; if (slowFor > 1.5) { qScale *= .8; slowFor = 0; ema = 1 / 60; resize(); } } else slowFor = 0;
   }
   if (state === 'fail') failT += dt;
+  if (telCur && state === 'play' && dt > 0) { telCur.fn++; telCur.ft += dt; if (dt > .025) telCur.fj++; }
   boostVis += (boost - boostVis) * Math.min(1, dt * 4); if (kick > 0) kick = Math.max(0, kick - dt * 3);
   Snd.rate = 1 + (state === 'play' && mode !== 'tutorial' ? boostVis : 0) * .6;   // the music speeds up with you
   // screens where nothing moves (paused, result, briefing, or a sheet covering the tunnel) are drawn for a moment, then left alone
@@ -1179,7 +1467,7 @@ function frame(ts) {
   if (still) idleFor += dt; else idleFor = 0;
   if (!still) {
     // practice speed and slow-mo stretch time itself, so every jump and gap keeps its proportions
-    let scale = state === 'menu' ? 1 : (mode === 'tutorial' ? 1 : opts.speed * (1 + boost));
+    let scale = state === 'menu' ? 1 : (mode === 'tutorial' ? 1 : opts.speed * tune.pace * (1 + boost));
     if (state === 'play' && !frozen) runT += dt;   // the level clock is real time, so going faster shows
     if (slowT > 0 && state === 'play') { slowT -= dt; scale *= .6; }
     acc += dt * scale; while (acc >= STEP) { tick(STEP); acc -= STEP; if (state === 'fail' || state === 'win') { acc = 0; break; } }
@@ -1205,6 +1493,8 @@ window.__eightfold = {
   sig() { let h = 0; track.cell(300, 0); for (let r = 0; r < 300; r++) h = (h * 31 + track.S[r] + 7 * track.B[r]) | 0; return h; },
   pilot() { bot = new Bot(track, .5, false); },
   kill() { runner.die('fall'); },
+  tune(o) { if (o) { Object.assign(tune, o); applyTune(); } return Object.assign({}, tune); },
+  tel() { return tel; },
   // benchmark: n full frames (4 physics steps + draw); flush forces the canvas to finish rasterising each one
   bench(n, flush) { const t0 = performance.now(); for (let i = 0; i < n; i++) { for (let k = 0; k < 4; k++) tick(STEP); render(1 / 60, 0); if ((i & 3) === 0) hud(); if (flush) ctx.getImageData(0, 0, 1, 1); } return (performance.now() - t0) / n; },
   perf() { const r = { renderMs: pf.n ? pf.ms / pf.n : 0, frames: pf.n, scale: qScale }; pf.ms = 0; pf.n = 0; return r; },

@@ -38,6 +38,14 @@ Every key can be rebound under **Controls & options**, which also has a 75% prac
 
 100 points per spark (200 for one in the air), 10 per percent of progress, and for a cleared level 1,000 for the clear, 100 per second under par and 1,000 for collecting every spark. Endless scores 10 per metre plus sparks.
 
+## Tuning and play data (temporary)
+
+Two tools are in the game for now, to find the right feel and then be taken out again.
+
+**Tuning** (the menu or pause screen, or press `T`) is a drawer of sliders beside the tunnel: overall pace, how long a jump, flip and turn take, edge forgiveness, how long an early press is remembered, the top speed sparks give, and the camera distance, height, zoom and ball size. The view changes as you drag. Changing a move time lays the courses out again for it, and the drawer checks that the built-in pilot can still finish all eight levels. Runs with changed pace, moves or forgiveness are not scored; camera changes do not affect scoring. *Copy values* gives the numbers to bake in as defaults.
+
+**Play data** records one small entry per attempt in the browser's local storage: the course, how the run ended, where and on which obstacle, the time, sparks, how early or late each press came inside the window the course allows, and the frame rate. Nothing is sent anywhere from the GitHub Pages copy: the sheet has Copy, Download, a switch to stop recording, and Erase. (The copy published as a Claude artifact also saves the same records to that artifact's own storage.)
+
 ## How the levels are made
 
 Levels are generated, not hand-drawn, but each one is fixed: a level is a configuration plus a seed in `src/core.js`, so it is the same course every time.
@@ -88,6 +96,7 @@ The browser tests drive the real page through real key events:
 node build.js --test                    # a build with a small test hook, not committed
 python3 test/browser/play.py 1,2,3      # play levels with human-like timing error
 python3 test/browser/flows.py           # tutorial, restart, pause, unlock, rebinding, endless, phone layout
+python3 test/browser/tuning.py          # the tuning drawer and the play recording
 ```
 
 They need Python with Playwright and its Chromium (`pip install playwright && playwright install chromium`).
