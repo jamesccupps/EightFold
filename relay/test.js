@@ -65,6 +65,8 @@ r = await post({ v: 1, session: Object.assign({}, session, { core: '0a1b2c3d4e',
 ok('engine id, course checksum and fun ratings are stored', r.status === 200 && stored().session.core === '0a1b2c3d4e' && JSON.stringify(stored().session.fun) === '{"L3":"love"}' && stored().attempts.find(a => a.i === 8).cs === 3912345678, stored().session);
 r = await post({ v: 1, session: Object.assign({}, session, { xp: { 'jump-1': 'b', 'bad key!': 'x' }, load: 310, ff: 520, lang: 'en-US', rmo: false, ls: true }), attempts: [attempt({ i: 10, in: [0, 6, 0, 0, 9] })] });
 ok('experiment variant, load times, language and tap/swipe counts are stored', r.status === 200 && JSON.stringify(stored().session.xp) === '{"jump-1":"b"}' && stored().session.load === 310 && stored().session.lang === 'en-US' && stored().attempts.find(a => a.i === 10).in[4] === 9, stored().session);
+r = await post({ v: 1, session, attempts: [attempt({ i: 11, d: 39.48, pf: [22, 22], rk: [9, 9] })] });
+ok('perfects, red sparks and times to the hundredth are stored', r.status === 200 && JSON.stringify(stored().attempts.find(a => a.i === 11).pf) === '[22,22]' && stored().attempts.find(a => a.i === 11).rk[1] === 9 && stored().attempts.find(a => a.i === 11).d === 39.48);
 ok('tutorial step timings are stored', t2 && JSON.stringify(t2.tt) === '[0,850,0,1,2400,2]', t2);
 r = await post({ v: 1, session: Object.assign({}, session, { pid: 'NOT-A-PID', err: [1, '<script>alert(1)</script>'], ref: 'http://x/y?z', kb: 'left:<' }), attempts: [attempt({ i: 5 })] });
 ok('malformed player code, error text, referrer and keys are dropped', r.status === 200 && !('pid' in stored().session) && !('err' in stored().session) && !('ref' in stored().session) && !('kb' in stored().session) && !('cc' in stored().session), stored().session);
@@ -78,7 +80,7 @@ ok('a later post without the notes does not lose them', r.status === 200 && (sto
 r = await post({ v: 1, session: Object.assign({}, session, { id: 'empty0000' }), attempts: [] });
 ok('an empty post is refused', r.status === 400);
 r = await post({ v: 1, session: Object.assign({}, session, { ev: [0, 'menu', 3, '<img src=x>'] }), attempts: [attempt({ i: 3 })] });
-ok('a trail with anything odd in it is dropped whole', r.status === 200 && stored().n === 10 && !('ev' in stored().session));
+ok('a trail with anything odd in it is dropped whole', r.status === 200 && stored().n === 11 && !('ev' in stored().session));
 
 r = await post({ v: 1, session: Object.assign({}, session, { ua: 'Mozilla/5.0 secret', email: 'x@y.z', br: '<script>' }), attempts: [attempt({ i: 9, note: 'hello <b>', k: '../../etc', m: 'L3', extra: { a: 1 }, tr: [1, 'x'] })] });
 const s = stored(), last9 = s.attempts.find(a => a.i === 9);

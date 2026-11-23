@@ -17,7 +17,7 @@
 //   ORIGINS       optional, comma-separated pages allowed to post, default "https://jamesccupps.github.io"
 //   OFF           optional. Set to "1" to refuse everything without deleting the Worker.
 
-const VERSION = '2026-11-23.7';   // shown on the status line, so a deploy can be told from the one before
+const VERSION = '2026-11-23.8';   // shown on the status line, so a deploy can be told from the one before
 const DEFAULTS = { REPO: 'jamesccupps/EightFold', BRANCH: 'play-data', ORIGINS: 'https://jamesccupps.github.io' };
 const MAX_BODY = 64 * 1024;        // bytes per post
 const MAX_ATTEMPTS = 400;          // attempts per session file
@@ -64,6 +64,8 @@ function cleanAttempt(a, sid) {
   if (Array.isArray(a.tr) && a.tr.length % 2 === 0) put(out, 'tr', nums(a.tr, 400, -1000, 1e9));   // the press trace: position, move, position, move ...
   if (Array.isArray(a.in) && (a.in.length === 4 || a.in.length === 5)) put(out, 'in', nums(a.in, 5, 0, 1e5));   // presses by keyboard, tap, on-screen button, mouse, swipe
   if (Array.isArray(a.pz) && a.pz.length === 2) put(out, 'pz', nums(a.pz, 2, 0, 1e6));
+  if (Array.isArray(a.pf) && a.pf.length === 2) put(out, 'pf', nums(a.pf, 2, 0, 1e5));   // perfect presses, longest run of them
+  if (Array.isArray(a.rk) && a.rk.length === 2) put(out, 'rk', nums(a.rk, 2, 0, 1e5));   // red sparks taken, of how many
   if (Array.isArray(a.ft) && a.ft.length === 7) put(out, 'ft', nums(a.ft, 7, 0, 1e7));   // frames by how long they took
   put(out, 'rm', num(a.rm, 0, 1000));                                                      // ms spent drawing a frame
   if (Array.isArray(a.tt) && a.tt.length % 3 === 0) put(out, 'tt', nums(a.tt, 90, 0, 1e7));   // tutorial: step, ms waited, wrong keys
