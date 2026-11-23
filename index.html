@@ -1960,6 +1960,7 @@ on('btnDataSave', () => {
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   } catch (err) { $('dataOut').hidden = false; $('dataOut').value = dataExport(); $('dataOut').select(); }
 });
+if (window.claude) $('btnDataSave').hidden = true;   // Claude's artifact viewer does not allow downloads; Copy still works there
 on('btnDataToggle', () => { tel.on = !tel.on; if (!tel.on) telCur = null; saveTel(); buildData(); });
 on('btnDataClear', () => {
   if (!dataArmed) { dataArmed = true; $('btnDataClear').textContent = 'Erase it all? Click again'; return; }
