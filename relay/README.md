@@ -43,7 +43,18 @@ That address goes into `RELAY` near the top of the recording code in `src/page.h
 
 ## Updating the Worker
 
-When `worker.js` changes: Worker > Edit code > replace everything with the new file > Deploy. The secret stays as it is. An older Worker keeps working with a newer game; it just drops the fields it does not know yet.
+**Automatically (recommended).** Connect the Worker to this repository once, and every push to `main` that touches `relay/` deploys it:
+
+- Worker > Settings > Builds > Connect > GitHub > repository `EightFold`, branch `main`.
+- Root directory: `relay`. Build command: none. Deploy command: `npx wrangler deploy` (the default).
+- Branch control: turn **off** builds for non-production branches. The relay commits to `play-data` many times a day, and each of those would otherwise start a build.
+- Build watch paths: include `relay/*`, so game-only changes do not redeploy the Worker.
+
+`wrangler.jsonc` here names the Worker and its entry file. The `GITHUB_TOKEN` secret stays in the dashboard and is untouched by deploys.
+
+**By hand.** Worker > Edit code > replace everything with the new `worker.js` > Deploy.
+
+Either way, an older Worker keeps working with a newer game; it just drops the fields it does not know yet.
 
 ## Turning it off
 

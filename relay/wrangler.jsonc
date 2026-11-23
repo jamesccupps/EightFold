@@ -1,0 +1,9 @@
+// Lets Cloudflare build and deploy this Worker from the repository on every push to main (Workers Builds).
+// The name must match the Worker in the Cloudflare dashboard. The GITHUB_TOKEN secret is set there, never here.
+{
+  "name": "eightfold-relay",
+  "main": "worker.js",
+  "compatibility_date": "2026-11-01",
+  "keep_vars": true,                    // leave variables set in the dashboard (OFF, REPO ...) alone on deploy
+  "observability": { "enabled": true }
+}

@@ -63,6 +63,8 @@ function cleanAttempt(a, sid) {
   if (Array.isArray(a.tr) && a.tr.length % 2 === 0) put(out, 'tr', nums(a.tr, 400, -1000, 1e9));   // the press trace: position, move, position, move ...
   if (Array.isArray(a.in) && a.in.length === 4) put(out, 'in', nums(a.in, 4, 0, 1e5));
   if (Array.isArray(a.pz) && a.pz.length === 2) put(out, 'pz', nums(a.pz, 2, 0, 1e6));
+  if (Array.isArray(a.ft) && a.ft.length === 7) put(out, 'ft', nums(a.ft, 7, 0, 1e7));   // frames by how long they took
+  put(out, 'rm', num(a.rm, 0, 1000));                                                      // ms spent drawing a frame
   if (Array.isArray(a.tt) && a.tt.length % 3 === 0) put(out, 'tt', nums(a.tt, 90, 0, 1e7));   // tutorial: step, ms waited, wrong keys
   return out;
 }
@@ -78,6 +80,8 @@ function cleanSession(s, sid) {
   put(out, 'quality', str(s.quality, /^(auto|high|low)$/));
   for (const k of ['touch', 'cp', 'auto', 'invert', 'calm', 'brief', 'unlockAll', 'muted', 'binds', 'full', 'tut']) put(out, k, bool(s[k]));
   put(out, 'tune', numMap(s.tune, 16));
+  put(out, 'hz', num(s.hz, 0, 1000)); if (Array.isArray(s.px) && s.px.length === 2) put(out, 'px', nums(s.px, 2, 0, 40000));   // display refresh rate; the size the picture is drawn at
+  put(out, 'gpu', str(s.gpu, /^[A-Za-z0-9 .,:_()\/+\-]{1,100}$/));                                                              // graphics card, as the browser names it
   put(out, 'cores', num(s.cores, 0, 1024)); put(out, 'mem', num(s.mem, 0, 1024)); put(out, 'music', num(s.music, 0, 100)); put(out, 'sfx', num(s.sfx, 0, 100));
   put(out, 'tot', num(s.tot, 0, 1e7)); put(out, 'dur', num(s.dur, 0, 1e7)); put(out, 'skin', str(s.skin, /^[a-z]{1,12}$/));
   put(out, 'st', nums(s.st, 36, 0, 1e6));   // per level: best %, clears, attempts
@@ -105,7 +109,7 @@ function cleanSession(s, sid) {
     if (n) out.fb = fb;
   }
   // the trail through the menus: seconds into the visit, what happened, seconds, what happened ...
-  if (Array.isArray(s.ev) && s.ev.length && s.ev.length <= 600 && s.ev.length % 2 === 0 && s.ev.every((x, i) => i % 2 ? str(x, /^[A-Za-z0-9:=.\-]{1,32}$/) !== undefined : num(x, 0, 1e7) !== undefined)) out.ev = s.ev;
+  if (Array.isArray(s.ev) && s.ev.length && s.ev.length <= 1600 && s.ev.length % 2 === 0 && s.ev.every((x, i) => i % 2 ? str(x, /^[A-Za-z0-9:=.\-]{1,32}$/) !== undefined : num(x, 0, 1e7) !== undefined)) out.ev = s.ev;
   return out;
 }
 // returns { sid, date, body } or a string saying what is wrong
