@@ -1,0 +1,14 @@
+name: test
+on: [push, pull_request]
+jobs:
+  levels:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: index.html matches the source
+        run: node build.js && git diff --exit-code index.html
+      - name: every level can be finished, and cannot be skipped through
+        run: npm test

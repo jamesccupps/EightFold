@@ -1,0 +1,1707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eightfold</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chivo+Mono:wght@400;600&family=Unbounded:wght@500;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* Layout: the live tunnel fills the screen; type sits in one left-aligned column over a scrim; HUD hugs the top edge. */
+  /* One committed dark world. --bgc, --tile and --hazard are re-set from script for each level's palette. */
+  --bgc: 35 26 85;
+  --ink: #f7f4ff;
+  --dim: rgb(247 244 255 / .66);
+  --line: rgb(247 244 255 / .2);
+  --tile: #ffd15c;
+  --hazard: #ff4f7b;
+  --display: 'Unbounded', 'Arial Black', 'Helvetica Neue', sans-serif;
+  --body: 'Chivo Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; margin: 0; }
+body {
+  background: rgb(var(--bgc)); color: var(--ink);
+  font: 400 14px/1.5 var(--body);
+  overflow: hidden; overscroll-behavior: none;
+  -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+}
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+button:focus-visible { outline: 2px solid var(--tile); outline-offset: 2px; }
+[hidden] { display: none !important; }
+.btn {
+  font: 600 12px/1 var(--body); letter-spacing: .08em; text-transform: uppercase;
+  padding: 10px 13px; border: 1px solid var(--line); border-radius: 3px; background: rgb(var(--bgc) / .55);
+}
+.btn:hover { border-color: var(--ink); }
+.btn.go { background: var(--tile); color: rgb(var(--bgc)); border-color: var(--tile); }
+
+/* ---------- menu ---------- */
+.menu {
+  position: fixed; inset: 0 auto 0 0; width: min(580px, 100%); box-sizing: border-box;
+  padding: clamp(12px, 2.6vh, 36px) clamp(18px, 7vw, 96px) clamp(12px, 2.6vh, 36px) clamp(18px, 4vw, 52px);
+  display: flex; flex-direction: column; overflow-y: auto;
+  background: linear-gradient(90deg, rgb(var(--bgc) / .95) 0%, rgb(var(--bgc) / .88) 62%, rgb(var(--bgc) / 0) 100%);
+}
+.menu-in { margin: auto 0; display: flex; flex-direction: column; gap: clamp(10px, 2vh, 20px); }
+.title { margin: 0; font: 900 clamp(36px, min(11vw, 9.5vh), 76px)/.92 var(--display); letter-spacing: -.02em; color: var(--tile); }
+.title span { display: block; }
+.title svg { width: .76em; height: .76em; margin: 0 .03em 0 .02em; vertical-align: -.035em; }
+.tag { margin: 0; color: var(--dim); max-width: 42ch; height: 4.5em; overflow: hidden; }
+.levels { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.lv {
+  display: grid; grid-template-columns: 2.6em 1fr auto; align-items: baseline; gap: 8px;
+  width: 100%; text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--line);
+  transition: background .12s, padding-left .12s;
+}
+.lv:not(:disabled):hover, .lv:focus-visible { background: rgb(247 244 255 / .09); padding-left: 12px; }
+.lv .n { color: var(--dim); font-variant-numeric: tabular-nums; }
+.lv .nm { font: 500 14.5px/1.3 var(--display); letter-spacing: .01em; }
+.lv .bs { color: var(--dim); font-variant-numeric: tabular-nums; font-size: 12.5px; }
+.lv .bs.done { color: var(--tile); }
+.lv.alt .nm { color: var(--tile); }
+.lv:disabled { cursor: default; opacity: .45; }
+.menu-row { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-height: 640px) { .tag { display: none; } }
+@media (max-width: 620px) { .menu { background: rgb(var(--bgc) / .9); } }
+
+/* ---------- HUD ---------- */
+.bar { position: fixed; inset: 0 0 auto 0; height: 4px; background: rgb(247 244 255 / .14); }
+.bar i { display: block; height: 100%; width: 100%; background: var(--tile); transform-origin: 0 50%; transform: scaleX(0); }
+.hud { position: fixed; top: 14px; left: clamp(14px, 3vw, 28px); display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; max-width: calc(100% - 340px); pointer-events: none; text-shadow: 0 1px 10px rgb(var(--bgc) / .8); }
+.hud .no { color: var(--dim); font-variant-numeric: tabular-nums; }
+.hud .nm { font: 500 14px/1.2 var(--display); }
+.hud .pc, .hud .sp, .hud .tm { font: 600 14px/1.2 var(--body); font-variant-numeric: tabular-nums; }
+.hud .pc { color: var(--tile); min-width: 4ch; }
+.hud .tm { color: var(--dim); }
+.hud .tg { font: 600 11px/1 var(--body); letter-spacing: .1em; padding: 4px 6px; border: 1px solid currentColor; border-radius: 2px; }
+.bar b { position: absolute; top: 0; bottom: -4px; width: 2px; background: var(--ink); }
+.corner { position: fixed; top: 10px; right: clamp(10px, 3vw, 24px); display: flex; gap: 8px; }
+@media (max-width: 560px) { #btnFull { display: none; } .hud { max-width: calc(100% - 200px); } }
+.seg { flex-wrap: wrap; }
+.seg button:disabled { opacity: .45; cursor: default; }
+.hint {
+  position: fixed; left: clamp(12px, 3vw, 28px); bottom: 14px; pointer-events: none; opacity: 0;
+  padding: 8px 14px; border-radius: 4px; background: rgb(var(--bgc) / .8); white-space: nowrap; font-size: 13px;
+}
+.hint.show { animation: toast 6s ease-out both; }
+.hint kbd { display: inline-block; min-width: 1.5em; padding: 1px 6px; margin: 0 3px 0 10px; border-radius: 3px; text-align: center; font: 600 12px/1.5 var(--body); background: var(--ink); color: rgb(var(--bgc)); }
+.hint kbd:first-child { margin-left: 0; }
+.pad { position: fixed; inset: auto 0 0 0; display: flex; justify-content: space-between; padding: 0 14px 18px; pointer-events: none; }
+.pad div { display: flex; gap: 10px; pointer-events: auto; }
+.pad button { width: 68px; height: 68px; border-radius: 50%; border: 2px solid rgb(247 244 255 / .5); background: rgb(var(--bgc) / .45); font: 600 12px/1 var(--body); letter-spacing: .06em; text-transform: uppercase; touch-action: none; }
+.pad button:active { background: var(--tile); color: rgb(var(--bgc)); }
+input[type=range] { width: 170px; accent-color: var(--tile); }
+
+/* ---------- call-outs ---------- */
+.big {
+  position: fixed; left: 0; right: 0; top: 9%; padding: 0 16px; text-align: center; pointer-events: none;
+  font: 900 clamp(26px, 6.5vw, 64px)/1 var(--display); letter-spacing: -.02em;
+  color: var(--ink); text-shadow: 0 4px 40px rgb(var(--bgc) / .85); opacity: 0;
+}
+.big small { display: block; margin: 14px auto 0; max-width: 46ch; font: 600 13px/1.5 var(--body); letter-spacing: .04em; color: var(--ink); }
+.big.show { animation: callout 2.6s ease-out both; }
+@keyframes callout { 0% { opacity: 0; transform: scale(1.1); } 8% { opacity: 1; transform: scale(1); } 80% { opacity: 1; } 100% { opacity: 0; } }
+.toast {
+  position: fixed; left: 50%; top: 58px; transform: translateX(-50%); pointer-events: none; opacity: 0;
+  font: 600 12px/1 var(--body); letter-spacing: .16em; text-transform: uppercase; white-space: nowrap;
+  padding: 8px 12px; border-radius: 3px; background: var(--ink); color: rgb(var(--bgc));
+}
+.toast.show { animation: toast 1.6s ease-out both; }
+@keyframes toast { 0% { opacity: 0; } 10% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
+.tip {
+  position: fixed; left: 50%; top: clamp(64px, 13vh, 120px); transform: translateX(-50%); width: min(560px, calc(100% - 32px)); box-sizing: border-box;
+  padding: 14px 18px; border: 1px solid var(--line); border-radius: 4px; background: rgb(var(--bgc) / .9);
+  font: 400 15px/1.5 var(--body); text-align: center; pointer-events: none;
+}
+.tip kbd, .keys kbd {
+  display: inline-block; min-width: 1.5em; padding: 2px 7px; margin: 0 2px; border-radius: 3px; text-align: center;
+  font: 600 13px/1.4 var(--body); background: var(--ink); color: rgb(var(--bgc));
+}
+.tip.wait { border-color: var(--tile); box-shadow: 0 0 0 3px rgb(var(--bgc) / .6); }
+
+/* ---------- panels ---------- */
+.panel {
+  position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  padding: 24px; text-align: center; background: rgb(var(--bgc) / .78);
+}
+.panel h2 { margin: 0; font: 900 clamp(34px, 9vw, 84px)/1 var(--display); letter-spacing: -.02em; color: var(--tile); text-wrap: balance; }
+.panel p { margin: 0; color: var(--dim); max-width: 52ch; }
+.panel p.stat { color: var(--ink); font-variant-numeric: tabular-nums; }
+.panel .row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.meter { position: relative; width: min(420px, 80vw); height: 10px; border-radius: 2px; background: rgb(247 244 255 / .16); }
+.meter i { position: absolute; inset: 0 auto 0 0; background: var(--tile); border-radius: 2px; }
+.meter b { position: absolute; top: -5px; bottom: -5px; width: 2px; background: var(--ink); }
+.sheet {
+  position: fixed; inset: 0; display: flex; justify-content: center; align-items: flex-start; overflow-y: auto;
+  padding: clamp(12px, 4vh, 48px) 16px; background: rgb(var(--bgc) / .97);
+}
+.sheet-in { width: min(640px, 100%); display: flex; flex-direction: column; gap: 18px; }
+.sheet header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sheet h2 { margin: 0; font: 900 clamp(24px, 5vw, 38px)/1 var(--display); color: var(--tile); }
+.sheet h3 { margin: 8px 0 0; font: 600 12px/1 var(--body); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+.sheet p { margin: 0; color: var(--dim); }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { padding: 7px 6px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font: 600 11px/1.2 var(--body); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+th:first-child, td:first-child { text-align: left; white-space: normal; }
+td.done { color: var(--tile); }
+.tablewrap { overflow-x: auto; }
+.eyebrow { margin: 0; font: 600 12px/1 var(--body); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+.brief .sheet-in { gap: 14px; margin: auto 0; }
+.brief { align-items: stretch; }
+.brief h2 { font-size: clamp(30px, 7vw, 56px); }
+.brief p.lead { color: var(--ink); font-size: 15px; max-width: 52ch; }
+.brstats { display: flex; flex-wrap: wrap; gap: 8px 26px; margin: 0; }
+.brstats div { display: flex; flex-direction: column; gap: 4px; }
+.brstats dt { font: 600 11px/1 var(--body); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+.brstats dd { margin: 0; font: 600 15px/1.2 var(--body); font-variant-numeric: tabular-nums; }
+.pips { display: inline-flex; gap: 3px; vertical-align: middle; }
+.pips i { width: 9px; height: 13px; border-radius: 1px; background: rgb(247 244 255 / .2); }
+.pips i.on { background: var(--tile); }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; }
+.card { display: grid; grid-template-columns: 76px 1fr; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 4px; background: rgb(247 244 255 / .06); text-align: left; }
+.card.new { border-color: var(--tile); }
+.card svg { width: 76px; height: 48px; display: block; }
+.card b { display: block; font: 500 14px/1.3 var(--display); }
+.card span { display: block; color: var(--dim); font-size: 13px; line-height: 1.4; }
+.card kbd { display: inline-block; min-width: 1.4em; padding: 1px 6px; margin: 3px 3px 0 0; border-radius: 3px; text-align: center; font: 600 12px/1.5 var(--body); background: var(--ink); color: rgb(var(--bgc)); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 12.5px; }
+.keys { display: grid; grid-template-columns: 1fr auto auto; gap: 8px 8px; align-items: center; }
+.keys .lab { text-align: left; }
+.bind { min-width: 74px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 3px; font: 600 13px/1 var(--body); background: rgb(247 244 255 / .06); }
+.bind:hover { border-color: var(--ink); }
+.bind.listen { background: var(--tile); color: rgb(var(--bgc)); border-color: var(--tile); }
+.optrow { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; align-items: center; text-align: left; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+.seg button { padding: 8px 11px; font: 600 12px/1 var(--body); }
+.seg button[aria-pressed="true"] { background: var(--tile); color: rgb(var(--bgc)); }
+@media (max-width: 520px) { .optrow { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .big.show, .toast.show { animation-duration: 2s; } .lv { transition: none; } }
+</style>
+</head>
+<body>
+<canvas id="c" aria-label="Eightfold game view"></canvas>
+
+<div class="bar" id="bar" hidden><i id="prog"></i><b id="bestMark" hidden></b></div>
+<div class="hud" id="hud" hidden>
+  <span class="no" id="hudNo">01</span><span class="nm" id="hudNm">First Light</span><span class="pc" id="hudPc">0%</span>
+  <span class="sp" id="hudSp"></span><span class="tm" id="hudTm"></span><span class="sp" id="hudPts"></span>
+  <span class="tg" id="tgShield" hidden style="color:#7fe7ff">Shield</span><span class="tg" id="tgSlow" hidden style="color:#d9b8ff">Slow-mo</span><span class="tg" id="tgBoost" hidden style="color:var(--tile)"></span><span class="tg" id="tgPrac" hidden>Practice</span>
+</div>
+<div class="corner">
+  <button class="btn" id="btnPause" type="button" hidden>Pause</button>
+  <button class="btn" id="btnFull" type="button">Full screen</button>
+  <button class="btn" id="btnSound" type="button">Sound on</button>
+</div>
+<div class="big" id="big"></div>
+<div class="toast" id="toast"></div>
+<div class="tip" id="tip" hidden></div>
+<div class="hint" id="hint"></div>
+<div class="pad" id="pad" hidden>
+  <div><button type="button" data-m="left" aria-label="Turn left">&#9664;</button><button type="button" data-m="right" aria-label="Turn right">&#9654;</button></div>
+  <div><button type="button" data-m="flip">Flip</button><button type="button" data-m="jump">Jump</button></div>
+</div>
+
+<nav class="menu" id="menu" aria-label="Level select"><div class="menu-in">
+  <h1 class="title" aria-label="Eightfold"><span>EIGHT</span><span>F<svg viewBox="0 0 100 100" aria-hidden="true"><polygon points="92.5,32.4 92.5,67.6 67.6,92.5 32.4,92.5 7.5,67.6 7.5,32.4 32.4,7.5 67.6,7.5" fill="none" stroke="currentColor" stroke-width="17"/></svg>LD</span></h1>
+  <p class="tag" id="tagline">Eight walls, one way through. Turn the tunnel, jump, flip to the far wall, and do not fall out.</p>
+  <ol class="levels" id="levels"></ol>
+  <div class="menu-row"><button class="btn" id="btnScores" type="button">Scores</button><button class="btn" id="btnControls" type="button">Controls &amp; options</button></div>
+</div></nav>
+
+<div class="panel" id="pausePanel" hidden>
+  <h2>Paused</h2>
+  <div class="row"><button class="btn go" id="btnResume" type="button">Resume</button><button class="btn" id="btnRestart" type="button">Restart</button><button class="btn" id="btnControls2" type="button">Controls</button><button class="btn" id="btnQuit" type="button">Level select</button></div>
+</div>
+<div class="panel" id="failPanel" hidden>
+  <h2 id="failBig">0%</h2>
+  <div class="meter" id="failMeter"><i id="failBar"></i><b id="failBest"></b></div>
+  <p class="stat" id="failStat"></p>
+  <div class="row"><button class="btn go" id="btnRetry" type="button">Restart</button><button class="btn" id="btnFromStart" type="button" hidden>From the start</button><button class="btn" id="btnNew" type="button" hidden>New course</button><button class="btn" id="btnQuit3" type="button">Level select</button></div>
+  <p id="failHint"></p>
+</div>
+<div class="panel" id="winPanel" hidden>
+  <h2 id="winTitle">Through.</h2>
+  <p class="stat" id="winStat"></p>
+  <p class="stat" id="winParts"></p>
+  <p id="winText"></p>
+  <div class="row"><button class="btn go" id="btnNext" type="button">Next level</button><button class="btn" id="btnAgain" type="button">Play again</button><button class="btn" id="btnQuit2" type="button">Level select</button></div>
+</div>
+
+<div class="sheet brief" id="briefSheet" hidden><div class="sheet-in">
+  <p class="eyebrow" id="brNo"></p>
+  <h2 id="brName"></h2>
+  <p class="lead" id="brHint"></p>
+  <dl class="brstats" id="brStats"></dl>
+  <h3 id="brNewH">New in this level</h3>
+  <div class="cards" id="brNew"></div>
+  <h3 id="brAlsoH">Also in it, from earlier levels</h3>
+  <div class="chips" id="brAlso"></div>
+  <div class="menu-row"><button class="btn go" id="btnGo" type="button">Start</button><button class="btn" id="btnBack" type="button">Back</button></div>
+  <p id="brNote"></p>
+  <p id="brKey"></p>
+</div></div>
+
+<div class="sheet" id="scoreSheet" hidden><div class="sheet-in">
+  <header><h2>Scores</h2><button class="btn" id="btnCloseScores" type="button">Close</button></header>
+  <div class="tablewrap"><table><thead><tr><th>Level</th><th>Best</th><th>Score</th><th>Time</th><th>Sparks</th><th>Clears</th><th>Attempts</th></tr></thead><tbody id="scoreBody"></tbody></table></div>
+  <h3>Endless: longest runs</h3>
+  <div class="tablewrap"><table><thead><tr><th>Run</th><th>Distance</th><th>Score</th><th>Sparks</th><th>Date</th></tr></thead><tbody id="endBody"></tbody></table></div>
+  <h3>Daily</h3>
+  <p id="dailyText"></p>
+  <p>Scores are kept in this browser. Practice runs (75% speed or checkpoints) are not recorded.</p>
+  <div><button class="btn" id="btnWipe" type="button">Erase scores</button></div>
+</div></div>
+
+<div class="sheet" id="ctrlSheet" hidden><div class="sheet-in">
+  <header><h2>Controls</h2><button class="btn" id="btnCloseCtrl" type="button">Close</button></header>
+  <p>Click a key to change it, then press the new key. Esc cancels, Backspace clears.</p>
+  <div class="keys" id="keys"></div>
+  <p>Touch or mouse: swipe or click a side to turn, swipe up to flip, swipe down to jump.</p>
+  <h3>Options</h3>
+  <div class="optrow" id="optrows"></div>
+  <div class="menu-row"><button class="btn" id="btnDefaults" type="button">Reset keys</button><button class="btn" id="btnTut" type="button">Play the tutorial</button></div>
+</div></div>
+
+<script>
+(function () {
+'use strict';
+// ===== Core: track generator + physics (shared by the game and the solvability tests) =====
+const HOP = 0.10, FLIP = 0.40, JUMP = 0.44, LAUNCH = 0.70, COYOTE = 0.06, LANDGRACE = 0.03, PEND = 0.45;
+const HZ0 = .38, HZ1 = .62;   // the slice of a row a low bar occupies
+
+function rng(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+// speed = rows per second, react = seconds of warning before a forced move,
+// tw = timing window (s) for a ring-gap jump, widths = corridor half-widths to draw from,
+// mix = how often each kind of section turns up. Each level leans on its own sections.
+// Each level adds its own new obstacles and keeps the earlier ones in the mix, a little faster and denser every time.
+const LEVELS = [
+  { name: 'First Light', seed: 3284, fresh: ['step', 'flipGate'], shields: 0, slows: 0, speed: 7.5, secs: 40, react: .62, tw: .36, widths: [3, 2, 2, 1], rest: [4, 7], holes: 0, decor: .25, blockP: .30, sparks: .35, detour: .08, high: 0, pickups: 0, pat: 0,
+    hint: 'Stay on the floor. Turn to follow it, flip when it carries on overhead.',
+    mix: { step: 4, stairs: 1, flipGate: 3, field: 1 } },
+  { name: 'Sidestep', seed: 4025, fresh: ['dodge1', 'dodge2', 'slalom'], shields: 1, slows: 0, speed: 8.2, secs: 44, react: .58, tw: .35, widths: [3, 2, 2, 1], rest: [3, 6], holes: .15, decor: .40, blockP: .50, sparks: .35, detour: .08, high: 0, pickups: .16, pat: 1,
+    hint: 'Tall blocks. Go around them: every wall has one opening.',
+    mix: { dodge1: 4, dodge2: 2, slalom: 2, step: 2, stairs: 1, flipGate: 2, field: 1 } },
+  { name: 'Leapfrog', seed: 5580, fresh: ['hurdle', 'laneGap'], shields: 1, slows: 1, speed: 8.8, secs: 46, react: .55, tw: .34, widths: [2, 1, 2, 3], rest: [3, 6], holes: .15, decor: .45, blockP: .45, sparks: .35, detour: .08, high: .35, pickups: .16, pat: 4,
+    hint: 'Jump low bars and short gaps. Tall blocks you still go around.',
+    mix: { hurdle: 4, laneGap: 3, hurdles: 1, stones: 1, dodge1: 2, slalom: 1, step: 2, flipGate: 2, field: 1 } },
+  { name: 'Overhead', seed: 5803, fresh: ['ringGap', 'blockFlip', 'pingpong'], shields: 1, slows: 1, speed: 9.4, secs: 48, react: .52, tw: .32, widths: [2, 2, 1, 3], rest: [3, 5], holes: .20, decor: .50, blockP: .50, sparks: .35, detour: .08, high: .2, pickups: .16, pat: 3, ringOpen: 0,
+    hint: 'Gaps all the way round, and walls across your whole side. The way on is overhead.',
+    mix: { ringGap: 3, blockFlip: 3, pingpong: 2, flipGate: 1, hurdle: 2, laneGap: 1, dodge1: 1, slalom: 1, stairs: 1, zigzag: 1 } },
+  { name: 'Sweepers', seed: 8986, fresh: ['sweep', 'launch'], shields: 2, slows: 1, speed: 10, secs: 50, react: .49, tw: .31, widths: [2, 3, 2, 1], rest: [2, 5], taper: .25, holes: .20, decor: .50, blockP: .50, sparks: .35, detour: .08, high: .2, pickups: .16, pat: 2, ringOpen: .2,
+    hint: 'Sliding blocks stop on the marked tile. White pads throw you across long gaps.',
+    mix: { sweep: 4, launch: 3, ringGap: 1, blockFlip: 1, pingpong: 1, hurdles: 1, stones: 1, hurdle: 1, slalom: 1, zigzag: 1, dodge2: 1 } },
+  { name: 'Crossfire', seed: 9172, fresh: ['beam', 'fan', 'fans'], shields: 2, slows: 1, speed: 10.6, secs: 52, react: .44, tw: .29, widths: [2, 1, 1, 0], rest: [2, 4], taper: .2, holes: .25, decor: .50, blockP: .60, sparks: .35, detour: .08, high: .2, pickups: .16, pat: 0, ringOpen: .2,
+    hint: 'Beams and fans swing across the tunnel. Slip past, and never flip through one.',
+    mix: { beam: 3, fan: 2, fans: 2, sweep: 2, launch: 1, ringGap: 1, blockFlip: 1, pingpong: 1, hurdles: 1, stones: 1, slalom: 1, zigzag: 1 } },
+  { name: 'Overdrive', seed: 11948, fresh: ['sprint', 'crawl', 'spiral'], shields: 2, slows: 2, speed: 11.2, secs: 62, react: .40, tw: .27, widths: [1, 1, 2, 0], rest: [2, 4], taper: .2, holes: .30, decor: .60, blockP: .60, sparks: .35, detour: .08, high: .2, pickups: .16, pat: 1, ringOpen: .2,
+    hint: 'Bright zones sprint, dark zones crawl through tight turns. Change gear with them.',
+    mix: { sprint: 2, crawl: 2, spiral: 2, beam: 1, fans: 1, sweep: 2, launch: 1, ringGap: 3, blockFlip: 1, pingpong: 1, hurdles: 2, stones: 3, slalom: 1 } },
+  { name: 'Eightfold', seed: 9211, fresh: [], shields: 2, slows: 2, speed: 12, secs: 60, react: .36, tw: .25, widths: [1, 1, 0, 0], rest: [2, 3], taper: .18, holes: .30, decor: .75, blockP: .65, sparks: .35, detour: .08, high: .2, pickups: .16, pat: 3, ringOpen: .2,
+    hint: 'Everything you have met, at full speed.',
+    mix: { zigzag: 2, spiral: 1, pingpong: 2, ringGap: 3, blockFlip: 2, dodge2: 1, slalom: 2, hurdles: 3, stones: 3, sweep: 2, beam: 2, fan: 1, fans: 2, launch: 2, sprint: 1, crawl: 1 } }
+];
+const DAILY = { name: 'Daily', fresh: [], shields: 2, slows: 1, speed: 9.5, secs: 60, react: .50, tw: .30, widths: [2, 1, 3, 1], rest: [3, 7], holes: .25, decor: .60, blockP: .55, sparks: .35, detour: .15, high: .2, pickups: .16, pat: 0,
+  hint: 'One course a day, the same for everyone.',
+  mix: { step: 2, stairs: 1, zigzag: 1, flipGate: 3, pingpong: 1, ringGap: 2, dodge1: 2, slalom: 1, blockFlip: 1, sweep: 2, beam: 2, fan: 1, hurdle: 2, hurdles: 1, laneGap: 1, stones: 1, launch: 2, sprint: 1, crawl: 1 } };
+// obstacle families, for spacing things out and deciding which helper suits what comes next
+const KGROUP = { step: 'turns', stairs: 'turns', zigzag: 'turns', spiral: 'turns', flipGate: 'overhead', pingpong: 'overhead', dodge1: 'blocks', dodge2: 'blocks', slalom: 'blocks',
+  blockFlip: 'blockflip', hurdle: 'bars', hurdles: 'bars', laneGap: 'gaps', stones: 'gaps', ringGap: 'ringgap', sweep: 'sweepers', beam: 'beams', fan: 'beams', fans: 'beams', launch: 'pads', sprint: 'sprint', crawl: 'slow', field: 'holes' };
+const CRASH = { dodge2: 1, slalom: 1, sweep: 1, beam: 1, fan: 1, fans: 1, hurdles: 1, blockFlip: 1 };      // things a shield saves you from
+const PRECISION = { stones: 1, pingpong: 1, spiral: 1, zigzag: 1, fans: 1, hurdles: 1, slalom: 1 };        // rhythm sections where slow-mo helps
+const EMIX = [
+  { step: 4, flipGate: 2, dodge1: 3, field: 1 },
+  { step: 3, stairs: 2, flipGate: 3, ringGap: 1, dodge1: 3, slalom: 2, sweep: 2, hurdle: 3, laneGap: 2, launch: 1, field: 1 },
+  { step: 2, stairs: 2, zigzag: 1, flipGate: 3, pingpong: 1, ringGap: 2, dodge1: 2, dodge2: 1, slalom: 1, blockFlip: 1, sweep: 2, beam: 2, hurdle: 2, hurdles: 2, stones: 2, launch: 2, sprint: 1 },
+  { step: 2, stairs: 2, zigzag: 2, spiral: 1, flipGate: 3, pingpong: 2, ringGap: 2, dodge1: 2, dodge2: 1, slalom: 1, blockFlip: 2, sweep: 2, beam: 2, fan: 2, fans: 1, hurdle: 2, hurdles: 2, laneGap: 1, stones: 2, launch: 2, sprint: 2, crawl: 1 }
+];
+const TUTORIAL = { name: 'How to play', tutorial: true, speed: 6, secs: 0, react: 1.1, tw: .5, widths: [2], rest: [6, 6], holes: 0, decor: 0, blockP: 0, sparks: 0, detour: 0, high: 0, pickups: 0, pat: 0, mix: {} };
+
+class Track {
+  // cfg: a level config, or null for the endless run
+  constructor(seed, cfg) {
+    this.rnd = rng(seed);
+    // per row: solid lanes, tall-block lanes, low-bar lanes, launch-pad lanes, no-flip flag, speed, zone (1 sprint, 2 slow)
+    this.S = []; this.B = []; this.H = []; this.PD = []; this.X = []; this.V = []; this.Z = [];
+    this.G = {};                       // per row: moving-obstacle drawing info
+    this.I = {};                       // per row: one pickup {lane, t: spark | high | shield | slow}
+    this.notes = [];                   // tutorial captions that need no key press
+    this.events = [];                  // the pilot's route: {z0, z1, key, opt?} press windows
+    this.L = 0; this.w = 4;            // pilot lane and corridor half-width
+    this.level = cfg || null; this.end = Infinity;
+    this.decor = []; this.noDecor = false; this.mult = 1; this.zone = 0; this.vo = 0; this.nSparks = 0;
+    this.cps = [];                     // safe places to restart from: {z, lane}
+    this.P = this.params(0);
+    if (cfg && cfg.tutorial) { this.buildTutorial(); this.end = this.S.length; return; }
+    this.plain(Math.ceil(this.P.speed * 2.2), { noHoles: true });
+    if (cfg) {
+      const N = Math.round(cfg.speed * cfg.secs);
+      this.layout(cfg, N);
+      if (this.mult !== 1) this.setMult(1);
+      // home straight: wide floor and a last line of sparks
+      this.P = this.params(this.S.length); this.w = 4;
+      const s0 = this.S.length, n = Math.ceil(cfg.speed * 1.5), lead = Math.ceil(HOP * cfg.speed) + 1;
+      this.plain(n, { noHoles: true });
+      for (let r = s0 + lead, c = 0; r < s0 + n - 1 && c < 6; r++, c++) this.spark(r, this.L);
+      this.end = this.S.length;
+    }
+  }
+  base(row) { return this.level ? this.level.speed : Math.min(14.5, 8 + row / 320); }
+  speedAt(z) {
+    const r = Math.floor(z); if (r < 0) return this.V[0];
+    if (this.end === Infinity) this.cell(r + 1, 0);
+    const V = this.V, n = V.length; if (r >= n - 1) return V[n - 1];
+    return V[r] + (V[r + 1] - V[r]) * (z - r);
+  }
+  params(row) {
+    const b = this.base(row) * this.mult;
+    if (this.level) { const P = Object.create(this.level); P.speed = b; return P; }
+    const d = Math.min(1, row / 3200);
+    return {
+      speed: b, react: .60 - .20 * d, tw: .36 - .10 * d,
+      widths: d < .2 ? [4, 3, 2, 2] : d < .55 ? [3, 2, 1, 1] : [2, 1, 0, 1],
+      rest: [Math.round(6 - 3 * d), Math.round(10 - 5 * d)],
+      holes: .1 + .2 * d, decor: .3 + .45 * d, blockP: .3 + .35 * d, sparks: .35, detour: .15, high: .2, pickups: .14,
+      mix: EMIX[d < .08 ? 0 : d < .25 ? 1 : d < .5 ? 2 : 3]
+    };
+  }
+  cell(r, lane) {                      // 0 gap, 1 floor, 2 block
+    if (r < 0 || r >= this.end) return 1;
+    if (r >= this.S.length) { if (this.level) return 1; while (this.S.length <= r) this.segment(); }
+    const b = 1 << (lane & 7);
+    return this.B[r] & b ? 2 : (this.S[r] & b ? 1 : 0);
+  }
+  bit(l) { return 1 << (l & 7); }
+  band(c, w) { if (w >= 4) return 255; let m = 0; for (let i = -w; i <= w; i++) m |= this.bit(c + i); return m; }
+  ri(a, b) { return a + Math.floor(this.rnd() * (b - a + 1)); }
+  pickW() { const a = this.P.widths; return a[Math.floor(this.rnd() * a.length)]; }
+  dir() { return this.rnd() < .5 ? 1 : -1; }
+
+  push(m, b, clean) {
+    const row = this.S.length;
+    if (clean || this.noDecor) this.decor.length = 0;
+    else {
+      // stray platforms away from the corridor: extra floor only, never hazards
+      const guard = this.band(this.L, Math.min(4, this.w + 1));
+      this.decor = this.decor.filter(d => !(d.m & guard) && d.n-- > 0);
+      if (this.decor.length < 2 && this.rnd() < this.P.decor * .14) {
+        const dm = this.band(this.ri(0, 7), this.rnd() < .3 ? 1 : 0);
+        if (!(dm & guard)) this.decor.push({ m: dm, n: this.ri(3, 12) });
+      }
+      for (const d of this.decor) m |= d.m;
+    }
+    this.S.push(m); this.B.push(b || 0); this.H.push(0); this.PD.push(0); this.X.push(0); this.Z.push(this.zone);
+    this.V.push(this.vo || this.base(row) * this.mult);
+  }
+  item(r, lane, t) { if (!this.I[r]) { this.I[r] = { lane: lane & 7, t }; if (t === 'spark' || t === 'high') this.nSparks++; } }
+  spark(r, lane) { this.item(r, lane, 'spark'); }
+  plain(n, o) {
+    o = o || {};
+    const s0 = this.S.length, hp = o.holes != null ? o.holes : this.P.holes * .3;
+    let hole = null;
+    for (let i = 0; i < n; i++) {
+      let m = this.band(this.L, this.w);
+      if (!o.noHoles && this.w >= 1 && hp > 0) {
+        if (hole) { m &= ~hole.m; if (--hole.n <= 0) hole = null; }
+        else if (this.rnd() < hp) {
+          const off = this.w >= 4 ? this.ri(1, 7) : this.ri(1, this.w) * this.dir();
+          hole = { m: this.bit(this.L + off), n: this.ri(2, 4) };
+        }
+      }
+      this.push(m);
+    }
+    if (o.sparks) {   // something to pick up along the route
+      const P = this.P, lead = Math.ceil(HOP * P.speed) + 1;
+      if (n >= lead + 2 && (o.sparks === 'yes' || this.rnd() < P.sparks)) {
+        const jr = JUMP * P.speed, q = Math.ceil(.75 * jr), y = this.rnd();
+        if (y < P.high && n >= lead + 2 * q + 2) {   // a spark hung in the air: jump for it
+          const c = s0 + lead + q + this.ri(0, n - lead - 2 * q - 2);
+          this.item(c, this.L, 'high');
+          this.events.push({ z0: c - .75 * jr + .3, z1: c + 1 - .25 * jr - .3, key: 'J', opt: 1 }); this.nOpt = (this.nOpt || 0) + 1;
+        } else {
+          const cnt = Math.min(this.ri(2, 4), n - lead), st = s0 + lead + this.ri(0, n - lead - cnt);
+          for (let c = 0; c < cnt; c++) this.spark(st + c, this.L);
+        }
+      }
+    }
+  }
+  // Level layout. Teach each new obstacle alone with room around it, practise it mixed with old ones as the
+  // gaps between obstacles shrink, give a breather at half way, then test everything close together.
+  layout(cfg, N) {
+    let shields = cfg.shields | 0, slows = cfg.slows | 0, breathed = false, last = null;
+    for (const k of cfg.fresh || []) { this.lead(-.4, null); this.runKind(k); last = k; }
+    while (this.S.length < N) {
+      const prog = this.S.length / N;
+      if (!breathed && prog >= .5) { breathed = true; this.breather(shields > 0); if (shields > 0) shields--; continue; }
+      const kind = this.draw(last); last = kind;
+      // what the stretch before this obstacle offers: slow-mo (off the route, your choice) before a rhythm section,
+      // a shield (on the route) before something you can run into
+      let offer = null;
+      if (slows > 0 && prog > .6 && PRECISION[kind]) { offer = 'slow'; slows--; }
+      else if (shields > 0 && prog > .72 && CRASH[kind]) { offer = 'shield'; shields--; }
+      this.lead(prog, offer); this.runKind(kind);
+    }
+  }
+  // next obstacle from a shuffle bag (each kind turns up in proportion), never the same family twice running
+  draw(last) {
+    const P = this.P = this.params(this.S.length);
+    if (!this.bag || !this.bag.length || this.bagMix !== P.mix) {
+      this.bagMix = P.mix; this.bag = [];
+      for (const k in P.mix) for (let i = 0; i < P.mix[k]; i++) this.bag.push(k);
+      for (let i = this.bag.length - 1; i > 0; i--) { const j = Math.floor(this.rnd() * (i + 1)), t = this.bag[i]; this.bag[i] = this.bag[j]; this.bag[j] = t; }
+    }
+    let i = this.bag.length - 1;
+    if (last) while (i > 0 && KGROUP[this.bag[i]] === KGROUP[last]) i--;
+    return this.bag.splice(i, 1)[0];
+  }
+  runKind(kind) {
+    this.P = this.params(this.S.length);
+    (this.kinds || (this.kinds = {}))[kind] = (this.kinds[kind] || 0) + 1;
+    this.noDecor = true;
+    if (kind === 'dodge1') this.dodge(1); else if (kind === 'dodge2') this.dodge(2);
+    else if (kind === 'sweep') this.dodge(1, 'sweep'); else if (kind === 'beam') this.dodge(1, 'beam'); else if (kind === 'fan') this.dodge(1, 'fan');
+    else this[kind]();
+    this.noDecor = false;
+  }
+  // the stretch of floor before an obstacle. prog 0..1 through the level shortens it; offer puts a helper in it.
+  lead(prog, offer) {
+    const P = this.P = this.params(this.S.length), hop = Math.ceil(HOP * P.speed) + 1;
+    if (this.rnd() < .5) this.w = this.pickW();
+    this.cps.push({ z: this.S.length + 1.5, lane: this.L });
+    if (offer === 'slow') return this.detour('slow');
+    let n = Math.max(3, Math.round(P.rest[1] + (P.rest[0] - P.rest[1]) * prog) + this.ri(0, 1));
+    if (offer === 'shield') { n = Math.max(n, hop + 3); this.plain(n, { noHoles: true }); this.item(this.S.length - 2, this.L, 'shield'); return; }
+    if (this.rnd() < P.detour) return this.detour();
+    const want = this.rnd() < P.sparks; if (want) n = Math.max(n, hop + 2);
+    this.plain(n, { sparks: want ? 'yes' : false });
+  }
+  // half-way breather: a long open straight with a line of sparks, and a shield at the end if the level has things to hit
+  breather(shield) {
+    const P = this.P = this.params(this.S.length), hop = Math.ceil(HOP * P.speed) + 1;
+    if (this.w < 2) this.w = 2;
+    const s0 = this.S.length, n = Math.ceil(P.speed * 2.2);
+    this.cps.push({ z: s0 + 1.5, lane: this.L });
+    this.plain(n, { noHoles: true });
+    for (let r = s0 + hop, c = 0; r < s0 + n - 3 && c < 8; r++, c++) this.spark(r, this.L);
+    if (shield) this.item(s0 + n - 2, this.L, 'shield');
+  }
+  // something one lane off the route, with room to hop over and back: two sparks, or a slow-mo you can choose to take
+  detour(what) {
+    const P = this.P, hr = HOP * P.speed, s = this.dir();
+    if (this.w < 1) this.w = 1;
+    const G = Math.ceil(P.speed * P.react * .8) + Math.ceil(hr) + 1, n = 2 * G + 2, s0 = this.S.length, c = s0 + G;
+    this.plain(n, { noHoles: true });
+    if (what === 'slow') this.item(c, this.L + s, 'slow');
+    else { this.spark(c, this.L + s); this.spark(c + 1, this.L + s); this.nOpt = (this.nOpt || 0) + 2; }
+    this.events.push({ z0: s0 + .1, z1: c - hr - .3, key: s > 0 ? 'L' : 'R', opt: 1 }, { z0: c + 1.9, z1: s0 + n - .6, key: s > 0 ? 'R' : 'L', opt: 1 });
+  }
+  // endless run: no fixed plan, but helpers still turn up before the sections they suit
+  segment() {
+    const kind = this.draw(this.lastKind); this.lastKind = kind;
+    const x = this.rnd(), offer = PRECISION[kind] && x < .14 ? 'slow' : CRASH[kind] && x < .3 ? 'shield' : null;
+    this.lead(.5, offer); this.runKind(kind);
+  }
+  // change pace: 1.35 = sprint, .7 = slow zone; eased in over four rows
+  setMult(m) {
+    const from = this.mult; this.mult = m; this.zone = m > 1 ? 1 : m < 1 ? 2 : 0;
+    for (let i = 1; i <= 4; i++) { this.vo = this.base(this.S.length) * (from + (m - from) * i / 4); this.push(this.band(this.L, this.w)); }
+    this.vo = 0; this.P = this.params(this.S.length);
+  }
+  // funnel the corridor down a lane at a time so nobody is stranded on its edge
+  narrow(to) { while (this.w > to) { this.w--; this.plain(Math.ceil(this.P.speed * (this.P.taper || .3)) + 1, { noHoles: true }); } }
+  // single-file floor jogs one lane sideways; the old lane ends, so everyone has to turn
+  step(dir, wNew, k) {
+    const P = this.P; dir = dir || this.dir();
+    this.narrow(0);
+    const U = Math.ceil(P.speed * P.react * (k || 1)) + Math.ceil(HOP * P.speed);
+    const s = this.S.length, m = this.bit(this.L) | this.bit(this.L + dir);
+    for (let i = 0; i < U; i++) this.push(m);
+    this.events.push({ z0: s + .1, z1: s + U - .6, key: dir > 0 ? 'L' : 'R' });
+    this.L += dir; this.w = 0; this.plain(k ? 1 : 2, { noHoles: true });
+    if (!k) this.spark(this.S.length - 1, this.L);
+  }
+  stairs() { const d = this.dir(), n = this.ri(2, 4); this.narrow(0); this.plain(2, { noHoles: true }); for (let i = 0; i < n; i++) { this.step(d, 0, .7); this.plain(this.ri(0, 1), { noHoles: true }); } this.plain(2, { noHoles: true }); this.spark(this.S.length - 1, this.L); }
+  zigzag() { let d = this.dir(); const n = this.ri(3, 5); this.narrow(0); this.plain(2, { noHoles: true }); for (let i = 0; i < n; i++) { this.step(d, 0, .7); this.plain(this.ri(0, 1), { noHoles: true }); d = -d; } this.plain(2, { noHoles: true }); this.spark(this.S.length - 1, this.L); }
+  spiral() { const d = this.dir(), n = this.ri(6, 9); this.narrow(0); this.plain(2, { noHoles: true }); for (let i = 0; i < n; i++) this.step(d, 0, .6); this.plain(3, { noHoles: true }); this.spark(this.S.length - 2, this.L); this.spark(this.S.length - 1, this.L); }
+  // floor ends; it carries on along the opposite wall. Both sides are narrow, so no lane is shared and turning cannot reach it
+  flipGate() {
+    const P = this.P; this.narrow(1); this.plain(2, { noHoles: true });
+    const wNew = Math.min(this.pickW(), 1), U = Math.ceil(P.speed * P.react) + 1;
+    const s = this.S.length, m = this.band(this.L, this.w) | this.band(this.L + 4, wNew);
+    for (let i = 0; i < U; i++) this.push(m);
+    this.events.push({ z0: s + .1, z1: s + U - .6, key: 'F' });
+    this.L += 4; this.w = wNew; this.plain(Math.ceil(FLIP * P.speed) + 2, { noHoles: true });
+    this.spark(this.S.length - 1, this.L);
+  }
+  pingpong() { const n = this.ri(2, 3); for (let i = 0; i < n; i++) this.flipGate(); }
+  // every lane drops away for a moment. open: full ring both sides, so a jump or a flip clears it.
+  // otherwise the floor resumes only on the opposite wall, so it has to be a flip.
+  ringGap(open) {
+    const P = this.P, fr = FLIP * P.speed;
+    if (open === undefined) open = this.rnd() < (P.ringOpen == null ? .35 : P.ringOpen);
+    if (open) this.w = 4; else this.narrow(1);
+    this.plain(Math.ceil(fr) + 2, { noHoles: true });
+    const g = Math.max(1, Math.floor(fr - P.tw * P.speed)), e = this.S.length;
+    for (let i = 0; i < g; i++) this.push(0, 0, true);
+    this.events.push({ z0: e + g - fr + .2, z1: e - .15, key: 'F' });
+    this.L += 4; this.w = open ? 4 : Math.min(this.pickW(), 1);
+    this.plain(Math.ceil(fr) + 2, { noHoles: true });
+    this.spark(this.S.length - 1, this.L);
+  }
+  // something across the whole corridor with one opening, d lanes from the route.
+  // style: 'bumps' wall of blocks, 'sweep' sliding blocks, 'beam' bar across the tunnel, 'fan' two crossed bars
+  dodge(d, style, dirO) {
+    const P = this.P, dir = dirO || this.dir(), hr = HOP * P.speed; style = style || 'bumps';
+    let m, E;
+    if (style === 'beam' || style === 'fan') { d = 1; this.narrow(0); E = this.L + dir; m = this.bit(this.L) | this.bit(E); }
+    else if (style === 'sweep') { d = 1; this.narrow(1); this.w = 1; E = this.L + dir; m = this.band(this.L, 1); }
+    else { this.narrow(2); if (this.w < d) this.w = d; E = this.L + d * dir; m = this.band(this.L, this.w); }
+    const A = Math.ceil(P.speed * (P.react + (d - 1) * .18)) + Math.ceil(hr) * d + 1, s = this.S.length;
+    for (let i = 0; i < A; i++) this.push(m);
+    const b0 = this.S.length; let blk = 0, n = 1;
+    if (style === 'bumps') { blk = m & ~this.bit(E); n = this.ri(1, 2); }
+    else if (style === 'sweep') {
+      const span = this.ri(2, 3); blk = this.bit(this.L) | this.bit(this.L - dir);
+      this.G[b0] = { t: 'sweep', items: [{ lane: this.L, dir, span }, { lane: this.L - dir, dir, span }] };
+    } else {
+      const arms = style === 'fan' ? [this.L, this.L + 2] : [this.L];
+      for (const a of arms) blk |= this.bit(a) | this.bit(a + 4);
+      this.G[b0] = { t: 'beam', arms, spin: this.dir() * this.ri(1, 3) };
+    }
+    for (let i = 0; i < n; i++) this.push(m, blk);
+    if (style === 'beam' || style === 'fan') { this.X[b0] = 1; this.w = 0; }
+    for (let i = 0; i < d; i++) this.events.push({ z0: s + .1 + i * (hr + .35), z1: b0 - .3 - (d - 1 - i) * (hr + .35), key: dir > 0 ? 'L' : 'R' });
+    this.L = E;
+    // landing strip past the opening, with a spark for threading it
+    this.plain(Math.ceil(hr) + 1, { noHoles: true }); this.spark(this.S.length - 1, this.L);
+  }
+  slalom() { let d = this.dir(); const n = this.ri(3, 4); for (let i = 0; i < n; i++) { this.dodge(1, 'bumps', d); d = -d; } }
+  fans() { const n = this.ri(2, 3); for (let i = 0; i < n; i++) this.dodge(1, this.rnd() < .5 ? 'fan' : 'beam'); }
+  // blocks across your whole side; the opposite wall is clear
+  blockFlip() {
+    const P = this.P; this.narrow(1); this.plain(2, { noHoles: true });
+    const w2 = Math.min(this.pickW(), 1), A = Math.ceil(P.speed * P.react) + 1;
+    const s = this.S.length, old = this.band(this.L, this.w), m = old | this.band(this.L + 4, w2);
+    for (let i = 0; i < A; i++) this.push(m);
+    const b0 = this.S.length, n = this.ri(1, 2);
+    for (let i = 0; i < n; i++) this.push(m, old);
+    this.events.push({ z0: s + .1, z1: b0 - .3, key: 'F' });
+    this.L += 4; this.w = w2; this.plain(Math.ceil(FLIP * P.speed) + 2, { noHoles: true });
+    this.spark(this.S.length - 1, this.L);
+  }
+  // fast, open stretch with long jumps
+  sprint() {
+    this.setMult(1.35); this.w = this.rnd() < .5 ? 4 : 3;
+    const n = this.ri(2, 3);
+    for (let i = 0; i < n; i++) { this.plain(this.ri(6, 10), { sparks: true, noHoles: true }); this.ringGap(true); }
+    this.plain(3, { noHoles: true }); this.setMult(1);
+  }
+  // slow, single-file stretch with quick turns
+  crawl() {
+    this.setMult(.7); let d = this.dir(); const n = this.ri(5, 8);
+    this.narrow(0); this.plain(2, { noHoles: true });
+    for (let i = 0; i < n; i++) { this.step(d, 0, .55); if (this.rnd() < .7) d = -d; }
+    this.plain(2, { noHoles: true }); this.spark(this.S.length - 1, this.L); this.setMult(1);
+  }
+  // a low bar across the corridor: jump it
+  hurdle(lead) {
+    this.narrow(1);   // three lanes at most, so there is no opposite floor to flip to
+    const P = this.P, jr = JUMP * P.speed, A = lead || Math.ceil(P.speed * P.react) + 1, m = this.band(this.L, this.w);
+    for (let i = 0; i < A; i++) this.push(m);
+    const b = this.S.length; this.push(m); this.H[b] = m; this.item(b, this.L, 'high');   // a spark over the bar: a clean jump collects it
+    this.events.push({ z0: b + HZ1 - .92 * jr + .15, z1: b + HZ0 - .08 * jr - .15, key: 'J' });
+    this.plain(Math.ceil(jr) + 1, { noHoles: true });
+  }
+  hurdles() { const n = this.ri(2, 4), jr = JUMP * this.P.speed; this.hurdle(); for (let i = 1; i < n; i++) this.hurdle(Math.ceil(.92 * jr) + this.ri(0, 2)); }
+  // a short break in a single-file floor with nothing overhead: jump it
+  laneGap(pre) {
+    const P = this.P, jr = JUMP * P.speed, g = Math.max(1, Math.floor(jr - P.tw * P.speed - .2));
+    this.narrow(0); this.plain(pre || Math.max(3, Math.ceil(jr - g)), { noHoles: true });
+    const e = this.S.length;
+    for (let i = 0; i < g; i++) this.push(0, 0, true);
+    this.item(e + Math.floor(g / 2), this.L, 'high');   // a spark over the gap
+    this.events.push({ z0: e + g - jr + .2, z1: e - .1, key: 'J' });
+    this.plain(Math.ceil(jr) + 1, { noHoles: true });
+  }
+  // stepping stones: several of those in a row
+  stones() {
+    const P = this.P, jr = JUMP * P.speed, g = Math.max(1, Math.floor(jr - P.tw * P.speed - .2)), n = this.ri(3, 5);
+    const pre = Math.max(1, Math.ceil(jr - g + .22 * P.speed) - Math.ceil(jr) - 1);
+    this.laneGap(); for (let i = 1; i < n; i++) this.laneGap(pre);
+  }
+  // a pad that throws you over a long gap; nothing to press
+  launch() {
+    const P = this.P, Lr = LAUNCH * P.speed; if (this.w < 1) this.w = 1;
+    this.plain(3, { noHoles: true });
+    const m = this.band(this.L, this.w), b = this.S.length;
+    this.push(m); this.push(m); this.PD[b] = m; this.PD[b + 1] = m;
+    const g = Math.max(2, Math.floor(Lr) - 3);
+    for (let i = 0; i < g; i++) this.push(0, 0, true);
+    for (let r = b + 2; r < b + 2 + g; r += 2) this.item(r, this.L, 'high');   // an arc of sparks along the flight
+    this.plain(Math.ceil(Lr) + 3, { noHoles: true });
+  }
+  // wide floor full of holes
+  field() { if (this.w < 3) this.w = 3; this.plain(this.ri(10, 16), { holes: .8, sparks: true }); }
+
+  buildTutorial() {
+    const tip = (i0, t) => { for (let i = i0; i < this.events.length; i++) { this.events[i].tip = t; delete this.events[i].opt; } };
+    const calm = n => this.plain(n, { noHoles: true });
+    let n;
+    this.w = 3; calm(12); this.w = 0; calm(5);
+    n = this.events.length; this.step(1, 0); tip(n, 'The floor shifts left. Press {K} to follow it.'); calm(6);
+    n = this.events.length; this.step(-1, 0); tip(n, 'Now it shifts right. Press {K}.'); calm(6);
+    n = this.events.length; this.flipGate(); tip(n, 'The floor ends, but it carries on overhead. Press {K} to flip.'); calm(4);
+    this.w = 2; calm(4);
+    n = this.events.length; this.dodge(1, 'bumps', 1); tip(n, 'A tall block. Press {K} to go around it.'); calm(6);
+    n = this.events.length; this.hurdle(); tip(n, 'A low bar. Press {K} to jump it.'); calm(4);
+    this.w = 0; calm(3);
+    n = this.events.length; this.laneGap(); tip(n, 'A short gap with nothing overhead. Press {K} to jump it.'); calm(5);
+    this.w = 4;
+    n = this.events.length; this.ringGap(); tip(n, 'A gap all the way round. Press {K} to flip across it.'); this.w = 2; calm(6);
+    n = this.events.length; this.dodge(1, 'beam', -1); tip(n, 'A beam. Press {K} to slip past. Never flip through one.'); calm(5);
+    n = this.events.length; this.dodge(1, 'sweep', 1); tip(n, 'A sliding block. It stops on the marked tile: press {K} to be elsewhere.'); calm(5);
+    n = this.events.length; this.detour();
+    this.events[n].tip = 'Sparks score points, and each one speeds you up a little. Press {K} to hop over for these.'; this.events[n + 1].tip = 'Press {K} to hop back.';
+    delete this.events[n].opt; delete this.events[n + 1].opt;
+    this.w = 2; calm(4);
+    this.notes.push({ z: this.S.length - 1, text: 'A launch pad. Nothing to press: it throws you across.' });
+    this.launch();
+    this.w = 4; calm(12);
+  }
+}
+
+class Runner {
+  constructor(track) {
+    this.tr = track; this.z = 0; this.lane = 0; this.from = 0;
+    this.mode = 'ground'; this.t = 0; this.dur = HOP; this.high = .5; this.gap = 0; this.noJump = false;
+    this.q = []; this.dead = null;   // q: up to two buffered presses, so a quick double tap is never lost
+    this.lastDir = 1; this.cam = 0; this.on = null;
+    this.sparks = 0; this.pts = 0; this.taken = {}; this.shield = false; this.inv = 0;
+  }
+  press(k) {   // 'L', 'R', 'F' (flip) or 'J' (jump)
+    if (this.dead) return;
+    if (this.q.length >= 2) this.q.pop();
+    this.q.push({ k, age: 0 });
+  }
+  emit(n) { if (this.on) this.on(n); }
+  die(kind) { this.mode = 'ground'; this.dead = { kind, t: 0 }; this.emit(kind); }
+  hit() {   // ran into something solid; true if that ended the run
+    if (this.inv > 0) return false;
+    if (this.shield) { this.shield = false; this.inv = .7; this.emit('shieldhit'); return false; }
+    this.die('crash'); return true;
+  }
+  take(r, it) {
+    this.taken[r] = 1;
+    if (it.t === 'shield') { this.shield = true; this.emit('shield'); }
+    else if (it.t === 'slow') this.emit('slow');
+    else { this.sparks++; this.pts += it.t === 'high' ? 200 : 100; this.emit('spark'); }
+  }
+  air(mode, dur, high) { this.mode = mode; this.dur = dur; this.high = high || .5; this.from = this.lane; this.t = 0; this.gap = 0; }
+  step(dt) {
+    const tr = this.tr;
+    if (this.dead) {
+      const d = this.dead; d.t += dt;
+      if (d.kind === 'fall') this.z += tr.speedAt(this.z) * dt * Math.max(0, 1 - d.t * 1.6);
+      return;
+    }
+    this.z += tr.speedAt(this.z) * dt;
+    for (let i = 0; i < this.q.length; i++) this.q[i].age += dt;
+    while (this.q.length && this.q[0].age > PEND) this.q.shift();
+    if (this.inv > 0) this.inv -= dt;
+    const r = Math.floor(this.z), fz = this.z - r, l7 = this.lane & 7, bit = 1 << l7;
+    const it = tr.I[r], mine = it && it.lane === l7 && !this.taken[r];
+    const bar = r >= 0 && (tr.H[r] & bit) && fz > HZ0 && fz < HZ1;
+    if (this.mode === 'ground') {
+      const c = tr.cell(r, this.lane);
+      if (c === 2 && this.hit()) return;
+      if (c === 0) { this.gap += dt; if (this.gap > COYOTE) return this.die('fall'); }
+      else { this.gap = 0; this.noJump = false; }
+      if (bar && this.hit()) return;
+      if (mine && it.t !== 'high') this.take(r, it);
+      if (c !== 0 && r >= 0 && (tr.PD[r] & bit)) { this.q.length = 0; this.air('jump', LAUNCH, .8); this.emit('launch'); }
+      else if (this.q.length && !this.noJump) {
+        const p = this.q.shift().k;
+        if (p === 'F') { this.air('flip', FLIP); this.lane += 4 * this.lastDir; this.emit('flip'); }
+        else if (p === 'J') { this.air('jump', JUMP, .5); this.emit('jump'); }
+        else { const d = p === 'L' ? 1 : -1; this.air('hop', HOP); this.lane += d; this.lastDir = d; this.emit('hop'); }
+      }
+    } else {
+      this.t += dt; const u = this.t / this.dur;
+      if (this.mode === 'flip') { if (r >= 0 && tr.X[r] && u > .12 && u < .88 && this.hit()) return; }
+      else {
+        if (tr.cell(r, this.lane) === 2 && this.hit()) return;
+        if (bar && (this.mode === 'hop' || !(u > .08 && u < .92)) && this.hit()) return;
+        if (this.mode === 'jump' && mine && it.t === 'high' && u > .1 && u < .9) this.take(r, it);
+      }
+      if (this.t >= this.dur) {
+        this.mode = 'ground'; this.from = this.lane;
+        const c = tr.cell(r, this.lane);
+        if (c === 2 && this.hit()) return;
+        if (c === 0) { this.gap = COYOTE - LANDGRACE; this.noJump = true; } else this.gap = 0;
+      }
+    }
+    const v = this.vis();
+    this.cam += (v.camT - this.cam) * (1 - Math.exp(-dt * 26));
+  }
+  // where to draw the runner: lane angle, radial factor (1 = on its floor, -1 = opposite wall), camera target.
+  // ex looks that many seconds ahead (for smooth drawing between physics steps). One object is reused: no garbage.
+  vis(ex) {
+    const o = this._v || (this._v = { lane: 0, r: 1, camT: 0 });
+    let lane = this.lane, r = 1, camT = this.lane;
+    const u = Math.min(1, (this.t + (ex || 0)) / this.dur);
+    if (this.mode === 'hop') { const e = u * u * (3 - 2 * u); lane = this.from + (this.lane - this.from) * e; r = 1 - .1 * Math.sin(Math.PI * u); camT = lane; }
+    else if (this.mode === 'flip') { const e = u * u * (3 - 2 * u); lane = this.from; r = Math.cos(Math.PI * u); camT = this.from + (this.lane - this.from) * e; }
+    else if (this.mode === 'jump') r = 1 - this.high * Math.sin(Math.PI * u);
+    if (this.dead && this.dead.kind === 'fall') r = 1 + this.dead.t * this.dead.t * 9;
+    o.lane = lane; o.r = r; o.camT = camT; return o;
+  }
+}
+
+// Follows the generator's own route. f picks where in each press window to act (0 early, 1 late).
+// skipOpt leaves out the optional spark detours.
+class Bot {
+  constructor(track, f, skipOpt) { this.tr = track; this.f = f; this.i = 0; this.skipOpt = skipOpt; }
+  update(run) {
+    const ev = this.tr.events;
+    while (this.i < ev.length) {
+      const e = ev[this.i];
+      if (this.skipOpt && e.opt) { this.i++; continue; }
+      if (run.z >= e.z0 + (e.z1 - e.z0) * this.f) { run.press(e.key); this.i++; } else break;
+    }
+  }
+}
+
+
+// ================= setup =================
+const $ = id => document.getElementById(id);
+const cv = $('c'), ctx = cv.getContext('2d', { alpha: false });
+const RM = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+const calm = () => RM || opts.calm;   // fewer effects: no shake, flash, streaks or beat pulse
+const pad2 = n => String(n).padStart(2, '0');
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('eightfold.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('eightfold.' + k, JSON.stringify(v)); } catch (e) {} }
+};
+
+// ---------- options and key bindings ----------
+const ACTIONS = [['left', 'Turn left'], ['right', 'Turn right'], ['flip', 'Flip to the far wall'], ['jump', 'Jump'], ['pause', 'Pause'], ['restart', 'Restart'], ['sound', 'Sound on / off']];
+const DEF_BINDS = { left: ['ArrowLeft', 'a'], right: ['ArrowRight', 'd'], flip: ['ArrowUp', 'w'], jump: [' ', 'ArrowDown'], pause: ['p', 'Escape'], restart: ['r', null], sound: ['m', null] };
+const cloneBinds = b => { const o = {}; for (const [a] of ACTIONS) o[a] = [b[a] ? b[a][0] : null, b[a] ? b[a][1] : null]; return o; };
+let opts = Object.assign({ brief: true, invert: false, speed: 1, unlockAll: false, auto: false, cp: false, calm: false, quality: 'auto', music: 80, sfx: 90 }, store.get('opts', {}) || {});
+opts.binds = cloneBinds(Object.assign({}, DEF_BINDS, opts.binds || {}));
+const saveOpts = () => store.set('opts', opts);
+const keyNorm = e => e.key.length === 1 ? e.key.toLowerCase() : e.key;
+const KEYNAMES = { ' ': 'Space', ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', Escape: 'Esc' };
+const keyLabel = k => k == null ? '—' : KEYNAMES[k] || (k.length === 1 ? k.toUpperCase() : k);
+function actionOf(k) { for (const a in opts.binds) if (opts.binds[a].indexOf(k) >= 0) return a; return null; }
+function labelFor(a) { const b = opts.binds[a].filter(x => x != null); return b.length ? keyLabel(b[0]) : 'unset'; }
+// which action produces a given runner move, allowing for the swapped-turn option
+const actionForMove = m => m === 'F' ? 'flip' : m === 'J' ? 'jump' : (m === 'L') !== opts.invert ? 'left' : 'right';
+
+// ---------- scores ----------
+let stats = store.get('stats', null);
+if (!stats || typeof stats !== 'object') stats = {};
+if (!Array.isArray(stats.lv)) stats.lv = [];
+if (!Array.isArray(stats.endless)) stats.endless = [];
+if (!stats.daily || typeof stats.daily !== 'object') stats.daily = {};
+const lvS = i => stats.lv[i] || (stats.lv[i] = { best: 0, clears: 0, tries: 0, sparks: 0, perfect: false, pclear: false });
+{ const old = store.get('best', null); if (Array.isArray(old)) old.forEach((b, i) => { if (b && i < LEVELS.length) { const s = lvS(i); s.best = Math.max(s.best, b); if (b >= 100) s.clears = Math.max(1, s.clears); } }); }
+const saveStats = () => store.set('stats', stats);
+const SKINS = [['pearl', 'Pearl', 0], ['ember', 'Ember', 30], ['mint', 'Mint', 80], ['void', 'Void', 160], ['prism', 'Prism', 300]];
+const skin = () => { const s = SKINS.find(x => x[0] === opts.skin); return s && (stats.total || 0) >= s[2] ? s[0] : 'pearl'; };
+const TOTALS = LEVELS.map(lv => new Track(lv.seed, lv).nSparks);
+const unlocked = i => i === 0 || opts.unlockAll || (stats.lv[i - 1] && (stats.lv[i - 1].clears > 0 || stats.lv[i - 1].pclear));
+function today() {
+  const d = new Date(), y = d.getFullYear(), m = d.getMonth() + 1, dd = d.getDate();
+  return { key: y + '-' + pad2(m) + '-' + pad2(dd), seed: y * 10000 + m * 100 + dd, label: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) };
+}
+function dayBefore(key) { const p = key.split('-').map(Number), d = new Date(p[0], p[1] - 1, p[2] - 1); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+function dailyS() { const t = today(); if (stats.daily.date !== t.key) { stats.daily.date = t.key; stats.daily.best = 0; stats.daily.cleared = false; stats.daily.tries = 0; stats.daily.score = 0; stats.daily.time = 0; } return stats.daily; }
+
+// ================= palettes =================
+const hex = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const PALS = [
+  ['#231a55', '#6b4fd8', '#ffd15c', '#ffb347', '#ff4f7b'],
+  ['#0c3547', '#1f8a9e', '#e9fff4', '#bfeedd', '#ff7a3d'],
+  ['#0f2d2a', '#2f9c7c', '#c9f26b', '#9fdc4f', '#ff5c8a'],
+  ['#4a0f2c', '#c2356a', '#ffb38a', '#ff8f6b', '#fff07a'],
+  ['#1a2a6c', '#4f7bff', '#ff9ecf', '#ff78b9', '#fff27a'],
+  ['#3a1a0a', '#d9652b', '#ffe8c2', '#ffd08a', '#3fd0ff'],
+  ['#2b0f4f', '#a044ff', '#7ef0e0', '#4fd6c8', '#ff5c5c'],
+  ['#141a22', '#5d7388', '#ffffff', '#d5dce3', '#ff3b3b']
+].map(p => ({ bg: hex(p[0]), glow: hex(p[1]), a: hex(p[2]), b: hex(p[3]), hz: hex(p[4]) }));
+function hsl(h, s, l) {
+  h = ((h % 360) + 360) % 360 / 360;
+  const q = l < .5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+  const f = t => { t = (t + 1) % 1; return 255 * (t < 1 / 6 ? p + (q - p) * 6 * t : t < .5 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p); };
+  return [f(h + 1 / 3), f(h), f(h - 1 / 3)];
+}
+let hue0 = 250;
+function endlessPal(z) {
+  const h = hue0 + z * .28;
+  return { bg: hsl(h, .56, .17), glow: hsl(h + 25, .6, .5), a: hsl(h + 170, .95, .75), b: hsl(h + 186, .9, .65), hz: hsl(h + 75, 1, .6) };
+}
+const rgb = c => 'rgb(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ')';
+const rgba = (c, a) => 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',' + a + ')';
+let pal = PALS[0], cssAt = -1, cssPal = null;
+function syncCss(force) {
+  if (!force && pal === cssPal) return;
+  const now = performance.now();
+  if (!force && now - cssAt < 400) return;
+  cssAt = now; cssPal = pal;
+  const st = document.documentElement.style;
+  st.setProperty('--bgc', (pal.bg[0] | 0) + ' ' + (pal.bg[1] | 0) + ' ' + (pal.bg[2] | 0));
+  st.setProperty('--tile', rgb(pal.a)); st.setProperty('--hazard', rgb(pal.hz));
+}
+
+// ================= sound: a small synth, no samples =================
+const Snd = {
+  ac: null, out: null, nbuf: null, muted: !!store.get('muted', false), on: false,
+  bpm: 120, root: 55, t0: 0, nextT: 0, stepN: 0, bass: [], lead: [],
+  init() {
+    if (this.ac) return;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+      const ac = this.ac = new AC(), comp = ac.createDynamicsCompressor();
+      this.out = ac.createGain(); this.out.gain.value = this.muted ? 0 : .55;
+      this.out.connect(comp); comp.connect(ac.destination);
+      this.mus = ac.createGain(); this.sfx = ac.createGain(); this.mus.connect(this.out); this.sfx.connect(this.out); this.bus = this.sfx; this.levels();
+      const n = ac.sampleRate, b = ac.createBuffer(1, n, n), d = b.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+      this.nbuf = b;
+    } catch (e) { this.ac = null; }
+  },
+  wake() { this.init(); try { if (this.ac && this.ac.state === 'suspended') this.ac.resume().catch(() => {}); } catch (e) {} },
+  sleep() { try { if (this.ac && this.ac.state === 'running') this.ac.suspend().catch(() => {}); } catch (e) {} },
+  levels() { if (this.mus) { this.mus.gain.value = opts.music / 100; this.sfx.gain.value = opts.sfx / 100; } },
+  setMuted(m) { this.muted = m; store.set('muted', m); if (this.out) this.out.gain.setTargetAtTime(m ? 0 : .55, this.ac.currentTime, .02); },
+  tone(type, f0, f1, t, dur, vol, cut) {
+    const ac = this.ac; if (!ac) return;
+    const o = ac.createOscillator(), g = ac.createGain(); o.type = type;
+    o.frequency.setValueAtTime(f0, t); if (f1) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.001, t + dur);
+    let node = o;
+    if (cut) { const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = cut; o.connect(f); node = f; }
+    node.connect(g); g.connect(this.bus); o.start(t); o.stop(t + dur + .03);
+  },
+  noise(t, dur, vol, hp) {
+    const ac = this.ac; if (!ac) return;
+    const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+    s.buffer = this.nbuf; f.type = 'highpass'; f.frequency.value = hp;
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.001, t + dur);
+    s.connect(f); f.connect(g); g.connect(this.bus); s.start(t, Math.random() * .5, dur + .03);
+  },
+  song(i) {
+    const r = rng(900 + i * 31), sc = [0, 3, 5, 7, 10, 12];
+    this.bpm = 112 + (i % 8) * 5; this.root = [55, 49, 58.27, 51.91, 61.74, 46.25, 65.41, 55][i % 8];
+    this.bass = []; this.lead = [];
+    for (let s = 0; s < 16; s++) this.bass.push(s % 4 === 0 ? 0 : (r() < .45 ? sc[Math.floor(r() * 4)] : null));
+    for (let s = 0; s < 16; s++) this.lead.push(r() < .55 ? sc[Math.floor(r() * 6)] : null);
+    this.on = true;
+    if (this.ac) { this.t0 = this.ac.currentTime + .06; this.nextT = this.t0; this.stepN = 0; }
+  },
+  stop() { this.on = false; },
+  pump() {
+    const ac = this.ac; if (!ac || !this.on || ac.state !== 'running') return;
+    const sp = 60 / this.bpm / 4;
+    if (this.nextT < ac.currentTime - .2) { const k = Math.ceil((ac.currentTime - this.nextT) / sp); this.nextT += k * sp; this.stepN += k; }
+    while (this.nextT < ac.currentTime + .14) { this.playStep(this.stepN, this.nextT, sp); this.nextT += sp; this.stepN++; }
+  },
+  playStep(s, t, sp) {
+    const i = s % 16, bar = s >> 4; this.bus = this.mus;
+    if (i % 4 === 0) this.tone('sine', 160, 42, t, .24, .9);
+    if (i % 4 === 2) this.noise(t, .04, .16, 7000);
+    if ((i === 4 || i === 12) && bar > 0) this.noise(t, .13, .2, 1500);
+    if (i % 2 === 1 && bar % 2 === 1) this.noise(t, .02, .06, 9000);
+    const b = this.bass[i];
+    if (b != null) this.tone('sawtooth', this.root * Math.pow(2, b / 12), 0, t, sp * 1.7, .26, 420 + (bar % 4) * 120);
+    if (bar % 4 >= 2) { const l = this.lead[(i + bar * 5) % 16]; if (l != null && i % 2 === 0) this.tone('square', this.root * 4 * Math.pow(2, l / 12), 0, t, sp * 1.4, .055, 2600); }
+  },
+  pulse() {
+    const ac = this.ac; if (calm() || !ac || !this.on || ac.state !== 'running') return 0;
+    const ph = (ac.currentTime - this.t0) * this.bpm / 60;
+    return ph < 0 ? 0 : Math.exp(-(ph % 1) * 5);
+  },
+  fx(name) {
+    const ac = this.ac; if (!ac || ac.state !== 'running') return;
+    const t = ac.currentTime; this.bus = this.sfx;
+    if (name === 'hop') this.tone('triangle', 520, 760, t, .06, .14);
+    else if (name === 'jump') this.tone('triangle', 330, 660, t, .16, .16);
+    else if (name === 'launch') { this.tone('sine', 220, 990, t, .5, .2); this.noise(t, .3, .06, 4000); }
+    else if (name === 'flip') { this.tone('sine', 280, 880, t, .28, .16); this.noise(t, .2, .05, 3000); }
+    else if (name === 'spark') { const k = 1 + boost * 2.2; this.tone('triangle', 1320 * k, 1760 * k, t, .09, .12); }
+    else if (name === 'shield' || name === 'slow') { this.tone('triangle', 660, 0, t, .12, .16); this.tone('triangle', 990, 0, t + .09, .2, .16); }
+    else if (name === 'shieldhit') { this.noise(t, .2, .3, 1200); this.tone('square', 180, 90, t, .2, .15, 1200); }
+    else if (name === 'fall' || name === 'crash') { this.noise(t, .35, .45, name === 'crash' ? 300 : 900); this.tone('sawtooth', 220, 38, t, .45, .3, 900); }
+    else if (name === 'win') [0, 4, 7, 12, 16].forEach((n, k) => this.tone('triangle', 440 * Math.pow(2, n / 12), 0, t + k * .09, .3, .2));
+  }
+};
+
+// ================= game state =================
+let state = 'menu';            // menu | play | dead | fail | win | pause
+let mode = null;               // level index, 'endless', 'daily' or 'tutorial'
+let track, runner, bot = null, deadT = 0, failT = 0, tries = 0, runT = 0, slowT = 0, shake = 0, flash = 0;
+let tutI = 0, tutNote = 0, frozen = false, lastZone = 0;
+let shards = [], ballAt = { x: 0, y: 0, R: 10 }, lastPc = '', lastSp = '', lastTm = '';
+const BOOST_MAX = .15;   // sparks add speed for the rest of the run, up to +15%
+const sparkBoost = () => track.end === Infinity ? .005 : BOOST_MAX / Math.max(15, .8 * track.nSparks);
+let boost = 0;
+const fmtN = n => Math.round(n).toLocaleString('en-US');
+function parOf(tr) { if (tr.end === Infinity) return 0; if (tr.par == null) { let t = 0; for (let r = 0; r < tr.end; r++) t += 1 / tr.V[r]; tr.par = t; } return tr.par; }
+// points for the run so far (or the finished run): what each part is worth
+function tally(win) {
+  const parts = [['Sparks', runner.pts]];
+  if (track.end === Infinity) parts.push(['Distance', Math.floor(runner.z) * 10]);
+  else {
+    parts.push(['Progress', score() * 10]);
+    if (win) {
+      parts.push(['Clear', 1000], ['Time under par', Math.round(Math.max(0, parOf(track) - runT) * 100)]);
+      if (track.nSparks && runner.sparks >= track.nSparks) parts.push(['Every spark', 1000]);
+    }
+  }
+  let total = 0; for (const p of parts) total += p[1];
+  return { total, parts };
+}
+const practice = () => opts.speed < 1 || opts.cp;
+let resumeCp = null, touchSeen = false;
+const scored = () => mode !== 'tutorial' && !practice();
+
+function toast(t) { const el = $('toast'); el.className = 'toast'; el.textContent = t; void el.offsetWidth; el.className = 'toast show'; }
+function showBig(html) { const el = $('big'); el.className = 'big'; el.innerHTML = html; void el.offsetWidth; el.className = 'big show'; }
+function attach() {
+  runner = new Runner(track);
+  runner.on = name => {
+    if (state !== 'play') return;
+    Snd.fx(name);
+    if (name === 'spark' && mode !== 'tutorial' && boost < BOOST_MAX) { boost = Math.min(BOOST_MAX, boost + sparkBoost()); if (boost >= BOOST_MAX - 1e-9) toast('Top speed'); }
+    if (name === 'shield') toast('Shield');
+    else if (name === 'slow') { slowT = 3.5; toast('Slow-mo'); }
+    else if (name === 'shieldhit') { toast('Shield used'); if (!calm()) shake = .6; burst(10); }
+    else if (name === 'crash') burst(16);
+  };
+}
+function burst(n) { for (let i = 0; i < n; i++) { const a = Math.random() * 6.283, v = 140 + Math.random() * 420; shards.push({ x: ballAt.x, y: ballAt.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 160, r: Math.random() * 6.283, s: ballAt.R * (.25 + Math.random() * .45), t: 0 }); } }
+function startAttract() {
+  hue0 = Math.random() * 360; palZ = -99;
+  track = new Track((Math.random() * 1e9) | 0, null); attach(); bot = new Bot(track, .5, false);
+}
+function modeName() { return mode === 'endless' ? 'Endless' : mode === 'daily' ? 'Daily' : mode === 'tutorial' ? 'How to play' : LEVELS[mode].name; }
+function hidePanels() { for (const id of ['menu', 'pausePanel', 'failPanel', 'winPanel', 'scoreSheet', 'ctrlSheet', 'briefSheet']) $(id).hidden = true; overlay = null; }
+function begin(first, cp) {
+  attach(); bot = null; state = 'play';
+  if (cp) { runner.z = cp.z; runner.lane = runner.from = runner.cam = cp.lane; } shards.length = 0; shake = 0; flash = 0; lastPc = lastSp = lastTm = '';
+  lastProg = ''; lastPts = ''; lastBoost = -1; lastFlags = -1; boost = 0; runT = 0; slowT = 0; tutI = 0; tutNote = 0; frozen = false; lastZone = cp ? (track.Z[Math.floor(cp.z)] || 0) : 0; tries++;
+  hidePanels(); $('tip').hidden = true;
+  $('hud').hidden = false; $('bar').hidden = false; $('btnPause').hidden = false;
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  $('hudNo').textContent = typeof mode === 'number' ? pad2(mode + 1) : mode === 'endless' ? '∞' : mode === 'daily' ? today().label : '?';
+  $('hudNm').textContent = modeName();
+  $('tgPrac').hidden = !practice() || mode === 'tutorial';
+  if (scored()) { if (typeof mode === 'number') lvS(mode).tries++; else if (mode === 'daily') dailyS().tries++; saveStats(); }
+  if (first && mode !== 'tutorial') {
+    const hint = mode === 'endless' ? 'How far can you get? Restart replays the same course.' : track.level.hint;
+    showBig(esc(modeName()) + '<small>' + esc(hint) + '</small>');
+  } else $('big').className = 'big';
+  if (first) {   // remind which keys do what
+    const h = $('hint'); h.className = 'hint';
+    h.innerHTML = '<kbd>' + esc(labelFor('left')) + '</kbd><kbd style="margin-left:3px">' + esc(labelFor('right')) + '</kbd>turn<kbd>' + esc(labelFor('jump')) + '</kbd>jump<kbd>' + esc(labelFor('flip')) + '</kbd>flip';
+    void h.offsetWidth; if (mode !== 'tutorial' && !touchSeen) h.className = 'hint show';
+  }
+  const bm = $('bestMark'), bst = typeof mode === 'number' && stats.lv[mode] ? stats.lv[mode].best : mode === 'daily' ? (dailyS().best || 0) : 0;
+  bm.hidden = !(bst > 0 && bst < 100); bm.style.left = bst + '%'; bestRow = bm.hidden ? -1 : Math.floor(bst / 100 * track.end);
+  syncCss(true);
+}
+let bestRow = -1;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+function launchRun(m, tr, song) { mode = m; track = tr; tries = 0; resumeCp = null; Snd.wake(); Snd.song(song); begin(true); }
+function startLevel(i, skip) { if (!unlocked(i)) return; store.set('last', i); pal = PALS[i]; enter(i, new Track(LEVELS[i].seed, LEVELS[i]), i, skip); }
+function startEndless(skip) { hue0 = Math.random() * 360; palZ = -99; enter('endless', new Track((Math.random() * 1e9) | 0, null), 3 + ((Math.random() * 5) | 0), skip); }
+function startDaily(skip) { const d = today(); pal = PALS[d.seed % 8]; enter('daily', new Track(d.seed, Object.assign({}, DAILY, { pat: d.seed % 5 })), d.seed % 8, skip); }
+// ---------- level briefing: what the level is, what is new in it, and how to deal with each thing ----------
+const GROUP = { step: 'turns', stairs: 'turns', zigzag: 'turns', spiral: 'turns', flipGate: 'overhead', pingpong: 'overhead', dodge1: 'blocks', dodge2: 'blocks', slalom: 'blocks',
+  blockFlip: 'blockflip', hurdle: 'bars', hurdles: 'bars', laneGap: 'gaps', stones: 'gaps', ringGap: 'ringgap', sweep: 'sweepers', beam: 'beams', fan: 'beams', fans: 'beams', launch: 'pads', sprint: 'sprint', crawl: 'slow' };
+const ORDER = ['turns', 'overhead', 'blocks', 'bars', 'gaps', 'ringgap', 'blockflip', 'sweepers', 'pads', 'beams', 'sprint', 'slow'];
+const FL = 'fill="var(--tile)"', HZ = 'fill="var(--hazard)"', PATH = 'fill="none" stroke="#fff" stroke-width="1.6" stroke-dasharray="3 3" stroke-linecap="round"', BALL = 'r="4" fill="#fff"';
+const svg = body => '<svg viewBox="0 0 64 40" aria-hidden="true">' + body + '</svg>';
+const TYPES = {   // name, what to do, which move, picture
+  turns: ['Shifting floor', 'The floor jogs sideways. Turn to follow it.', 'turn', svg('<rect x="4" y="22" width="26" height="9" rx="1" ' + FL + '/><rect x="30" y="9" width="30" height="9" rx="1" ' + FL + '/><path d="M16 26.5H26L36 13.5H52" ' + PATH + '/><circle cx="12" cy="26.5" ' + BALL + '/>')],
+  overhead: ['Floor overhead', 'Your floor ends while another runs along the far wall. Flip up to it.', 'flip', svg('<rect x="4" y="31" width="30" height="5" rx="1" ' + FL + '/><rect x="24" y="4" width="36" height="5" rx="1" ' + FL + '/><path d="M18 26Q30 24 44 13" ' + PATH + '/><circle cx="13" cy="26.5" ' + BALL + '/>')],
+  blocks: ['Tall blocks', 'A wall with one opening. Go around: you cannot jump these.', 'turn', svg('<rect x="4" y="5" width="56" height="30" rx="1" ' + FL + '/><rect x="34" y="5" width="9" height="10" ' + HZ + '/><rect x="34" y="25" width="9" height="10" ' + HZ + '/><path d="M16 10H26L33 20H54" ' + PATH + '/><circle cx="12" cy="10" ' + BALL + '/>')],
+  bars: ['Low bars', 'A thin bar across the floor. Jump it.', 'jump', svg('<rect x="4" y="31" width="56" height="5" rx="1" ' + FL + '/><rect x="31" y="24" width="4" height="7" ' + HZ + '/><path d="M17 26Q33 0 49 26" ' + PATH + '/><circle cx="12" cy="26.5" ' + BALL + '/>')],
+  gaps: ['Short gaps', 'A break in a single-file floor with nothing overhead. Jump it.', 'jump', svg('<rect x="4" y="31" width="23" height="5" rx="1" ' + FL + '/><rect x="38" y="31" width="22" height="5" rx="1" ' + FL + '/><path d="M17 26Q33 2 49 26" ' + PATH + '/><circle cx="12" cy="26.5" ' + BALL + '/>')],
+  ringgap: ['Ring gaps', 'Every wall drops away and the floor resumes overhead. Flip across.', 'flip', svg('<rect x="4" y="31" width="22" height="5" rx="1" ' + FL + '/><rect x="38" y="4" width="22" height="5" rx="1" ' + FL + '/><path d="M18 26Q32 22 46 13" ' + PATH + '/><circle cx="13" cy="26.5" ' + BALL + '/>')],
+  blockflip: ['Blocked side', 'Blocks across your whole side of the tunnel. Flip over them.', 'flip', svg('<rect x="4" y="31" width="56" height="5" rx="1" ' + FL + '/><rect x="34" y="18" width="9" height="13" ' + HZ + '/><rect x="20" y="4" width="40" height="5" rx="1" ' + FL + '/><path d="M18 26Q26 22 36 13" ' + PATH + '/><circle cx="13" cy="26.5" ' + BALL + '/>')],
+  sweepers: ['Sliding blocks', 'They slide in and stop on the marked tile. Be on another one.', 'turn', svg('<rect x="4" y="16" width="56" height="20" rx="1" ' + FL + '/><rect x="34" y="16" width="10" height="10" fill="var(--hazard)" opacity=".45"/><rect x="34" y="2" width="10" height="9" ' + HZ + '/><path d="M39 11V19M36 16l3 3 3-3" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M16 21H28L34 31H54" ' + PATH + '/><circle cx="12" cy="21" ' + BALL + '/>')],
+  pads: ['Launch pads', 'White pads throw you over a long gap. Nothing to press.', null, svg('<rect x="4" y="31" width="12" height="5" rx="1" ' + FL + '/><rect x="16" y="31" width="9" height="5" fill="#fff"/><rect x="48" y="31" width="12" height="5" rx="1" ' + FL + '/><path d="M20 27Q36 -8 53 26" ' + PATH + '/><circle cx="12" cy="26.5" ' + BALL + '/>')],
+  beams: ['Beams and fans', 'Bars swing across the tunnel and settle. Slip past, and never flip through one.', 'turn', svg('<polygon points="44.8,5 55.6,15.8 55.6,31 44.8,37 19.2,37 8.4,31 8.4,15.8 19.2,5" transform="translate(0 -1)" fill="none" stroke="var(--tile)" stroke-width="2"/><rect x="29" y="2" width="6" height="36" transform="rotate(38 32 20)" ' + HZ + '/><circle cx="41" cy="31" ' + BALL + '/>')],
+  sprint: ['Sprint zones', 'Bright floor: everything speeds up, with long gaps to clear.', null, svg('<rect x="4" y="14" width="56" height="12" rx="1" fill="#fff" opacity=".85"/><path d="M14 9l9 11-9 11M28 9l9 11-9 11M42 9l9 11-9 11" fill="none" stroke="var(--hazard)" stroke-width="3"/>')],
+  slow: ['Slow zones', 'Dark floor: slower, single file, with quick turns one after another.', 'turn', svg('<path d="M4 30H16V20H28V30H40V20H52V10H60" fill="none" stroke="var(--tile)" stroke-width="7" opacity=".6"/><path d="M6 30H16V20H28V30H40V20H52V10H58" ' + PATH + '/>')]
+};
+const typesOf = mix => { const has = {}; for (const k in mix) if (GROUP[k]) has[GROUP[k]] = 1; return ORDER.filter(t => has[t]); };
+let pending = null;
+function moveKeys(m) { return m === 'turn' ? [labelFor('left'), labelFor('right')] : m ? [labelFor(m)] : []; }
+function card(t, isNew) {
+  const d = TYPES[t], el = document.createElement('div'); el.className = 'card' + (isNew ? ' new' : '');
+  el.innerHTML = d[3] + '<div><b></b><span></span></div>';
+  el.querySelector('b').textContent = d[0]; const sp = el.querySelector('span'); sp.textContent = d[1] + ' ';
+  for (const k of moveKeys(d[2])) { const kb = document.createElement('kbd'); kb.textContent = k; sp.appendChild(kb); }
+  return el;
+}
+function showBrief(m, tr, song) {
+  mode = m; track = tr; attach(); bot = null; state = 'brief'; pending = { m, tr, song }; hidePanels();
+  $('hud').hidden = true; $('bar').hidden = true; $('btnPause').hidden = true; $('big').className = 'big'; $('tip').hidden = true; $('hint').className = 'hint';
+  const lv = typeof m === 'number', types = lv || m === 'daily' ? typesOf(tr.kinds || tr.level.mix) : ORDER;
+  let seen = {}; if (lv) for (let i = 0; i < m; i++) for (const t of typesOf(LEVELS[i].mix)) seen[t] = 1;
+  const fresh = lv ? types.filter(t => !seen[t]) : [], old = types.filter(t => fresh.indexOf(t) < 0);
+  $('brNo').textContent = lv ? 'Level ' + pad2(m + 1) + ' of ' + pad2(LEVELS.length) : m === 'daily' ? 'Daily course · ' + today().label : 'Endless';
+  $('brName').textContent = modeName();
+  $('brHint').textContent = m === 'endless' ? 'No finish line. It starts with turns, flips and blocks, then adds everything else as it speeds up. Restart replays the same course.' : tr.level.hint;
+  const st = $('brStats'); st.textContent = '';
+  const stat = (k, v, html) => { const d = document.createElement('div'), a = document.createElement('dt'), b = document.createElement('dd'); a.textContent = k; if (html) b.innerHTML = v; else b.textContent = v; d.appendChild(a); d.appendChild(b); st.appendChild(d); };
+  const sp = tr.speedAt(0), on = clamp(Math.round((sp - 6.8) / .75), 1, 8); let pips = '<span class="pips" role="img" aria-label="' + on + ' of 8">'; for (let i = 0; i < 8; i++) pips += '<i' + (i < on ? ' class="on"' : '') + '></i>'; stat('Speed', pips + '</span>', true);
+  if (tr.end !== Infinity) {
+    let secs = 0; for (let r = 0; r < tr.end; r++) secs += 1 / tr.V[r];
+    stat('Par time', Math.round(secs) + ' s'); stat('Moves needed', String(tr.events.filter(e => !e.opt).length)); stat('Sparks', String(tr.nSparks));
+    const b = lv ? (stats.lv[m] || {}) : dailyS(); stat('Your best', ((lv ? b.clears : b.cleared) ? (b.time ? fmtT(b.time) : 'cleared') : b.best ? b.best + '%' : 'not yet') + (b.score ? '  ·  ' + fmtN(b.score) + ' pts' : ''));
+  } else stat('Your best', stats.endless[0] ? stats.endless[0].m + ' m' : 'not yet');
+  $('brNewH').hidden = !fresh.length; $('brNew').hidden = !fresh.length; $('brNew').textContent = ''; for (const t of fresh) $('brNew').appendChild(card(t, true));
+  $('brAlsoH').textContent = !lv ? 'What is in it' : fresh.length ? 'Also in it, from earlier levels' : 'Nothing new. Everything from the earlier levels:';
+  $('brAlsoH').hidden = !old.length; const also = $('brAlso'); also.textContent = ''; also.className = fresh.length ? 'chips' : 'cards';
+  for (const t of old) { if (fresh.length) { const c = document.createElement('span'); c.className = 'chip'; c.textContent = TYPES[t][0]; also.appendChild(c); } else also.appendChild(card(t, false)); }
+  let nSh = 0, nSl = 0; if (tr.end !== Infinity) for (const r in tr.I) { if (tr.I[r].t === 'shield') nSh++; else if (tr.I[r].t === 'slow') nSl++; }
+  $('brNote').textContent = 'Sparks mark the line: over each jump and past each opening. Each is worth 100 points (200 in the air) and adds a little speed, up to +15%, which is how you beat par.'
+    + (nSh ? ' ' + (nSh > 1 ? nSh + ' shields sit' : 'A shield sits') + ' on your route before the walls.' : '')
+    + (nSl ? ' Slow-mo sits one lane off the route before ' + (nSl > 1 ? 'the rhythm sections' : 'a rhythm section') + ': it helps, but it costs time.' : '')
+    + (tr.end === Infinity ? ' Shields and slow-mo turn up before the sections they suit.' : '');
+  $('brKey').textContent = (practice() ? 'Practice options are on: this run will not be recorded. ' : '') + (touchSeen ? '' : 'Press ' + labelFor('jump') + ' or Enter to start, Esc to go back.');
+  $('briefSheet').hidden = false; $('briefSheet').scrollTop = 0; $('btnGo').focus(); syncCss(true);
+}
+function go() { if (!pending) return; const p = pending; pending = null; launchRun(p.m, p.tr, p.song); }
+function enter(m, tr, song, skip) { if (skip || opts.brief === false) launchRun(m, tr, song); else showBrief(m, tr, song); }
+function startTutorial() { pal = PALS[1]; launchRun('tutorial', new Track(1, TUTORIAL), 0); }
+// Restart always replays the course you were on: the same track object is kept, only the runner is new.
+function retry(fromStart) { begin(false, fromStart ? null : resumeCp); }
+function lastCp() {
+  if (!opts.cp || track.end === Infinity || mode === 'tutorial') return null;
+  let c = null; for (const p of track.cps) { if (p.z <= runner.z - 2) c = p; else break; } return c;
+}
+function score() { return track.end === Infinity ? Math.floor(runner.z) : Math.min(100, Math.floor(100 * runner.z / track.end)); }
+const fmtT = t => t.toFixed(1) + ' s';
+
+function record(win) {   // returns { best, rec, total, parts, newScore, newTime }
+  const s = score(), sp = runner.sparks, tl = tally(win); let best = s, rec = false, newScore = false, newTime = false;
+  if (!scored()) {
+    if (win && typeof mode === 'number' && !lvS(mode).pclear) { lvS(mode).pclear = true; saveStats(); }
+    return { best: null, rec: false, total: tl.total, parts: tl.parts };
+  }
+  stats.total = (stats.total || 0) + sp;
+  const marks = st => {   // best score and, for a finished run, best time
+    if (tl.total > (st.score || 0)) { newScore = (st.score || 0) > 0; st.score = tl.total; }
+    if (win && (!st.time || runT < st.time)) { newTime = !!st.time; st.time = +runT.toFixed(2); }
+  };
+  if (typeof mode === 'number') {
+    const st = lvS(mode); rec = s > st.best && st.tries > 1;
+    st.best = Math.max(st.best, s); st.sparks = Math.max(st.sparks, sp); marks(st);
+    if (win) { st.clears++; if (sp >= track.nSparks) st.perfect = true; }
+    best = st.best;
+  } else if (mode === 'endless') {
+    const top = stats.endless[0] ? stats.endless[0].m : 0; rec = s > top && top > 0;
+    if (s >= 30) { stats.endless.push({ m: s, sp, pts: tl.total, d: today().key }); stats.endless.sort((a, b) => b.m - a.m); stats.endless.length = Math.min(8, stats.endless.length); }
+    best = Math.max(top, s);
+  } else if (mode === 'daily') {
+    const st = dailyS(); rec = s > st.best && st.tries > 1; st.best = Math.max(st.best || 0, s); best = st.best; marks(st);
+    if (win && !st.cleared) { st.cleared = true; stats.daily.streak = stats.daily.last === dayBefore(st.date) ? (stats.daily.streak || 0) + 1 : 1; stats.daily.last = st.date; }
+  }
+  saveStats(); return { best, rec, total: tl.total, parts: tl.parts, newScore, newTime };
+}
+function sparkText() { return track.end === Infinity ? runner.sparks + ' sparks' : runner.sparks + '/' + track.nSparks + ' sparks'; }
+function showFail() {
+  state = 'fail'; failT = 0;
+  const s = score(), r = record(false), endless = track.end === Infinity;
+  $('big').className = 'big'; $('tip').hidden = true; $('btnPause').hidden = true;
+  $('failBig').textContent = endless ? s + ' m' : s + '%';
+  $('failMeter').hidden = endless;
+  $('failBar').style.width = (endless ? 0 : s) + '%';
+  $('failBest').hidden = r.best == null; if (r.best != null) $('failBest').style.left = 'calc(' + clamp(r.best, 0, 100) + '% - 1px)';
+  resumeCp = lastCp();
+  $('btnRetry').textContent = resumeCp ? 'Restart from ' + Math.floor(100 * resumeCp.z / track.end) + '%' : 'Restart';
+  $('btnFromStart').hidden = !resumeCp;
+  const bits = [runner.dead && runner.dead.kind === 'crash' ? 'Hit an obstacle' : 'Fell through a gap', fmtN(r.total) + ' points', fmtT(runT), sparkText()];
+  if (r.best != null) bits.push(r.rec ? 'new best' : 'best ' + r.best + (endless ? ' m' : '%'));
+  bits.push('attempt ' + tries);
+  $('failStat').textContent = bits.join('  ·  ');
+  $('btnNew').hidden = mode !== 'endless';
+  $('failHint').textContent = (practice() && mode !== 'tutorial' ? 'Practice run: not recorded. ' : '') + (touchSeen ? 'Restart replays' : 'Press ' + labelFor('restart') + ' or ' + labelFor('jump') + ' to restart') + (resumeCp ? ' from the checkpoint.' : ' the same course.');
+  $('failPanel').hidden = false; $('btnRetry').focus();
+}
+function onWin() {
+  state = 'win'; Snd.fx('win'); $('big').className = 'big'; $('tip').hidden = true; $('btnPause').hidden = true;
+  const res = record(true);
+  const tut = mode === 'tutorial', lv = typeof mode === 'number', perfect = runner.sparks >= track.nSparks;
+  if (tut) { stats.tut = true; saveStats(); }
+  $('winTitle').textContent = tut ? 'You are set.' : lv && mode === LEVELS.length - 1 ? 'All eight. Done.' : 'Through.';
+  $('winStat').textContent = tut ? '' : [fmtN(res.total) + ' points' + (res.newScore ? ' (new best)' : ''), fmtT(runT) + (res.newTime ? ' (new best)' : '') + ', par ' + fmtT(parOf(track)), sparkText() + (perfect ? ', all of them' : ''), 'attempt ' + tries].join('  ·  ');
+  $('winParts').textContent = tut ? '' : res.parts.filter(p => p[1] > 0).map(p => p[0] + ' ' + fmtN(p[1])).join('  +  ');
+  $('winText').textContent = tut ? 'That is every move. Key bindings and a practice speed are under Controls & options.'
+    : practice() ? 'Cleared in practice: the next level unlocks, but the score is not recorded.'
+    : lv && mode < LEVELS.length - 1 ? LEVELS[mode + 1].name + ' is unlocked.' : mode === 'daily' ? 'Daily cleared. Streak: ' + (stats.daily.streak || 1) + '.' : '';
+  $('btnNext').hidden = !(tut || (lv && mode < LEVELS.length - 1));
+  $('btnNext').textContent = tut ? 'Start level 1' : 'Next level';
+  $('btnAgain').hidden = tut;
+  $('winPanel').hidden = false; ($('btnNext').hidden ? $('btnAgain') : $('btnNext')).focus();
+}
+function toMenu() {
+  state = 'menu'; mode = null; Snd.stop(); startAttract(); hidePanels(); buildMenu();
+  $('menu').hidden = false; $('hud').hidden = true; $('bar').hidden = true; $('btnPause').hidden = true;
+  $('big').className = 'big'; $('tip').hidden = true;
+}
+function setPause(p) {
+  if (p && state === 'play') { state = 'pause'; $('pausePanel').hidden = false; Snd.sleep(); $('btnResume').focus(); }
+  else if (!p && state === 'pause') { hidePanels(); state = 'play'; Snd.wake(); if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); }
+}
+
+// ---------- tutorial: the run freezes at each obstacle until the right key is pressed ----------
+function tipHtml(e) {
+  if (touchSeen) return esc(e.tip.replace('Press {K}', 'Tap {K}').replace('press {K}', 'tap {K}')).replace('{K}', '<kbd>' + ({ L: '\u25C0', R: '\u25B6', F: 'Flip', J: 'Jump' })[e.key] + '</kbd>');
+  return esc(e.tip).replace('{K}', '<kbd>' + esc(labelFor(actionForMove(e.key))) + '</kbd>');
+}
+function tutorialTick() {
+  const ev = track.events, tip = $('tip');
+  while (tutNote < track.notes.length && runner.z >= track.notes[tutNote].z - 7) { tip.innerHTML = esc(track.notes[tutNote].text); tip.className = 'tip'; tip.hidden = false; tutNote++; tutHide = runner.z + 12; }
+  if (tutI >= ev.length) { if (runner.z > tutHide) tip.hidden = true; return false; }
+  const e = ev[tutI];
+  if (runner.z >= e.z0 - 7) { tip.innerHTML = tipHtml(e); tip.hidden = false; tutHide = e.z1 + 4; }
+  else if (runner.z > tutHide) tip.hidden = true;
+  const hold = runner.z >= e.z0 + (e.z1 - e.z0) * .4;
+  tip.className = 'tip' + (hold ? ' wait' : '');
+  return hold;
+}
+let tutHide = 0;
+
+function tick(dt) {
+  if (state === 'play' && mode === 'tutorial') { frozen = tutorialTick(); if (frozen) return; }
+  if (bot) bot.update(runner);
+  runner.step(dt);
+  if (state === 'menu') { if (runner.dead || runner.z > 700) startAttract(); }
+  else if (state === 'play') {
+    if (runner.dead) { state = 'dead'; deadT = 0; if (!calm()) { shake = 1; flash = .5; } }
+    else if (runner.z >= track.end) onWin();
+    else {
+      const zn = track.Z[Math.floor(runner.z)] || 0;
+      if (zn !== lastZone) { lastZone = zn; if (zn === 1) toast('Sprint'); else if (zn === 2) toast('Slow zone'); }
+    }
+  } else if (state === 'dead') { deadT += dt; if (deadT > .55) { if (opts.auto || mode === 'tutorial') { record(false); resumeCp = lastCp(); retry(); } else showFail(); } }
+}
+
+// ================= rendering =================
+const RC = 1 / Math.cos(Math.PI / 8);   // corner radius of an octagon with apothem 1
+const RL = .86, CAMBACK = 4.4, NEAR = .3, CAMY = -.5, BR = .13, TH = .09;
+let VIEW = 36, qScale = 1, slowFor = 0, ema = 1 / 60, idleFor = 0;   // draw distance and resolution adapt to the machine
+const cxr = new Float64Array(9), cyr = new Float64Array(9), shade = new Float64Array(8);
+let W = 0, H = 0, DPR = 1, cx = 0, cy = 0, F = 1, camNow = 0;
+function resize() {
+  const q = opts.quality;
+  VIEW = q === 'low' ? 28 : 36;
+  let sc = Math.min(q === 'low' ? 1 : 2, window.devicePixelRatio || 1);
+  const cw = cv.clientWidth || window.innerWidth, ch = cv.clientHeight || window.innerHeight;
+  if (q !== 'high') sc = Math.min(sc, Math.sqrt((q === 'low' ? 1.2e6 : 3e6) / Math.max(1, cw * ch)));   // about 3 megapixels on Auto
+  DPR = Math.max(.5, sc * (q === 'auto' ? qScale : 1)); idleFor = 0;
+  W = cv.clientWidth || window.innerWidth; H = cv.clientHeight || window.innerHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+}
+const streaks = [];
+for (let i = 0; i < 44; i++) streaks.push({ a: Math.random() * 6.283, r: 1.8 + Math.random() * 2.8, z: Math.random() * VIEW, l: .6 + Math.random() * 1.6 });
+const mixc = (c, d, t, k) => [c[0] * k + (d[0] - c[0] * k) * t, c[1] * k + (d[1] - c[1] * k) * t, c[2] * k + (d[2] - c[2] * k) * t];
+const WHITE = [255, 255, 255];
+// Colour strings are cached by value (6 bits a channel), so the draw loop creates no garbage once warm.
+const CSSTAB = new Array(262144);
+function css(r, g, b) {
+  r = r < 0 ? 0 : r > 255 ? 255 : r | 0; g = g < 0 ? 0 : g > 255 ? 255 : g | 0; b = b < 0 ? 0 : b > 255 ? 255 : b | 0;
+  const i = (r >> 2) << 12 | (g >> 2) << 6 | (b >> 2);
+  return CSSTAB[i] || (CSSTAB[i] = 'rgb(' + (r & 252) + ',' + (g & 252) + ',' + (b & 252) + ')');
+}
+// colour c scaled by k, then blended toward d by t
+function tint(c, d, t, k) { return css(c[0] * k + (d[0] - c[0] * k) * t, c[1] * k + (d[1] - c[1] * k) * t, c[2] * k + (d[2] - c[2] * k) * t); }
+function quad(x1, y1, x2, y2, x3, y3, x4, y4) { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.lineTo(x3, y3); ctx.lineTo(x4, y4); ctx.closePath(); }
+// a point on the tunnel wall at any lane position (lane centres are whole numbers), f = 1 on the wall, 0 on the axis.
+// Written into the scratch buffer PT at index i, so nothing is allocated.
+const PT = new Float64Array(8);
+function lanePt(pos, f, i) {
+  const fr = pos - Math.round(pos), rad = f / Math.cos(fr * Math.PI / 4), a = (pos - camNow) * Math.PI / 4 + Math.PI / 2;
+  PT[i] = rad * Math.cos(a); PT[i + 1] = rad * Math.sin(a);
+}
+// a box standing on the wall: lane position, half width in lanes, near/far depth, height, colour
+function drawBox(pos, half, dA, dB, h, col, far, fog, top) {
+  if (dB <= NEAR) return;
+  const sA = F / Math.max(NEAR, dA), sB = F / dB, q = 1 - h;
+  lanePt(pos - half, 1, 0); lanePt(pos + half, 1, 2);
+  const ax = PT[0], ay = PT[1], bx = PT[2], by = PT[3];
+  const oax = cx + ax * sA, oay = cy + (ay - CAMY) * sA, iax = cx + ax * q * sA, iay = cy + (ay * q - CAMY) * sA;
+  const obx = cx + bx * sA, oby = cy + (by - CAMY) * sA, ibx = cx + bx * q * sA, iby = cy + (by * q - CAMY) * sA;
+  const oaxF = cx + ax * sB, oayF = cy + (ay - CAMY) * sB, iaxF = cx + ax * q * sB, iayF = cy + (ay * q - CAMY) * sB;
+  const obxF = cx + bx * sB, obyF = cy + (by - CAMY) * sB, ibxF = cx + bx * q * sB, ibyF = cy + (by * q - CAMY) * sB;
+  ctx.fillStyle = tint(col, far, fog, .55);
+  ctx.beginPath(); ctx.moveTo(oax, oay); ctx.lineTo(iax, iay); ctx.lineTo(iaxF, iayF); ctx.lineTo(oaxF, oayF); ctx.closePath();
+  ctx.moveTo(obx, oby); ctx.lineTo(ibx, iby); ctx.lineTo(ibxF, ibyF); ctx.lineTo(obxF, obyF); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = tint(top || col, far, fog, top ? 1 : .8);
+  quad(iax, iay, ibx, iby, ibxF, ibyF, iaxF, iayF); ctx.fill();
+  ctx.fillStyle = tint(col, far, fog, 1);
+  quad(oax, oay, obx, oby, ibx, iby, iax, iay); ctx.fill(); ctx.stroke();
+}
+// a bar across the tunnel from one wall to the opposite one
+function drawBeam(pos, dA, dB, col, far, fog) {
+  if (dB <= NEAR) return;
+  const sA = F / Math.max(NEAR, dA), sB = F / dB;
+  lanePt(pos - .2, 1, 0); lanePt(pos + .2, 1, 2); lanePt(pos + 3.8, 1, 4); lanePt(pos + 4.2, 1, 6);
+  const a1x = PT[0], a1y = PT[1] - CAMY, a2x = PT[2], a2y = PT[3] - CAMY, b1x = PT[4], b1y = PT[5] - CAMY, b2x = PT[6], b2y = PT[7] - CAMY;
+  ctx.fillStyle = tint(col, far, fog, .6);
+  ctx.beginPath(); ctx.moveTo(cx + a2x * sA, cy + a2y * sA); ctx.lineTo(cx + b1x * sA, cy + b1y * sA); ctx.lineTo(cx + b1x * sB, cy + b1y * sB); ctx.lineTo(cx + a2x * sB, cy + a2y * sB); ctx.closePath();
+  ctx.moveTo(cx + b2x * sA, cy + b2y * sA); ctx.lineTo(cx + a1x * sA, cy + a1y * sA); ctx.lineTo(cx + a1x * sB, cy + a1y * sB); ctx.lineTo(cx + b2x * sB, cy + b2y * sB); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = tint(col, far, fog, 1);
+  quad(cx + a1x * sA, cy + a1y * sA, cx + a2x * sA, cy + a2y * sA, cx + b1x * sA, cy + b1y * sA, cx + b2x * sA, cy + b2y * sA); ctx.fill(); ctx.stroke();
+}
+function drawItem(it, dm, fog) {
+  const s = F / dm, high = it.t === 'high'; lanePt(it.lane, high ? .5 : .78, 0);
+  const x = cx + PT[0] * s, y = cy + (PT[1] - CAMY) * s, u = s * .075;
+  ctx.globalAlpha = 1 - fog * .85;
+  if (it.t === 'spark' || high) {
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(x, y - u * 1.35); ctx.lineTo(x + u, y); ctx.lineTo(x, y + u * 1.35); ctx.lineTo(x - u, y); ctx.closePath(); ctx.fill();
+    if (high) { ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, u * .28); ctx.beginPath(); ctx.arc(x, y, u * 2.1, 0, 6.2832); ctx.stroke(); }
+  } else {
+    const c = it.t === 'shield' ? '#7fe7ff' : '#d9b8ff';
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.arc(x, y, u * 2.3, 0, 6.2832); ctx.fill();
+    ctx.strokeStyle = c; ctx.lineWidth = Math.max(1.5, u * .5); ctx.beginPath(); ctx.arc(x, y, u * 2.3, 0, 6.2832); ctx.stroke();
+    ctx.beginPath();
+    if (it.t === 'shield') { ctx.moveTo(x - u, y - u * .9); ctx.lineTo(x + u, y - u * .9); ctx.lineTo(x + u, y + u * .2); ctx.lineTo(x, y + u * 1.2); ctx.lineTo(x - u, y + u * .2); ctx.closePath(); }
+    else { ctx.moveTo(x, y - u * 1.2); ctx.lineTo(x, y); ctx.lineTo(x + u * .9, y + u * .5); }
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1; ctx.lineWidth = 1;
+}
+function pattern(p, j, k) { return p === 1 ? j & 1 : p === 2 ? k & 1 : p === 3 ? ((j >> 1) + k) & 1 : p === 4 ? (j % 4 === 0 ? 1 : 0) : (j + k) & 1; }
+
+// Everything derived from the palette (and the backdrop gradient) is rebuilt only when the palette or size changes.
+let PC = null, pcPal = null, pcW = 0, pcH = 0, palZ = -99;
+const bgCv = document.createElement('canvas'), bgCtx = bgCv.getContext('2d', { alpha: false });
+function prepPal() {
+  // the backdrop (flat colour plus the light at the end of the tunnel) is painted once, at half size, and copied each frame
+  const bw = Math.max(2, Math.ceil(W / 2)), bh = Math.max(2, Math.ceil(H / 2));
+  if (bgCv.width !== bw || bgCv.height !== bh) { bgCv.width = bw; bgCv.height = bh; }
+  const g = bgCtx.createRadialGradient(bw / 2, bh * .38, 0, bw / 2, bh * .38, F * .23);
+  g.addColorStop(0, rgb(mixc(pal.bg, pal.glow, .95, 1))); g.addColorStop(.4, rgb(mixc(pal.bg, pal.glow, .32, 1))); g.addColorStop(1, rgb(pal.bg));
+  bgCtx.fillStyle = g; bgCtx.fillRect(0, 0, bw, bh);
+  PC = { far: mixc(pal.bg, pal.glow, .7, 1), sprA: mixc(pal.a, WHITE, .45, 1), sprB: mixc(pal.b, WHITE, .45, 1), wire: rgb(mixc(pal.glow, WHITE, .35, 1)), glow: rgb(pal.glow) };
+  pcPal = pal; pcW = W; pcH = H;
+}
+const GAPL = .007, GAPZ = .007 * RL;   // tiles are drawn slightly inset; the gap between them replaces an outline stroke per tile
+
+// lead: simulated time not yet stepped this frame. Drawing that far ahead keeps motion even on 120/144 Hz screens.
+function render(fdt, lead) {
+  const z = runner.z + track.speedAt(runner.z) * lead, v = runner.vis(lead), cam = camNow = runner.cam;
+  if (!track.level && Math.abs(z - palZ) > 2) { pal = endlessPal(z); palZ = z; }
+  F = Math.min(W * 1.25, H * 1.4);
+  if (pal !== pcPal || W !== pcW || H !== pcH) prepPal();
+  syncCss(false);
+  const pulse = Snd.pulse(), pat = track.level ? track.level.pat : 0;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const sx = shake > 0 ? (Math.random() - .5) * shake * 16 : 0, sy = shake > 0 ? (Math.random() - .5) * shake * 16 : 0;
+  cx = W / 2 + sx; cy = H * .38 + sy;
+
+  ctx.drawImage(bgCv, 0, 0, W, H);
+
+  if (!calm()) {   // speed streaks outside the tunnel, drawn as three batches by distance
+    ctx.lineWidth = 1.5; ctx.strokeStyle = PC.glow;
+    const third = VIEW / 3, n = streaks.length;
+    for (let b = 0; b < 3; b++) {
+      ctx.globalAlpha = b === 0 ? .6 : b === 1 ? .36 : .14; ctx.beginPath();
+      for (let i = 0; i < n; i++) {
+        const s = streaks[i], rel = (((s.z - z) % VIEW) + VIEW) % VIEW;
+        if (rel < b * third || rel >= (b + 1) * third) continue;
+        const d = (rel + .4) * RL, a = s.a - cam * Math.PI / 4, x = s.r * Math.cos(a), y = s.r * Math.sin(a) - CAMY, s1 = F / d, s2 = F / (d + s.l * RL);
+        ctx.moveTo(cx + x * s1, cy + y * s1); ctx.lineTo(cx + x * s2, cy + y * s2);
+      }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  for (let i = 0; i < 9; i++) { const a = (i - .5 - cam) * Math.PI / 4 + Math.PI / 2; cxr[i] = RC * Math.cos(a); cyr[i] = RC * Math.sin(a); }
+  {   // wire frame of the whole tunnel, so its shape reads even where the floor is one lane wide
+    const sA = F / .7, sB = F / ((VIEW + CAMBACK) * RL);
+    ctx.strokeStyle = PC.wire; ctx.globalAlpha = .2; ctx.lineWidth = 1.5; ctx.beginPath();
+    for (let i = 0; i < 8; i++) { ctx.moveTo(cx + cxr[i] * sA, cy + (cyr[i] - CAMY) * sA); ctx.lineTo(cx + cxr[i] * sB, cy + (cyr[i] - CAMY) * sB); }
+    ctx.stroke(); ctx.globalAlpha = 1; ctx.lineWidth = 1;
+  }
+  for (let k = 0; k < 8; k++) shade[k] = .66 + .34 * (.5 + .5 * Math.sin((k - cam) * Math.PI / 4 + Math.PI / 2));
+  const far = PC.far, lit = 1 + .09 * pulse;
+  const j0 = Math.floor(z - CAMBACK + NEAR / RL), j1 = Math.floor(z) + VIEW, zb = Math.floor(z);
+  track.cell(j1, 0);   // make sure the endless track is generated this far
+  const rows = Math.min(track.end, track.S.length);
+  const speed = track.speedAt(z), settle = Math.max(2.5, speed * .35), travel = speed * 1.1;
+  ctx.lineWidth = 1; ctx.lineJoin = 'round';
+
+  for (let j = j1; j >= j0; j--) {
+    const dn = (j - z + CAMBACK) * RL, df = dn + RL;
+    if (df > NEAR) {
+      const sN = F / Math.max(NEAR, dn), sNi = F / Math.max(NEAR, dn + GAPZ), sFi = F / (df - GAPZ), ok = j >= 0 && j < rows;
+      let fog = clamp((dn - 6) / (VIEW * RL - 4), 0, 1); fog = fog * (2 - fog);
+      const S = ok ? track.S[j] : 255, B = ok ? track.B[j] : 0, Hh = ok ? track.H[j] : 0, PD = ok ? track.PD[j] : 0, zone = ok ? track.Z[j] : 0;
+      const Sp = j >= 1 && j - 1 < rows ? track.S[j - 1] : 255, fin = j >= track.end, G = ok ? track.G[j] : null;
+      let mark = 0;   // lanes where a moving obstacle will come to rest
+      if (G) { if (G.t === 'sweep') for (const it of G.items) mark |= 1 << (it.lane & 7); else for (const a of G.arms) mark |= (1 << (a & 7)) | (1 << ((a + 4) & 7)); }
+      if (j % 4 === 0 || j === bestRow) {   // tunnel ribs; a brighter one marks your best distance
+        const mine = j === bestRow;
+        ctx.strokeStyle = mine ? '#fff' : PC.wire; ctx.globalAlpha = (mine ? .9 : .28) * (1 - fog); ctx.lineWidth = mine ? 3 : 1.5;
+        ctx.beginPath(); ctx.moveTo(cx + cxr[0] * sN, cy + (cyr[0] - CAMY) * sN);
+        for (let i = 1; i < 8; i++) ctx.lineTo(cx + cxr[i] * sN, cy + (cyr[i] - CAMY) * sN);
+        ctx.closePath(); ctx.stroke(); ctx.globalAlpha = 1; ctx.lineWidth = 1;
+      }
+      const dark = zone === 2 ? .6 : 1;
+      for (let k = 0; k < 8; k++) {
+        const kb = 1 << k; if (!(S & kb)) continue;
+        const k1 = k + 1, ex = (cxr[k1] - cxr[k]) * GAPL, ey = (cyr[k1] - cyr[k]) * GAPL;
+        const ax = cxr[k] + ex, ay = cyr[k] + ey - CAMY, bx = cxr[k1] - ex, by = cyr[k1] - ey - CAMY;
+        const xa = cx + ax * sNi, ya = cy + ay * sNi, xb = cx + bx * sNi, yb = cy + by * sNi, xc = cx + bx * sFi, yc = cy + by * sFi, xd = cx + ax * sFi, yd = cy + ay * sFi;
+        // nothing of this tile is on screen: skip it
+        if ((xa < 0 && xb < 0 && xc < 0 && xd < 0) || (xa > W && xb > W && xc > W && xd > W) || (ya < 0 && yb < 0 && yc < 0 && yd < 0) || (ya > H && yb > H && yc > H && yd > H)) continue;
+        let base = fin ? (((j + k) & 1) ? WHITE : pal.bg) : pattern(pat, j, k) ? (zone === 1 ? PC.sprA : pal.a) : (zone === 1 ? PC.sprB : pal.b);
+        if (PD & kb) base = WHITE;
+        if (mark & kb) base = mixc(base, pal.hz, .55, 1);
+        if (!(Sp & kb)) {   // slab edge facing the camera
+          ctx.fillStyle = tint(base, far, fog, shade[k] * .42 * dark);
+          quad(xa, ya, xb, yb, cx + cxr[k1] * (1 + TH) * sN, cy + (cyr[k1] * (1 + TH) - CAMY) * sN, cx + cxr[k] * (1 + TH) * sN, cy + (cyr[k] * (1 + TH) - CAMY) * sN);
+          ctx.fill();
+        }
+        ctx.fillStyle = tint(base, far, fog, Math.min(1, shade[k] * lit) * dark);
+        quad(xa, ya, xb, yb, xc, yc, xd, yd); ctx.fill();
+        if (PD & kb) {   // launch pad: arrow pointing down the tunnel
+          ctx.fillStyle = tint(pal.glow, far, fog, 1);
+          ctx.beginPath(); ctx.moveTo(xa + (xb - xa) * .22, ya + (yb - ya) * .22); ctx.lineTo(xa + (xb - xa) * .78, ya + (yb - ya) * .78); ctx.lineTo((xc + xd) / 2, (yc + yd) / 2); ctx.closePath(); ctx.fill();
+        }
+      }
+      if (B || Hh || G) {
+        const thin = (G && G.t === 'beam') || (Hh && !B);   // beams and low bars sit mid-row
+        const passed = clamp(1 - (z - (j + (thin ? .72 : 1))) * 3.5, 0, 1);
+        if (passed > 0) {
+          ctx.globalAlpha = passed; ctx.strokeStyle = tint(pal.bg, far, fog, 1);
+          if (Hh) for (let k = 0; k < 8; k++) if (Hh & (1 << k)) drawBox(k, .5, dn + HZ0 * RL, dn + HZ1 * RL, .18, pal.hz, far, fog, WHITE);
+          if (G) {
+            const p = clamp((j - z - settle) / travel, 0, 1);
+            if (G.t === 'sweep') for (const it of G.items) drawBox(it.lane - it.dir * it.span * p, .5, dn, df, .4, pal.hz, far, fog);
+            else for (const a of G.arms) drawBeam(a + G.spin * p, dn + .3 * RL, dn + .7 * RL, pal.hz, far, fog);
+          } else if (B) for (let k = 0; k < 8; k++) if (B & (1 << k)) drawBox(k, .5, dn, df, .4, pal.hz, far, fog);
+          ctx.globalAlpha = 1;
+        }
+      }
+      const it = ok ? track.I[j] : null;
+      if (it && !runner.taken[j] && dn + RL / 2 > NEAR) drawItem(it, dn + RL / 2, fog);
+    }
+    if (j === zb) drawRunner(v, cam);
+  }
+
+  if (shards.length) {
+    ctx.fillStyle = '#fff';
+    for (const s of shards) {
+      s.t += fdt; s.vy += 900 * fdt; s.x += s.vx * fdt; s.y += s.vy * fdt; s.r += 9 * fdt;
+      ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.r); ctx.globalAlpha = clamp(1 - s.t / .9, 0, 1); ctx.fillRect(-s.s / 2, -s.s / 2, s.s, s.s); ctx.restore();
+    }
+    shards = shards.filter(s => s.t < .9);
+  }
+  if (flash > 0) { ctx.fillStyle = 'rgba(255,255,255,' + flash.toFixed(3) + ')'; ctx.fillRect(0, 0, W, H); flash = Math.max(0, flash - fdt * 2.4); }
+  if (shake > 0) shake = Math.max(0, shake - fdt * 3);
+}
+function drawRunner(v, cam) {
+  const a = (v.lane - cam) * Math.PI / 4 + Math.PI / 2, s = F / (CAMBACK * RL);
+  const rr = v.r * (1 - BR), bx = cx + rr * Math.cos(a) * s, by = cy + (rr * Math.sin(a) - CAMY) * s, R = BR * s;
+  ballAt.x = bx; ballAt.y = by; ballAt.R = R;
+  const d = runner.dead;
+  if (d && d.kind === 'crash') return;
+  if (Math.abs(v.r) <= 1.02) {   // contact shadow on whichever wall is nearer
+    const side = v.r >= 0 ? 1 : -1, h = 1 - Math.abs(v.r);
+    ctx.save(); ctx.translate(cx + side * Math.cos(a) * s, cy + (side * Math.sin(a) - CAMY) * s); ctx.rotate(a - Math.PI / 2); ctx.scale(1, .3);
+    ctx.globalAlpha = .38 * (1 - h); ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(0, -R * .4, R * (1.05 + h * .6), 0, 6.2832); ctx.fill(); ctx.restore();
+  }
+  ctx.save();
+  if (d) ctx.globalAlpha = clamp(1 - d.t * 2, 0, 1);
+  else if (runner.inv > 0) ctx.globalAlpha = .55;
+  const g = ctx.createRadialGradient(bx - R * .3, by - R * .38, R * .08, bx, by, R);
+  const sk = skin(); let c0 = '#fff', c1 = rgb(mixc(pal.a, WHITE, .6, 1));
+  if (sk === 'ember') { c0 = '#fff3c4'; c1 = '#ff7a2f'; } else if (sk === 'mint') { c0 = '#f2fff9'; c1 = '#39d6a4'; } else if (sk === 'void') { c0 = '#5d6280'; c1 = '#0b0c15'; } else if (sk === 'prism') c1 = rgb(hsl(runner.z * 9, .9, .66));
+  g.addColorStop(0, c0); g.addColorStop(1, c1);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(bx, by, R, 0, 6.2832); ctx.fill();
+  ctx.lineWidth = Math.max(1.5, R * .09); ctx.strokeStyle = sk === 'void' ? '#fff' : rgba(pal.bg, .55); ctx.stroke();
+  if (runner.shield) { ctx.strokeStyle = '#7fe7ff'; ctx.lineWidth = Math.max(2, R * .14); ctx.beginPath(); ctx.arc(bx, by, R * 1.45, 0, 6.2832); ctx.stroke(); }
+  ctx.restore(); ctx.lineWidth = 1;
+}
+
+// ================= HUD + menu =================
+let lastFlags = -1, lastProg = '';
+const EL = {};
+for (const id of ['hudPc', 'hudSp', 'hudTm', 'hudPts', 'tgBoost', 'prog', 'tgShield', 'tgSlow', 'pad']) EL[id] = $(id);
+let lastPts = '', lastBoost = -1;
+function hud() {
+  if (state === 'menu' || state === 'brief') { if (lastFlags !== 0) { lastFlags = 0; $('pad').hidden = true; } return; }
+  const endless = track.end === Infinity, s = score(), txt = endless ? s + ' m' : s + '%';
+  if (txt !== lastPc) { lastPc = txt; EL.hudPc.textContent = txt; }
+  const sp = '◆ ' + (endless ? runner.sparks : runner.sparks + '/' + track.nSparks);
+  if (sp !== lastSp) { lastSp = sp; EL.hudSp.textContent = sp; }
+  const tm = fmtT(runT); if (tm !== lastTm) { lastTm = tm; EL.hudTm.textContent = tm; }
+  const pts = mode === 'tutorial' ? '' : fmtN(tally(false).total) + ' pts'; if (pts !== lastPts) { lastPts = pts; EL.hudPts.textContent = pts; }
+  const bp = mode === 'tutorial' ? 0 : Math.round(boost * 100); if (bp !== lastBoost) { lastBoost = bp; EL.tgBoost.hidden = !bp; EL.tgBoost.textContent = '+' + bp + '% speed'; }
+  const flags = (runner.shield ? 1 : 0) | (slowT > 0 ? 2 : 0) | (touchSeen && (state === 'play' || state === 'dead') ? 4 : 0);
+  if (flags !== lastFlags) { lastFlags = flags; EL.tgShield.hidden = !(flags & 1); EL.tgSlow.hidden = !(flags & 2); EL.pad.hidden = !(flags & 4); }
+  const top = stats.endless[0] ? stats.endless[0].m : 0;
+  const pr = (endless ? clamp(runner.z / Math.max(80, top), 0, 1) : clamp(runner.z / track.end, 0, 1)).toFixed(3);
+  if (pr !== lastProg) { lastProg = pr; EL.prog.style.transform = 'scaleX(' + pr + ')'; }
+}
+const TAG = 'Eight walls, one way through. Turn the tunnel, jump, flip to the far wall, and do not fall out.';
+function menuRow(id, n, name, meta, done, onClick, cls, locked, hint) {
+  const li = document.createElement('li'), b = document.createElement('button');
+  b.type = 'button'; b.className = 'lv' + (cls ? ' ' + cls : ''); b.id = id; b.disabled = !!locked;
+  b.innerHTML = '<span class="n"></span><span class="nm"></span><span class="bs' + (done ? ' done' : '') + '"></span>';
+  b.children[0].textContent = n; b.children[1].textContent = name; b.children[2].textContent = meta;
+  b.addEventListener('click', onClick); li.appendChild(b); $('levels').appendChild(li);
+  if (hint) { const on = () => { $('tagline').textContent = hint; }, off = () => { $('tagline').textContent = TAG; }; li.addEventListener('mouseenter', on); li.addEventListener('mouseleave', off); b.addEventListener('focus', on); b.addEventListener('blur', off); }
+}
+function buildMenu() {
+  $('levels').textContent = '';
+  $('tagline').textContent = TAG;
+  menuRow('lvTut', '?', 'How to play', stats.tut ? 'done' : 'start here', !!stats.tut, startTutorial, 'alt', false, 'Every move, one at a time. The run waits for you at each obstacle.');
+  LEVELS.forEach((lv, i) => {
+    const st = stats.lv[i] || { best: 0, clears: 0, sparks: 0 }, open = unlocked(i);
+    const meta = !open ? 'clear ' + pad2(i) + ' to unlock' : st.clears ? '★ ' + (st.time ? fmtT(st.time) : 'cleared') + (st.score ? ' · ' + fmtN(st.score) + ' pts' : '') + (st.perfect ? ' · ◆' : '') : st.best ? st.best + '%' + (st.score ? ' · ' + fmtN(st.score) + ' pts' : '') : '—';
+    menuRow('lv' + (i + 1), pad2(i + 1), lv.name, meta, st.clears > 0, () => startLevel(i), '', !open, lv.hint);
+  });
+  const top = stats.endless[0];
+  menuRow('lvEndless', '∞', 'Endless', top ? top.m + ' m' : '—', false, () => startEndless(), 'alt', false, 'No finish line. It gets faster and adds new obstacles the further you go.');
+  const d = dailyS();
+  menuRow('lvDaily', '☀', 'Daily · ' + today().label, d.cleared ? 'cleared' : d.best ? d.best + '%' : '—', !!d.cleared, () => startDaily(), 'alt', false, DAILY.hint + ' Sixty seconds, a bit of everything.');
+}
+function soundLabel() { $('btnSound').textContent = Snd.muted ? 'Sound off' : 'Sound on'; $('btnSound').setAttribute('aria-pressed', String(!Snd.muted)); }
+function toggleSound() { Snd.setMuted(!Snd.muted); soundLabel(); }
+
+// ---------- scores sheet ----------
+let overlay = null, wipeArmed = false;
+function openSheet(id) { overlay = id; $(id).hidden = false; $(id).scrollTop = 0; const b = $(id).querySelector('header button'); if (b) b.focus(); }
+function closeSheet() { if (!overlay) return; $(overlay).hidden = true; overlay = null; listening = null; if (state === 'menu') buildMenu(); else if (state === 'pause') $('btnResume').focus(); }
+function cell(tr, t, cls) { const td = document.createElement('td'); td.textContent = t; if (cls) td.className = cls; tr.appendChild(td); }
+function buildScores() {
+  const tb = $('scoreBody'); tb.textContent = '';
+  LEVELS.forEach((lv, i) => {
+    const st = stats.lv[i] || { best: 0, clears: 0, tries: 0, sparks: 0 }, tr = document.createElement('tr');
+    cell(tr, pad2(i + 1) + '  ' + lv.name);
+    cell(tr, st.clears ? 'cleared' : st.best ? st.best + '%' : '—', st.clears ? 'done' : '');
+    cell(tr, st.score ? fmtN(st.score) : '—'); cell(tr, st.time ? fmtT(st.time) : '—');
+    cell(tr, st.sparks + '/' + TOTALS[i] + (st.perfect ? ' ★' : ''), st.perfect ? 'done' : '');
+    cell(tr, String(st.clears)); cell(tr, String(st.tries)); tb.appendChild(tr);
+  });
+  const eb = $('endBody'); eb.textContent = '';
+  if (!stats.endless.length) { const tr = document.createElement('tr'); cell(tr, 'No runs yet'); cell(tr, ''); cell(tr, ''); cell(tr, ''); cell(tr, ''); eb.appendChild(tr); }
+  stats.endless.forEach((r, i) => { const tr = document.createElement('tr'); cell(tr, '#' + (i + 1)); cell(tr, r.m + ' m', i === 0 ? 'done' : ''); cell(tr, r.pts ? fmtN(r.pts) : '—'); cell(tr, String(r.sp || 0)); cell(tr, r.d || ''); eb.appendChild(tr); });
+  const d = dailyS();
+  $('dailyText').textContent = 'Today (' + today().label + '): ' + (d.cleared ? 'cleared' : d.best ? 'best ' + d.best + '%' : 'not played') + ', ' + (d.tries || 0) + ' attempts. Streak of days cleared: ' + (stats.daily.streak && (stats.daily.last === d.date || stats.daily.last === dayBefore(d.date)) ? stats.daily.streak : 0) + '.';
+  if (d.score) $('dailyText').textContent += ' Best score today: ' + fmtN(d.score) + (d.time ? ', best time ' + fmtT(d.time) : '') + '.';
+  $('dailyText').textContent += ' Sparks collected in total: ' + (stats.total || 0) + '.';
+  wipeArmed = false; $('btnWipe').textContent = 'Erase scores';
+}
+
+// ---------- controls sheet ----------
+let listening = null;
+function buildControls() {
+  const box = $('keys'); box.textContent = '';
+  for (const [a, label] of ACTIONS) {
+    const l = document.createElement('span'); l.className = 'lab'; l.textContent = label; box.appendChild(l);
+    for (let s = 0; s < 2; s++) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'bind'; b.textContent = keyLabel(opts.binds[a][s]);
+      b.setAttribute('aria-label', label + ', key ' + (s + 1) + ': ' + keyLabel(opts.binds[a][s]));
+      b.addEventListener('click', () => { buildControls(); listening = { a, s }; const nb = $('keys').querySelectorAll('.bind')[ACTIONS.findIndex(x => x[0] === a) * 2 + s]; nb.className = 'bind listen'; nb.textContent = 'press a key'; nb.focus(); });
+      box.appendChild(b);
+    }
+  }
+  const rows = $('optrows'); rows.textContent = '';
+  const seg = (label, key, choices) => {
+    const l = document.createElement('span'); l.textContent = label; rows.appendChild(l);
+    const g = document.createElement('span'); g.className = 'seg'; g.setAttribute('role', 'group'); g.setAttribute('aria-label', label);
+    for (const [val, text] of choices) {
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = text; b.setAttribute('aria-pressed', String(opts[key] === val));
+      b.addEventListener('click', () => { opts[key] = val; saveOpts(); buildControls(); if (key === 'quality') { qScale = 1; resize(); } });
+      g.appendChild(b);
+    }
+    rows.appendChild(g);
+  };
+  const slider = (label, key) => {
+    const l = document.createElement('label'); l.textContent = label; l.htmlFor = 'opt-' + key; rows.appendChild(l);
+    const r = document.createElement('input'); r.type = 'range'; r.min = 0; r.max = 100; r.step = 5; r.value = opts[key]; r.id = 'opt-' + key;
+    r.addEventListener('input', () => { opts[key] = +r.value; saveOpts(); Snd.levels(); });
+    rows.appendChild(r);
+  };
+  seg('Turn keys', 'invert', [[false, 'Move the ball'], [true, 'Spin the tunnel']]);
+  seg('Game speed', 'speed', [[1, '100%'], [.75, '75% practice']]);
+  seg('Checkpoints', 'cp', [[false, 'Off'], [true, 'On (practice)']]);
+  seg('After a fall', 'auto', [[false, 'Show result'], [true, 'Restart at once']]);
+  seg('Levels', 'unlockAll', [[false, 'Unlock by clearing'], [true, 'All unlocked']]);
+  seg('Level briefing', 'brief', [[true, 'Show'], [false, 'Skip']]);
+  seg('Effects', 'calm', [[false, 'Full'], [true, 'Calm']]);
+  seg('Graphics', 'quality', [['auto', 'Auto'], ['high', 'High'], ['low', 'Low']]);
+  slider('Music volume', 'music'); slider('Effects volume', 'sfx');
+  {   // ball styles: collecting sparks unlocks them
+    const total = stats.total || 0, l = document.createElement('span'); l.textContent = 'Runner (' + total + ' sparks collected so far)'; rows.appendChild(l);
+    const g = document.createElement('span'); g.className = 'seg'; g.setAttribute('role', 'group'); g.setAttribute('aria-label', 'Runner style');
+    for (const [id, name, need] of SKINS) {
+      const b = document.createElement('button'); b.type = 'button'; b.disabled = total < need; b.textContent = total < need ? name + ' \u25C6' + need : name;
+      b.setAttribute('aria-pressed', String(skin() === id));
+      b.addEventListener('click', () => { opts.skin = id; saveOpts(); buildControls(); });
+      g.appendChild(b);
+    }
+    rows.appendChild(g);
+  }
+}
+function setBind(k) {
+  const { a, s } = listening; listening = null;
+  if (k !== 'Escape') {
+    if (k === 'Backspace' || k === 'Delete') opts.binds[a][s] = null;
+    else { for (const x in opts.binds) opts.binds[x] = opts.binds[x].map(v => v === k ? null : v); opts.binds[a][s] = k; }
+    saveOpts();
+  }
+  buildControls();
+}
+
+// ================= input =================
+function act(m) {   // m: 'L' | 'R' | 'F' | 'J'
+  if (state !== 'play') return;
+  if (mode === 'tutorial') {
+    const e = track.events[tutI];
+    if (e && m === e.key && runner.z >= e.z0) { runner.press(m); tutI++; frozen = false; }
+    return;
+  }
+  runner.press(m);
+}
+const turn = left => (left !== opts.invert) ? 'L' : 'R';
+window.addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = keyNorm(e);
+  if (listening) { e.preventDefault(); setBind(k); return; }
+  if (overlay) { if (k === 'Escape') { e.preventDefault(); closeSheet(); } return; }
+  const a = actionOf(k);
+  if (state === 'menu') { if (k.length === 1 && k >= '1' && k <= '8') startLevel(+k - 1); else if (a === 'sound') toggleSound(); return; }
+  if (a === 'sound') { toggleSound(); return; }
+  if (state === 'brief') { if (k === 'Escape') { e.preventDefault(); toMenu(); } else if ((k === 'Enter' || a === 'jump' || a === 'flip') && !e.repeat) { e.preventDefault(); go(); } return; }
+  if (state === 'pause') { if (a === 'pause') { e.preventDefault(); setPause(false); } return; }
+  if (state === 'win') { if (k === 'Escape') toMenu(); return; }
+  if (state === 'fail') {
+    if (k === 'Escape') { e.preventDefault(); toMenu(); }
+    else if ((a === 'restart' || a === 'jump' || a === 'flip' || k === 'Enter') && !e.repeat) { e.preventDefault(); if (failT > .3) retry(); }
+    else if (a === 'left' || a === 'right') e.preventDefault();
+    return;
+  }
+  if (a === 'left' || a === 'right' || a === 'flip' || a === 'jump') { e.preventDefault(); if (!e.repeat) act(a === 'flip' ? 'F' : a === 'jump' ? 'J' : turn(a === 'left')); return; }
+  if (a === 'pause') { e.preventDefault(); setPause(true); }
+  else if (a === 'restart' && !e.repeat && state === 'play') { record(false); retry(true); }
+});
+let ptr = null;
+cv.addEventListener('pointerdown', e => { if (e.pointerType === 'touch') touchSeen = true; if (state === 'menu') return; ptr = { x: e.clientX, y: e.clientY, t: performance.now(), done: false }; Snd.wake(); });
+cv.addEventListener('pointermove', e => {
+  if (!ptr || ptr.done) return;
+  const dx = e.clientX - ptr.x, dy = e.clientY - ptr.y;
+  if (Math.abs(dx) < 22 && Math.abs(dy) < 22) return;
+  ptr.done = true; act(Math.abs(dx) > Math.abs(dy) ? turn(dx < 0) : dy < 0 ? 'F' : 'J');
+});
+const ptrEnd = e => { if (ptr && !ptr.done && performance.now() - ptr.t < 350) act(turn(e.clientX < W / 2)); ptr = null; };
+cv.addEventListener('pointerup', ptrEnd);
+cv.addEventListener('pointercancel', () => { ptr = null; });
+cv.addEventListener('contextmenu', e => e.preventDefault());
+
+const on = (id, fn) => $(id).addEventListener('click', fn);
+on('btnSound', e => { toggleSound(); e.currentTarget.blur(); });
+for (const b of $('pad').querySelectorAll('button')) b.addEventListener('pointerdown', e => { e.preventDefault(); const m = b.dataset.m; act(m === 'flip' ? 'F' : m === 'jump' ? 'J' : turn(m === 'left')); });
+on('btnFull', e => {
+  const b = e.currentTarget; b.blur();
+  try {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else { const p = document.documentElement.requestFullscreen(); if (p && p.catch) p.catch(() => { b.hidden = true; }); }
+  } catch (err) { b.hidden = true; }
+});
+document.addEventListener('fullscreenchange', () => { $('btnFull').textContent = document.fullscreenElement ? 'Exit full screen' : 'Full screen'; });
+on('btnPause', () => setPause(state !== 'pause'));
+on('btnResume', () => setPause(false));
+on('btnRestart', () => { Snd.wake(); record(false); retry(true); });
+on('btnFromStart', () => retry(true));
+on('btnQuit', toMenu); on('btnQuit2', toMenu); on('btnQuit3', toMenu);
+on('btnRetry', () => { if (failT > .15) retry(); });
+on('btnNew', () => startEndless(true));
+on('btnAgain', () => { if (mode === 'daily') startDaily(true); else if (mode === 'endless') startEndless(true); else startLevel(mode, true); });
+on('btnGo', go); on('btnBack', toMenu);
+on('btnNext', () => { if (mode === 'tutorial') startLevel(0); else startLevel(Math.min(LEVELS.length - 1, mode + 1)); });
+on('btnScores', () => { buildScores(); openSheet('scoreSheet'); });
+on('btnControls', () => { buildControls(); openSheet('ctrlSheet'); });
+on('btnControls2', () => { buildControls(); openSheet('ctrlSheet'); });
+on('btnCloseScores', closeSheet); on('btnCloseCtrl', closeSheet);
+on('btnDefaults', () => { opts.binds = cloneBinds(DEF_BINDS); saveOpts(); buildControls(); });
+on('btnTut', startTutorial);
+on('btnWipe', () => {
+  if (!wipeArmed) { wipeArmed = true; $('btnWipe').textContent = 'Erase everything? Click again'; return; }
+  stats = { lv: [], endless: [], daily: {} }; saveStats(); store.set('best', null); buildScores();
+});
+document.addEventListener('visibilitychange', () => { if (document.hidden) setPause(true); });
+window.addEventListener('blur', () => setPause(true));
+window.addEventListener('pointerdown', e => { if (e.pointerType === 'touch') touchSeen = true; }, true);
+window.addEventListener('resize', resize);
+
+// ================= main loop =================
+const STEP = 1 / 240, pf = { ms: 0, n: 0 };
+let frameNo = 0;
+let last = 0, acc = 0;
+function frame(ts) {
+  const now = ts / 1000; let dt = now - last; last = now;
+  if (!(dt > 0)) dt = 0; if (dt > .05) dt = .05;
+  if (cv.clientWidth !== W || cv.clientHeight !== H) resize();
+  if (opts.quality === 'auto' && dt > 0 && dt < .05) {   // drop resolution a notch if the machine cannot hold ~45 fps
+    ema += (dt - ema) * .05;
+    if (ema > 1 / 45 && qScale > .5) { slowFor += dt; if (slowFor > 1.5) { qScale *= .8; slowFor = 0; ema = 1 / 60; resize(); } } else slowFor = 0;
+  }
+  if (state === 'fail') failT += dt;
+  // screens where nothing moves (paused, result, briefing, or a sheet covering the tunnel) are drawn for a moment, then left alone
+  const still = state === 'pause' || state === 'fail' || state === 'brief' || overlay !== null;
+  if (still) idleFor += dt; else idleFor = 0;
+  if (!still) {
+    // practice speed and slow-mo stretch time itself, so every jump and gap keeps its proportions
+    let scale = state === 'menu' ? 1 : (mode === 'tutorial' ? 1 : opts.speed * (1 + boost));
+    if (state === 'play' && !frozen) runT += dt;   // the level clock is real time, so going faster shows
+    if (slowT > 0 && state === 'play') { slowT -= dt; scale *= .6; }
+    acc += dt * scale; while (acc >= STEP) { tick(STEP); acc -= STEP; if (state === 'fail' || state === 'win') { acc = 0; break; } }
+  }
+  Snd.pump();
+  if (!still || idleFor < 1.2) {
+    const lead = !still && !frozen && !runner.dead && (state === 'play' || state === 'menu' || state === 'win') ? acc : 0;
+    const t0 = performance.now(); render(state === 'pause' ? 0 : dt, lead); pf.ms += performance.now() - t0; pf.n++;
+    if ((++frameNo & 3) === 0 || still) hud();
+  }
+  requestAnimationFrame(frame);
+}
+function start(saved) {
+  resize(); soundLabel(); toMenu(); syncCss(true);
+  if (saved && typeof saved.focus === 'number') { const b = $('lv' + (saved.focus + 1)); if (b && !b.disabled) b.focus(); }
+  requestAnimationFrame(frame);
+}
+// When shown inside Claude's artifact viewer, keep the focused level across a republish. Ignored everywhere else.
+const hot = window.claude && window.claude.hot;
+if (hot && hot.snapshot) hot.snapshot(() => ({ focus: typeof mode === 'number' ? mode : store.get('last', 0) }));
+if (hot && hot.ready) hot.ready(start); else start((hot && hot.data) || {});
+})();
+</script>
+</body>
+</html>

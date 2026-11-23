@@ -1,0 +1,12 @@
+{
+  "name": "eightfold",
+  "version": "1.0.0",
+  "description": "A browser tunnel runner: eight walls, one way through. Single HTML file, no dependencies.",
+  "private": true,
+  "scripts": {
+    "build": "node build.js",
+    "build:test": "node build.js --test",
+    "test": "node test/levels.js && node test/shortcuts.js",
+    "curve": "node test/curve.js"
+  }
+}
