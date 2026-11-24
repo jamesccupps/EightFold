@@ -16,7 +16,9 @@ What it does with a post:
 - adds the country Cloudflare reports for the request, and nothing else about the sender: the address is never stored;
 - commits as `eightfold-relay`, and never sends the token anywhere but GitHub.
 
-Limits against misuse: 40 posts per sender per ten minutes, 250 attempts per session, 300 new session files per day in total. The address is public, so junk is possible within those limits; it lands on the data branch only and is easy to delete.
+Every write is a commit, and two commits at the same moment collide, so a refused write is tried again (up to five times, with short uneven pauses) before the game is told the store is busy; the game then sends it again itself.
+
+Limits against misuse: 240 posts per sender per ten minutes (a household shares one address, so this has to fit several people playing at once), 250 attempts per session, 300 new session files per day in total. The address is public, so junk is possible within those limits; it lands on the data branch only and is easy to delete.
 
 ## Set up (about ten minutes, once)
 

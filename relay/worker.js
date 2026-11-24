@@ -22,14 +22,16 @@
 //   ORIGINS       optional, comma-separated pages allowed to post, default "https://jamesccupps.github.io"
 //   OFF           optional. Set to "1" to refuse everything without deleting the Worker.
 
-const VERSION = '2026-11-23.9';   // shown on the status line, so a deploy can be told from the one before
+const VERSION = '2026-11-23.10';   // shown on the status line, so a deploy can be told from the one before
 const DEFAULTS = { REPO: 'jamesccupps/EightFold', BRANCH: 'play-data', ORIGINS: 'https://jamesccupps.github.io' };
 const MAX_BODY = 64 * 1024;        // bytes per post
 const MAX_ATTEMPTS = 400;          // attempts per session file
 const MAX_FILE = 900 * 1024;       // bytes per session file (GitHub hands back file contents up to 1 MB)
 const MAX_FILES_PER_DAY = 300;     // new session files per day, across everyone
 const MAX_SCORES_PER_DAY = 600;    // posted scores per day, across everyone
-const MAX_POSTS = 40, WINDOW_MS = 10 * 60 * 1000;   // posts per sender per ten minutes (best effort, per Worker instance)
+const MAX_POSTS = 240, WINDOW_MS = 10 * 60 * 1000;  // posts per sender per ten minutes (best effort, per Worker instance). A household shares one address:
+                                                    // several people playing at once must fit under it, so it only stops a script, not a family.
+const TRIES = 5;                   // times a write is tried when someone else's write gets in first
 
 // ---------- checking what was sent: keep known fields of the right type, drop the rest ----------
 const num = (v, lo, hi) => typeof v === 'number' && isFinite(v) && v >= lo && v <= hi ? v : undefined;
@@ -73,6 +75,7 @@ function cleanAttempt(a, sid) {
   if (Array.isArray(a.pf) && a.pf.length === 2) put(out, 'pf', nums(a.pf, 2, 0, 1e5));   // perfect presses, longest run of them
   if (Array.isArray(a.rk) && a.rk.length === 2) put(out, 'rk', nums(a.rk, 2, 0, 1e5));   // red sparks taken, of how many
   if (Array.isArray(a.ft) && a.ft.length === 7) put(out, 'ft', nums(a.ft, 7, 0, 1e7));   // frames by how long they took
+  if (Array.isArray(a.il) && a.il.length === 3) put(out, 'il', nums(a.il, 3, 0, 1e5));   // key presses: typical and worst ms from the key to the game acting on it, typical ms on to the next frame
   put(out, 'rm', num(a.rm, 0, 1000));                                                      // ms spent drawing a frame
   if (Array.isArray(a.tt) && a.tt.length % 3 === 0) put(out, 'tt', nums(a.tt, 90, 0, 1e7));   // tutorial: step, ms waited, wrong keys
   return out;
@@ -168,12 +171,28 @@ function checkScore(data, now) {
   return { path: 'scores/' + new Date(now).toISOString().slice(0, 10) + '/' + pid + '-' + board + '-' + now.toString(36) + '.json', dir: 'scores/' + new Date(now).toISOString().slice(0, 10),
     body: Object.assign({ v: 1, at: now, board, name, pid, core, run }, data.test === true ? { test: true } : {}) };   // test: posted while checking the game; checked like any other, but never listed
 }
+// Every write to the branch is a commit, and two commits at once collide: GitHub refuses the second (409, sometimes 422).
+// A run ending sends its score and its play data together, and several people may be playing, so a refused write is
+// simply tried again after a short, uneven pause.
+const pause = n => new Promise(r => setTimeout(r, 120 + 180 * n + Math.floor(Math.random() * 200)));
+const busy = status => status === 409 || status === 422 || status === 500 || status === 502 || status === 503;
 async function saveScore(env, ok) {
   const branch = env.BRANCH || DEFAULTS.BRANCH;
   const list = await gh(env, ok.dir + '?ref=' + encodeURIComponent(branch), { method: 'GET' });
   if (list.status === 200) { const files = await list.json(); if (Array.isArray(files) && files.length >= MAX_SCORES_PER_DAY) return { status: 429, error: 'enough for today' }; }
-  const res = await gh(env, ok.path, { method: 'PUT', body: JSON.stringify({ message: 'score ' + ok.body.board + ' ' + ok.body.name, content: btoa(JSON.stringify(ok.body)), branch, committer: { name: 'eightfold-relay', email: 'eightfold-relay@users.noreply.github.com' } }) });
-  return res.status === 200 || res.status === 201 ? { status: 200 } : { status: 502, error: 'storage said ' + res.status };
+  let last = 0;
+  for (let n = 0; n < TRIES; n++) {
+    if (n) await pause(n);
+    const res = await gh(env, ok.path, { method: 'PUT', body: JSON.stringify({ message: 'score ' + ok.body.board + ' ' + ok.body.name, content: btoa(JSON.stringify(ok.body)), branch, committer: { name: 'eightfold-relay', email: 'eightfold-relay@users.noreply.github.com' } }) });
+    if (res.status === 200 || res.status === 201) return { status: 200 };
+    last = res.status;
+    if (res.status === 422) {   // 422 is also what GitHub says when the file is already there: an earlier try that did land
+      const got = await gh(env, ok.path + '?ref=' + encodeURIComponent(branch), { method: 'GET' });
+      if (got.status === 200) return { status: 200 };
+    }
+    if (!busy(res.status)) break;
+  }
+  return { status: 502, error: busy(last) ? 'storage busy' : 'storage said ' + last };
 }
 // the boards, as the checker last wrote them; kept for a few seconds so a busy moment does not mean a call to GitHub per player
 let boardsAt = 0, boardsText = '';
@@ -209,7 +228,8 @@ function merge(old, neu) {
 }
 async function save(env, ok) {
   const branch = env.BRANCH || DEFAULTS.BRANCH, dir = 'sessions/' + ok.date, path = dir + '/' + ok.sid + '.json';
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < TRIES; attempt++) {
+    if (attempt) await pause(attempt);
     let sha, old = null;
     const cur = await gh(env, path + '?ref=' + encodeURIComponent(branch), { method: 'GET' });
     if (cur.status === 200) {
@@ -223,8 +243,8 @@ async function save(env, ok) {
     const body = merge(old, ok.body), content = btoa(JSON.stringify(body).replace(/[\u0080-\uffff]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')));
     const res = await gh(env, path, { method: 'PUT', body: JSON.stringify({ message: 'play data ' + ok.sid + ' (' + body.n + ')', content, branch, sha, committer: { name: 'eightfold-relay', email: 'eightfold-relay@users.noreply.github.com' } }) });
     if (res.status === 200 || res.status === 201) return { status: 200, n: body.n };
-    if (res.status !== 409 && res.status !== 422) return { status: 502, error: 'storage said ' + res.status };
-    // 409/422: the file changed between reading and writing; read it again and try once more
+    if (!busy(res.status)) return { status: 502, error: 'storage said ' + res.status };
+    // the branch or the file changed between reading and writing: read it again and try again
   }
   return { status: 502, error: 'storage busy' };
 }

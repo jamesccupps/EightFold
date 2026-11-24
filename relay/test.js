@@ -105,8 +105,9 @@ ok('a plain visit shows a status line and nothing else', r.status === 200 && (aw
 r = await post(null, { method: 'OPTIONS' });
 ok('preflight is answered', r.status === 204);
 
-let last = 0; for (let i = 0; i < 45; i++) last = (await post({ v: 1, session, attempts: [attempt({})] }, { ip: '198.51.100.7' })).status;
-ok('one sender is slowed after 40 posts in ten minutes', last === 429);
+let last = 0, at60 = 0; for (let i = 0; i < 245; i++) { last = (await post({ v: 1, session, attempts: [attempt({})] }, { ip: '198.51.100.7' })).status; if (i === 59) at60 = last; }
+ok('several people on one connection fit under the limit', at60 === 200, at60);
+ok('one sender is slowed after 240 posts in ten minutes', last === 429);
 
 const old = Object.assign({}, session, { id: 'old000old', t: now - 40 * 86400 });
 r = await post({ v: 1, session: old, attempts: [attempt({ s: 'old000old' })] });
@@ -126,6 +127,12 @@ const sf = Object.keys(files).filter(p => p.startsWith('scores/'));
 ok('a posted score is filed under scores/', r.status === 200 && sf.length === 1 && /^scores\/\d{4}-\d{2}-\d{2}\/abcdef012345-L1-[a-z0-9]+\.json$/.test(sf[0]), sf);
 const filed = sf.length ? JSON.parse(atob(files[sf[0]].content)) : {};
 ok('with the name in capitals, the presses, and nothing unknown', filed.name === 'JMC' && filed.board === 'L1' && JSON.stringify(filed.run.tr) === '[1200,0,1890,3]' && !('junk' in filed.run) && typeof filed.at === 'number', filed);
+failNextPut = 3; r = await score({ pid: 'abcdef0123zz' });
+ok('a score whose write collides with other writes is tried again until it lands', r.status === 200 && Object.keys(files).some(p => /abcdef0123zz-L1-/.test(p)), r.status);
+failNextPut = 9; r = await score({ pid: 'abcdef0123yy' });
+ok('and says so if it never does, so the game can send it again', r.status === 502 && (await r.json()).error === 'storage busy' && !Object.keys(files).some(p => /abcdef0123yy-L1-/.test(p))); failNextPut = 0;
+failNextPut = 3; r = await post({ v: 1, session, attempts: [attempt({ i: 30, il: [3, 41, 6] })] });
+ok('play data gets the same retries, and the key-press delays are stored', r.status === 200 && JSON.stringify(stored().attempts.find(a => a.i === 30).il) === '[3,41,6]', r.status);
 r = await score({ name: 'toolong' }); ok('a name longer than three characters is refused', r.status === 400);
 r = await score({ name: '<b>' }); ok('a name with anything but letters and digits is refused', r.status === 400);
 r = await score({ board: '../../main' }); ok('an unknown board is refused', r.status === 400);

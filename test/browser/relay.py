@@ -22,7 +22,7 @@ async def main():
             r['notice_hidden_without_relay'] = await pg.evaluate('document.getElementById("telNote").hidden')
             await pg.evaluate('window.__eightfold.relay("%s/relay")' % BASE)
             r['notice_shown_with_relay'] = not await pg.evaluate('document.getElementById("telNote").hidden')
-            await pg.click('#lv1'); await pg.click('#btnGo'); await wait_state(pg, ['fail'], 15); await pg.wait_for_timeout(800)
+            await pg.click('#lv1'); await pg.click('#btnGo'); await wait_state(pg, ['fail'], 15); await pg.wait_for_timeout(2400)   # a run's record goes a moment after it ends, behind its score
             f = stored(); name = list(f['files'].keys())[0] if f['files'] else None; d = f['files'][name]['data'] if name else {}
             r['first_run_sent_at_once'] = (f['posts'], name is not None and name.startswith('sessions/'), d.get('n'))
             r['branch'] = f['files'][name]['branch'] if name else None

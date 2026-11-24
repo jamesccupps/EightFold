@@ -6,12 +6,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import worker from '../../relay/worker.js';
 const HERE = path.dirname(fileURLToPath(import.meta.url)), PORT = +process.argv[2] || 8787, ORIGIN = 'http://127.0.0.1:' + PORT;
-const files = {}; let shaN = 0, posts = 0;
+const files = {}; let shaN = 0, posts = 0, failPuts = 0, down = 0, busy = 0;   // failPuts: writes GitHub will refuse as collisions; down: posts the relay will not answer; busy: posts it answers with 502
 globalThis.fetch = async (url, init) => {
   const u = new URL(url), p = decodeURIComponent(u.pathname.replace(/^\/repos\/[^/]+\/[^/]+\/contents\//, ''));
   const json = (status, obj) => new Response(JSON.stringify(obj), { status });
   if (init.method === 'GET') { if (files[p]) return json(200, { sha: files[p].sha, content: Buffer.from(JSON.stringify(files[p].data)).toString('base64') }); const kids = Object.keys(files).filter(k => k.startsWith(p + '/')); return kids.length ? json(200, kids.map(k => ({ path: k }))) : json(404, {}); }
   const body = JSON.parse(init.body);
+  if (failPuts > 0) { failPuts--; return json(409, {}); }
   if (files[p] && files[p].sha !== body.sha) return json(409, {});
   files[p] = { sha: 's' + (++shaN), branch: body.branch, data: JSON.parse(Buffer.from(body.content, 'base64').toString()) };
   return json(200, {});
@@ -19,6 +20,11 @@ globalThis.fetch = async (url, init) => {
 http.createServer(async (req, res) => {
   if (req.url === '/files') { res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify({ posts, files })); }
   if (req.url.startsWith('/setfile/')) { const chunks = []; for await (const c of req) chunks.push(c); files[decodeURIComponent(req.url.slice(9))] = { sha: 's' + (++shaN), branch: 'play-data', data: JSON.parse(Buffer.concat(chunks).toString()) }; return res.end('ok'); }
+  if (req.url.startsWith('/failputs/')) { failPuts = +req.url.slice(10) || 0; return res.end('ok'); }
+  if (req.url.startsWith('/down/')) { down = +req.url.slice(6) || 0; return res.end('ok'); }
+  if (req.url.startsWith('/busy/')) { busy = +req.url.slice(6) || 0; return res.end('ok'); }
+  if (req.url.startsWith('/relay') && req.method === 'POST' && busy > 0) { busy--; posts++; for await (const c of req) {} res.statusCode = 502; res.setHeader('Access-Control-Allow-Origin', '*'); res.setHeader('Content-Type', 'application/json'); return res.end('{"error":"storage busy"}'); }
+  if (req.url.startsWith('/relay') && req.method === 'POST' && down > 0) { down--; posts++; return req.socket.destroy(); }
   if (req.url.startsWith('/relay')) {
     const chunks = []; for await (const c of req) chunks.push(c);
     if (req.method === 'POST') posts++;

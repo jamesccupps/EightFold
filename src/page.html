@@ -111,6 +111,7 @@ input[type=range] { width: 170px; accent-color: var(--tile); }
   position: fixed; left: 50%; top: 58px; transform: translateX(-50%); pointer-events: none; opacity: 0;
   font: 600 12px/1 var(--body); letter-spacing: .16em; text-transform: uppercase; white-space: nowrap;
   padding: 8px 12px; border-radius: 3px; background: var(--ink); color: rgb(var(--bgc));
+  max-width: calc(100% - 24px); box-sizing: border-box; overflow: hidden; text-overflow: ellipsis;
 }
 .toast.show { animation: toast 1.6s ease-out both; }
 @keyframes toast { 0% { opacity: 0; } 10% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
@@ -157,6 +158,8 @@ td.done { color: var(--tile); }
 .brief .sheet-in { gap: 14px; margin: auto 0; }
 .brief { align-items: stretch; }
 .brief h2 { font-size: clamp(30px, 7vw, 56px); }
+/* Start stays in reach however long the briefing is */
+.brief .foot { position: sticky; bottom: calc(-1 * clamp(12px, 4vh, 48px)); display: flex; flex-direction: column; gap: 8px; padding: 12px 0 clamp(12px, 4vh, 48px); margin: -4px 0 calc(-1 * clamp(12px, 4vh, 48px)); background: rgb(var(--bgc)); border-top: 1px solid var(--line); }
 .brief p.lead { color: var(--ink); font-size: 15px; max-width: 52ch; }
 .brstats { display: flex; flex-wrap: wrap; gap: 8px 26px; margin: 0; }
 .brstats div { display: flex; flex-direction: column; gap: 4px; }
@@ -172,6 +175,12 @@ td.done { color: var(--tile); }
 .card b { display: block; font: 500 14px/1.3 var(--display); }
 .card span { display: block; color: var(--dim); font-size: 13px; line-height: 1.4; }
 .card kbd { display: inline-block; min-width: 1.4em; padding: 1px 6px; margin: 3px 3px 0 0; border-radius: 3px; text-align: center; font: 600 12px/1.5 var(--body); background: var(--ink); color: rgb(var(--bgc)); }
+.legend { display: grid; grid-template-columns: 40px 1fr; gap: 7px 10px; align-items: center; text-align: left; color: var(--dim); font-size: 13px; line-height: 1.4; max-width: 62ch; }
+.legend svg { width: 40px; height: 25px; display: block; }
+.legend b { color: var(--ink); font-weight: 600; }
+ul.plain { margin: 0; padding-left: 1.2em; color: var(--dim); display: flex; flex-direction: column; gap: 6px; }
+ul.plain b { color: var(--ink); font-weight: 600; }
+#gdHud td:first-child { white-space: nowrap; color: var(--ink); font-weight: 600; } #gdHud td { text-align: left; white-space: normal; color: var(--dim); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 12.5px; }
 .keys { display: grid; grid-template-columns: 1fr auto auto; gap: 8px 8px; align-items: center; }
@@ -241,21 +250,21 @@ textarea.out {
   <h1 class="title" aria-label="Eightfold"><span>EIGHT</span><span>F<svg viewBox="0 0 100 100" aria-hidden="true"><polygon points="92.5,32.4 92.5,67.6 67.6,92.5 32.4,92.5 7.5,67.6 7.5,32.4 32.4,7.5 67.6,7.5" fill="none" stroke="currentColor" stroke-width="17"/></svg>LD</span></h1>
   <p class="tag" id="tagline">Eight walls, one way through. Turn the tunnel, jump, flip to the far wall, and do not fall out.</p>
   <ol class="levels" id="levels"></ol>
-  <div class="menu-row"><button class="btn" id="btnBoard" type="button">Leaderboard</button><button class="btn" id="btnScores" type="button">Scores</button><button class="btn" id="btnControls" type="button">Controls &amp; options</button><button class="btn" id="btnTune" type="button">Tuning</button><button class="btn" id="btnData" type="button">Play data</button><button class="btn" id="btnNote" type="button">Feedback</button></div>
+  <div class="menu-row"><button class="btn" id="btnGuide" type="button">Legend</button><button class="btn" id="btnBoard" type="button">Leaderboard</button><button class="btn" id="btnScores" type="button">Scores</button><button class="btn" id="btnControls" type="button">Controls &amp; options</button><button class="btn" id="btnTune" type="button">Tuning</button><button class="btn" id="btnData" type="button">Play data</button><button class="btn" id="btnNote" type="button">Feedback</button></div>
   <p class="note" id="verNote"></p>
   <p class="note" id="telNote" hidden>While the game is being tuned, how each run goes is recorded and sent to its developer, with no name or contact details. See Play data to look at it or switch it off.</p>
 </div></nav>
 
 <div class="panel" id="pausePanel" hidden>
   <h2>Paused</h2>
-  <div class="row"><button class="btn go" id="btnResume" type="button">Resume</button><button class="btn" id="btnRestart" type="button">Restart</button><button class="btn" id="btnControls2" type="button">Controls</button><button class="btn" id="btnTune2" type="button">Tuning</button><button class="btn" id="btnNote2" type="button">Feedback</button><button class="btn" id="btnQuit" type="button">Level select</button></div>
+  <div class="row"><button class="btn go" id="btnResume" type="button">Resume</button><button class="btn" id="btnRestart" type="button">Restart</button><button class="btn" id="btnGuide2" type="button">Legend</button><button class="btn" id="btnControls2" type="button">Controls</button><button class="btn" id="btnTune2" type="button">Tuning</button><button class="btn" id="btnNote2" type="button">Feedback</button><button class="btn" id="btnQuit" type="button">Level select</button></div>
 </div>
 <div class="panel" id="failPanel" hidden>
   <h2 id="failBig">0%</h2>
   <div class="meter" id="failMeter"><i id="failBar"></i><b id="failBest"></b></div>
   <p class="stat" id="failStat"></p>
   <p class="stat" id="failNeed" hidden></p>
-  <div class="row"><button class="btn go" id="btnRetry" type="button">Restart</button><button class="btn" id="btnFromStart" type="button" hidden>From the start</button><button class="btn" id="btnNew" type="button" hidden>New course</button><button class="btn" id="btnQuit3" type="button">Level select</button><button class="btn" id="btnNote3" type="button">Feedback</button></div>
+  <div class="row"><button class="btn go" id="btnRetry" type="button">Restart</button><button class="btn" id="btnFromStart" type="button" hidden>From the start</button><button class="btn" id="btnNew" type="button" hidden>New course</button><button class="btn" id="btnQuit3" type="button">Level select</button><button class="btn" id="btnGuide4" type="button">Legend</button><button class="btn" id="btnNote3" type="button">Feedback</button></div>
   <p id="failHint"></p>
   <div class="rate" id="failPost" hidden></div>
   <div class="rate" id="failRate" hidden></div>
@@ -280,9 +289,29 @@ textarea.out {
   <div class="cards" id="brNew"></div>
   <h3 id="brAlsoH">Also in it, from earlier levels</h3>
   <div class="chips" id="brAlso"></div>
-  <div class="menu-row"><button class="btn go" id="btnGo" type="button">Start</button><button class="btn" id="btnBack" type="button">Back</button></div>
-  <p id="brNote"></p>
-  <p id="brKey"></p>
+  <h3>Worth knowing</h3>
+  <div class="legend" id="brNote"></div>
+  <div class="foot"><div class="menu-row"><button class="btn go" id="btnGo" type="button">Start</button><button class="btn" id="btnBack" type="button">Back</button><button class="btn" id="btnGuide3" type="button">Legend</button></div>
+  <p id="brKey"></p></div>
+</div></div>
+
+<div class="sheet" id="guideSheet" hidden><div class="sheet-in">
+  <header><h2>Legend</h2><button class="btn" id="btnCloseGuide" type="button">Close</button></header>
+  <p>What everything on screen is, and what to do about it.</p>
+  <h3>Your three moves</h3>
+  <div class="cards" id="gdMoves"></div>
+  <p id="gdAir"></p>
+  <h3>Things to pick up</h3>
+  <div class="cards" id="gdItems"></div>
+  <h3>Floor and markings</h3>
+  <div class="cards" id="gdFloor"></div>
+  <h3>Obstacles</h3>
+  <div class="cards" id="gdObs"></div>
+  <h3>Along the top of the screen</h3>
+  <div class="tablewrap"><table><tbody id="gdHud"></tbody></table></div>
+  <h3>Speed, points and the leaderboard</h3>
+  <ul class="plain" id="gdScore"></ul>
+  <div class="menu-row"><button class="btn" id="btnGuideTut" type="button">Play the tutorial</button><button class="btn" id="btnGuideKeys" type="button">Change the keys</button></div>
 </div></div>
 
 <div class="sheet" id="scoreSheet" hidden><div class="sheet-in">
@@ -322,6 +351,7 @@ textarea.out {
   <p id="boardInfo"></p>
   <div class="tablewrap"><table><thead><tr id="boardHead"></tr></thead><tbody id="boardBody"></tbody></table></div>
   <div class="optrow"><label for="boardName">Your name on the boards: up to three letters or digits</label><input class="nm3" id="boardName" maxlength="3" autocomplete="off" spellcheck="false"></div>
+  <div class="rate" id="boardPend" hidden style="justify-content:flex-start"></div>
   <p id="boardNote"></p>
 </div></div>
 
@@ -397,6 +427,7 @@ if (!Array.isArray(stats.endless)) stats.endless = [];
 if (!stats.daily || typeof stats.daily !== 'object') stats.daily = {};
 if (!stats.know || typeof stats.know !== 'object') stats.know = {};
 if (!stats.posted || typeof stats.posted !== 'object') stats.posted = {};   // per board: the best run already posted, and the course it was on
+if (!stats.pending || typeof stats.pending !== 'object') stats.pending = {};   // per board: this player's best run that is not on the board yet, kept whole until it is
 if (typeof stats.name !== 'string' || !/^[A-Z0-9]{1,3}$/.test(stats.name)) stats.name = '';   // how many times the player has made each kind of move: reminders stop after two
 const lvS = i => stats.lv[i] || (stats.lv[i] = { best: 0, clears: 0, tries: 0, sparks: 0, perfect: false, pclear: false });
 { const old = store.get('best', null); if (Array.isArray(old)) old.forEach((b, i) => { if (b && i < LEVELS.length) { const s = lvS(i); s.best = Math.max(s.best, b); if (b >= 100) s.clears = Math.max(1, s.clears); } }); }
@@ -452,7 +483,7 @@ function applyTune() {
 // ---------- play recording (temporary: so the game can be tuned from how it is really played) ----------
 // One small record per attempt: where it ended and on what, the time, sparks, how early or late each press came inside
 // the window the course allows for it, and the frame rate. Kept in this browser; see the Play data sheet.
-const BUILD = '2026-11-23k', CORE_ID = '/*COREID*/';   // CORE_ID: which engine (generator + physics) this page was built from
+const BUILD = '2026-11-23m', CORE_ID = '/*COREID*/';   // CORE_ID: which engine (generator + physics) this page was built from
 // Where play records are sent from the public copy of the game: a small relay that files them on the play-data branch
 // of the game's GitHub repository (see relay/ in the repository). Empty = nothing is sent.
 let RELAY = 'https://eightfold-relay.jamesccupps.workers.dev/', relayAnywhere = false;
@@ -505,6 +536,7 @@ let telCur = null, telSess = null, telDb = null, telBusy = false, telAgain = fal
 const saveTel = () => store.set('tel', tel);
 const T0 = performance.now();
 let telSeq = 0, telLast = null, relayAck = 0, relayEv = 0, pauseAt = 0, fullUsed = false;
+let evNews = 0, relayLen = 0, relayBusy = false, relayAgain = false, relayKey = '', relayFails = 0, telLater = 0;
 // the visit: the machine in broad terms, the options in use, progress so far, and a trail of what was opened and started
 function telSession() {
   if (!telSess) {
@@ -544,12 +576,13 @@ function telEv(code) {
   if (!tel.on || document.prerendering) return;   // a page the browser loads ahead of time, unseen, is not a visit
   const s = telSess || telSession();
   if (s.ev.length < 1600) s.ev.push(Math.round((performance.now() - T0) / 1000), String(code).slice(0, 32));
+  if (code !== 'hide' && code !== 'show' && code !== 'leave') evNews++;   // switching tabs is noted, but is not worth a send on its own
 }
 const telMode = () => typeof mode === 'number' ? 'L' + (mode + 1) : mode === 'daily' ? 'D' + today().key : mode === 'endless' ? 'E' : 'T';
 function telStart(cp) {
   const now = performance.now();
   telCur = tel.on && !bot ? { cp: cp ? Math.floor(cp.z) : 0, pr: 0, px: 0, fh: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], kk: {}, sh: 0, sl: 0, sg: 0, fn: 0, ft: 0, fj: 0, fx: 0, fb: [0, 0, 0, 0, 0, 0, 0], rs: 0, rn: 0,
-    tr: [], inp: [0, 0, 0, 0, 0], tt: [], tw: 0, th: 0, pzN: 0, pzT: 0, rt: telLast && mode != null && telLast.m === telMode() ? Math.min(600, +((now - telLast.at) / 1000).toFixed(1)) : -1 } : null;
+    tr: [], inp: [0, 0, 0, 0, 0], tt: [], tw: 0, th: 0, pzN: 0, pzT: 0, il: [0, 0, 0, 0, 0], iq: [], rt: telLast && mode != null && telLast.m === telMode() ? Math.min(600, +((now - telLast.at) / 1000).toFixed(1)) : -1 } : null;
   pauseAt = 0;
 }
 // a press: find the move on the course's own route it belongs to, and note where in that move's window it came.
@@ -588,6 +621,7 @@ function telEnd(res) {
   if (track.nRisk || runner.risk) rec.rk = [runner.risk | 0, track.end === Infinity ? 0 : track.nRisk | 0];   // red sparks taken, of how many
   if (c.cp) rec.cp = c.cp; if (c.sh) rec.sh = c.sh; if (c.sl) rec.sl = c.sl; if (c.sg) rec.sg = c.sg;
   if (c.tt.length) rec.tt = c.tt;                                   // tutorial: step, ms the step waited for its key, wrong keys first
+  if (c.il[0]) rec.il = [+(c.il[1] / c.il[0]).toFixed(1), Math.round(c.il[2]), c.il[3] ? +(c.il[4] / c.il[3]).toFixed(1) : 0];   // key presses: typical and worst ms from the key going down to the game acting on it, and typical ms from there to the next frame drawn
   if (c.pzN) rec.pz = [c.pzN, Math.round(c.pzT / 1000)];          // pauses, and seconds spent paused
   if (c.rt >= 0) rec.rt = c.rt;                                     // seconds between the last run ending and this one starting
   if (qScale < 1) rec.q = +qScale.toFixed(2);
@@ -596,26 +630,43 @@ function telEnd(res) {
   telLast = { m: rec.m, at: performance.now() };
   lastRun = c.cut ? null : Object.assign({}, rec, { tr: c.tr });   // whole, in case it goes on a leaderboard
   tel.log.push(rec); if (tel.log.length > 400) tel.log.splice(0, tel.log.length - 400);
-  telSession(); saveTel(); telSync(); telSend(false);
+  telSession(); saveTel(); telSync(); keepBest(); telSoon();
 }
 // Send what is new to the relay: at most every 30 seconds, and once more when the page is put away.
+// Sends what is new to the relay. last: true when the page is being hidden (do not wait for the half-minute spacing),
+// 'bye' when it is being closed (send the trail even if switching tabs is all that happened since), 'again' for a
+// send that failed and is being repeated.
+// A send that fails is tried again later, and the same news is never sent twice at once.
 function telSend(last) {
   if (!relayOn() || !telSess) return;
-  const s = telSess, fresh = tel.log.filter(r => r.s === SID && r.i >= relayAck), marks = s.ev.length + Object.keys(s.fb).length + Object.keys(s.fun || {}).length + (s.notes ? s.notes.length : 0);
-  if (!fresh.length && marks === relayEv) return;
+  const s = telSess, fresh = tel.log.filter(r => r.s === SID && r.i >= relayAck), marks = evNews + Object.keys(s.fb).length + Object.keys(s.fun || {}).length + (s.notes ? s.notes.length : 0);
+  const bye = last === 'bye' && s.ev.length !== relayLen;
+  if (!fresh.length && marks === relayEv && !bye) return;
   if (!fresh.length && !(s.notes && s.notes.length) && !Object.keys(s.fb).length && performance.now() - T0 < 5000) return;   // opened and gone at once: not a visit
   const now = Date.now(), wait = 30000 - (now - relayAt);
   if (!last && wait > 0) { if (!relayTimer) relayTimer = setTimeout(() => { relayTimer = 0; telSend(false); }, wait + 100); return; }
+  const key = (fresh.length ? fresh[fresh.length - 1].i : -1) + ':' + marks + ':' + (bye ? s.ev.length : 0);
+  if (relayBusy) { if (key === relayKey) return; if (!last) { relayAgain = true; return; } }
   relayAt = now; telSession();
   let take = fresh.slice(0, 60), body;
   for (;;) { body = JSON.stringify({ v: 1, session: s, attempts: take }); if (body.length <= 60000 || take.length <= 1) break; take = take.slice(0, take.length >> 1); }
-  const ack = take.length ? take[take.length - 1].i + 1 : relayAck;
+  const ack = take.length ? take[take.length - 1].i + 1 : relayAck, len = s.ev.length;
+  relayBusy = true; relayKey = key;
+  const after = () => { relayBusy = false; if (relayAgain) { relayAgain = false; telSend(false); } };
+  const again = () => { relayFails++; if (relayFails <= 6 && !relayTimer) relayTimer = setTimeout(() => { relayTimer = 0; telSend('again'); }, [15, 30, 60, 120, 240, 480][relayFails - 1] * 1000); };
   // plain text keeps this a simple request; keepalive lets the last one finish after the page is gone
   try {
     fetch(RELAY, { method: 'POST', body, keepalive: true, headers: { 'Content-Type': 'text/plain;charset=UTF-8' } })
-      .then(r => { if (r.ok) { relayAck = Math.max(relayAck, ack); relayEv = marks; tel.ack[SID] = relayAck; tel.ackn[SID] = s.notes ? s.notes.length : 0; saveTel(); } else if (r.status !== 429 && r.status !== 502) relayDead = true; }, () => {});
-  } catch (e) {}
+      .then(r => {
+        if (r.ok) { relayAck = Math.max(relayAck, ack); relayEv = marks; relayLen = len; relayFails = 0; tel.ack[SID] = relayAck; tel.ackn[SID] = s.notes ? s.notes.length : 0; saveTel(); }
+        else if (r.status === 429 || r.status === 502) again();   // busy, or too many at once: it keeps
+        else relayDead = true;
+        after();
+      }, () => { again(); after(); });
+  } catch (e) { relayBusy = false; }
 }
+// a run has just ended: send its record in a moment, so it is not racing the run's score, which goes at once
+const telSoon = () => { if (!telLater) telLater = setTimeout(() => { telLater = 0; telSend(false); }, 1500); };
 // Runs an earlier visit recorded but could not send (the tab was closed first, or the network dropped): send them now.
 function telCatchUp() {
   if (!relayOn()) return;
@@ -833,22 +884,25 @@ function attach() {
       const was = pace.boost; if (name === 'risk') pace.risk(); else pace.spark(1); kick = 1;
       if (pace.boost > was && pace.boost >= PACE.boostMax) toast('Top speed');
     }
-    if (name === 'shield') toast('Shield');
-    else if (name === 'slow') { pace.slow(); toast('Slow-mo'); }
+    if (name === 'shield') toast(firstFew('i-shield', 2) ? 'Shield: saves you from one hit' : 'Shield');
+    else if (name === 'slow') { pace.slow(); toast(firstFew('i-slow', 2) ? 'Slow-mo: time runs slower for a moment' : 'Slow-mo'); }
+    else if (name === 'risk' && mode !== 'tutorial' && firstFew('i-risk', 3)) toast('Red spark: 300 points, extra top speed');
     else if (name === 'shieldhit') { toast('Shield used'); if (!calm()) shake = .6; burst(10); }
     else if (name === 'crash') burst(16);
   };
 }
+// true the first n times it is asked about k (kept with the scores), so a thing is explained while it is new and not after
+function firstFew(k, n) { const c = stats.know[k] | 0; if (c >= n) return false; stats.know[k] = c + 1; return true; }
 function burst(n) { for (let i = 0; i < n; i++) { const a = Math.random() * 6.283, v = 140 + Math.random() * 420; shards.push({ x: ballAt.x, y: ballAt.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 160, r: Math.random() * 6.283, s: ballAt.R * (.25 + Math.random() * .45), t: 0 }); } }
 function startAttract() {
   hue0 = Math.random() * 360; palZ = -99;
   track = new Track((Math.random() * 1e9) | 0, null); attach(); bot = new Bot(track, .5, false);
 }
 function modeName() { return mode === 'endless' ? 'Endless' : mode === 'daily' ? 'Daily' : mode === 'tutorial' ? 'How to play' : LEVELS[mode].name; }
-function hidePanels() { for (const id of ['menu', 'pausePanel', 'failPanel', 'winPanel', 'scoreSheet', 'ctrlSheet', 'briefSheet', 'tuneSheet', 'dataSheet', 'noteSheet', 'boardSheet']) $(id).hidden = true; overlay = null; }
+function hidePanels() { for (const id of ['menu', 'pausePanel', 'failPanel', 'winPanel', 'scoreSheet', 'ctrlSheet', 'briefSheet', 'tuneSheet', 'dataSheet', 'noteSheet', 'boardSheet', 'guideSheet']) $(id).hidden = true; overlay = null; }
 function begin(first, cp) {
-  telEnd('restart'); attach(); bot = null; state = 'play'; telStart(cp);
-  pace = new Pace(track, mode === 'tutorial' ? 1 : opts.speed * tune.pace, mode === 'tutorial'); coachI = 0; coachOn = null; perfFlash = 0; lastPerf = -1;
+  telEnd('restart'); attach(); bot = null; state = 'play'; telStart(cp); for (const k in postMsg) delete postMsg[k];
+  pace = new Pace(track, mode === 'tutorial' ? 1 : opts.speed * tune.pace, mode === 'tutorial'); coachI = 0; coachOn = null; rkI = 0; rkOn = null; rkSeen = null; perfFlash = 0; lastPerf = -1;
   if (cp) { runner.z = cp.z; runner.lane = runner.from = runner.cam = cp.lane; } shards.length = 0; shake = 0; flash = 0; lastPc = lastSp = lastTm = '';
   lastProg = ''; lastPts = ''; lastBoost = -1; lastFlags = -1; boostVis = 0; kick = 0; runT = 0; tutI = 0; tutNote = 0; frozen = false; lastZone = cp ? (track.Z[Math.floor(cp.z)] || 0) : 0; tries++;
   hidePanels(); $('tip').hidden = true;
@@ -901,6 +955,68 @@ const TYPES = {   // name, what to do, which move, picture
   sprint: ['Sprint zones', 'Bright floor: everything speeds up, with long gaps to clear.', null, svg('<rect x="4" y="14" width="56" height="12" rx="1" fill="#fff" opacity=".85"/><path d="M14 9l9 11-9 11M28 9l9 11-9 11M42 9l9 11-9 11" fill="none" stroke="var(--hazard)" stroke-width="3"/>')],
   slow: ['Slow zones', 'Dark floor: slower, single file, with quick turns one after another.', 'turn', svg('<path d="M4 30H16V20H28V30H40V20H52V10H60" fill="none" stroke="var(--tile)" stroke-width="7" opacity=".6"/><path d="M6 30H16V20H28V30H40V20H52V10H58" ' + PATH + '/>')]
 };
+// pictures of the things that are picked up or painted on the floor, drawn to match the game
+const IC = {
+  spark: svg('<path d="M32 8l9 12-9 12-9-12z" fill="#fff"/>'),
+  high: svg('<circle cx="32" cy="20" r="16" fill="none" stroke="#fff" stroke-width="2"/><path d="M32 11l7 9-7 9-7-9z" fill="#fff"/>'),
+  risk: svg('<circle cx="32" cy="20" r="17" fill="none" stroke="#ff3854" stroke-width="2.4"/><path d="M32 6l10 14-10 14-10-14z" fill="#ff3854"/><path d="M32 14l4.4 6-4.4 6-4.4-6z" fill="#fff"/>'),
+  shield: svg('<circle cx="32" cy="20" r="15" fill="rgba(0,0,0,.35)" stroke="#7fe7ff" stroke-width="3"/><path d="M25 13h14v8l-7 7-7-7z" fill="none" stroke="#7fe7ff" stroke-width="3" stroke-linejoin="round"/>'),
+  slow: svg('<circle cx="32" cy="20" r="15" fill="rgba(0,0,0,.35)" stroke="#d9b8ff" stroke-width="3"/><path d="M32 11v9l7 4" fill="none" stroke="#d9b8ff" stroke-width="3" stroke-linecap="round"/>'),
+  perfect: svg('<circle cx="32" cy="20" r="6" fill="#fff"/><circle cx="32" cy="20" r="13" fill="none" stroke="#fff" stroke-width="2.4" opacity=".75"/>'),
+  strip: svg('<rect x="4" y="24" width="56" height="10" rx="1" ' + FL + '/><rect x="14" y="8" width="20" height="10" fill="var(--tile)"/><rect x="14" y="8" width="20" height="10" fill="#ff3854" opacity=".35"/><rect x="34" y="8" width="14" height="10" fill="#ff3854"/><rect x="46.5" y="6" width="3" height="14" fill="#fff"/><path d="M12 29Q16 13 22 13H40Q44 13 50 29" ' + PATH + '/><circle cx="8" cy="29" ' + BALL + '/>'),
+  mark: svg('<rect x="4" y="12" width="56" height="16" rx="1" ' + FL + '/><rect x="26" y="12" width="14" height="16" fill="var(--hazard)" opacity=".55"/>'),
+  best: svg('<polygon points="44.8,5 55.6,15.8 55.6,31 44.8,37 19.2,37 8.4,31 8.4,15.8 19.2,5" transform="translate(0 -1)" fill="none" stroke="#fff" stroke-width="3"/>'),
+  finish: svg('<rect x="4" y="12" width="56" height="16" fill="#fff"/><path d="M4 12h8v8h-8zM20 12h8v8h-8zM36 12h8v8h-8zM52 12h8v8h-8zM12 20h8v8h-8zM28 20h8v8h-8zM44 20h8v8h-8z" fill="rgb(var(--bgc))"/>')
+};
+// a card like the obstacle cards: picture, name, what it means, and the keys if it takes a move
+function info(pic, name, text, move, cls) {
+  const el = document.createElement('div'); el.className = 'card' + (cls ? ' ' + cls : '');
+  el.innerHTML = pic + '<div><b></b><span></span></div>';
+  el.querySelector('b').textContent = name; const sp = el.querySelector('span'); sp.textContent = text + ' ';
+  for (const k of moveKeys(move)) { const kb = document.createElement('kbd'); kb.textContent = k; sp.appendChild(kb); }
+  return el;
+}
+const pct = x => Math.round(x * 100) + '%';
+function buildGuide() {
+  const fill = (id, list) => { const box = $(id); box.textContent = ''; for (const c of list) box.appendChild(c); };
+  fill('gdMoves', [
+    info(TYPES.turns[3], 'Turn', 'Hop one lane to the side. The tunnel turns with you, so your floor is always at the bottom.', 'turn'),
+    info(TYPES.bars[3], 'Jump', 'Over low bars and short gaps, and through sparks that hang in the air.', 'jump'),
+    info(TYPES.overhead[3], 'Flip', 'Cross to the wall straight overhead: for when your floor ends, or your whole side is blocked.', 'flip')]);
+  $('gdAir').textContent = 'Running off the floor ends the run, and so does touching a block, bar or beam: those are all drawn in one colour that stands out from the floor, a different one in each level. You cannot act in the air: a press made during a jump, flip or hop is remembered and happens the moment you land, so press as early as you like, and do not jump when there is nothing to jump.'
+    + (touchSeen ? ' Touch: swipe sideways to turn, up to flip, down to jump, or use the buttons.' : ' On a touch screen: swipe sideways to turn, up to flip, down to jump.');
+  fill('gdItems', [
+    info(IC.spark, 'Spark', '100 points and a little more speed. They mark the best line through the level.'),
+    info(IC.high, 'Ringed spark', 'Hangs in the air over a bar or a gap. Jump through it: 200 points.', 'jump'),
+    info(IC.risk, 'Red spark', 'Optional, on a strip off the safe line. 300 points, and speed beyond the usual top speed. Three at a time.'),
+    info(IC.shield, 'Shield', 'Saves you from one hit. A blue ring shows around the ball while you have it. It does not stop a fall.'),
+    info(IC.slow, 'Slow-mo', 'Time runs slower for ' + PACE.slowSecs + ' seconds. Easier, but the clock keeps going, so it costs time.')]);
+  fill('gdFloor', [
+    info(IC.strip, 'Red strip', 'Where red sparks sit: beside the floor (turn out to it) or overhead (flip to it). It turns full red after the last spark and ends at the white bar. Be back on the main floor by then.'),
+    info(IC.mark, 'Marked tile', 'A sliding block or a swinging bar is about to stop here. Be on another tile.'),
+    card('pads', false), card('sprint', false), card('slow', false),
+    info(IC.best, 'Bright ring', 'How far you have got before on this level.'),
+    info(IC.finish, 'Chequered floor', 'The finish line.')]);
+  fill('gdObs', ORDER.filter(t => t !== 'pads' && t !== 'sprint' && t !== 'slow').map(t => card(t, false)));
+  const hudRows = [
+    ['37%  or  412 m', 'How far you are: percent of a level, metres in Endless. The bar across the very top shows the same; its white tick is your best.'],
+    ['\u25C6 12/40', 'Sparks collected, out of how many the level has.'],
+    ['21.4 s', 'The run clock. Levels and the daily course are ranked by it.'],
+    ['4,200 pts', 'Points so far.'],
+    ['+18% SPEED', 'How much faster than the starting pace you are going, from sparks and perfects.'],
+    ['PERFECT \u00D73', 'Perfect presses in a row.'],
+    ['SHIELD, SLOW-MO', 'You are holding a shield; time is slowed.'],
+    ['PRACTICE, TUNED', 'A practice option or changed tuning is on: this run is not scored.']];
+  const tb = $('gdHud'); tb.textContent = ''; for (const [a, b] of hudRows) { const tr = document.createElement('tr'); cell(tr, a); cell(tr, b); tb.appendChild(tr); }
+  const pts = [
+    ['Sparks make you faster.', ' Each adds a little speed, most of it from the first few, up to +' + pct(PACE.boostMax) + '. Faster is how you beat par and other players.'],
+    ['A perfect is a press at the last moment', ' before it would be too late. It gives a burst of speed that fades over ' + PACE.surgeSecs + ' seconds and is stronger with each perfect in a row, plus 50 points.'],
+    ['Red sparks go past the limit.', ' Each adds ' + pct(PACE.risk) + ' speed on top of the usual top speed, for the rest of the run.'],
+    ['Points.', ' Sparks 100, ringed 200, red 300. Perfects 50. In Endless, 10 a metre. In a level: 10 a percent, 1,000 for clearing it, 100 for every second under par, 1,000 for taking every spark.'],
+    ['Leaderboard.', ' Levels and the daily course rank the fastest clear. Endless ranks how far you got on the day\u2019s course, which is the same for everyone; points settle a tie. Runs are played back and checked before they are listed.']];
+  const ul = $('gdScore'); ul.textContent = ''; for (const [a, b] of pts) { const li = document.createElement('li'), st = document.createElement('b'); st.textContent = a; li.appendChild(st); li.appendChild(document.createTextNode(b)); ul.appendChild(li); }
+}
+function openGuide() { if (state === 'play') setPause(true); buildGuide(); openSheet('guideSheet'); }
 const typesOf = mix => { const has = {}; for (const k in mix) if (GROUP[k]) has[GROUP[k]] = 1; return ORDER.filter(t => has[t]); };
 let pending = null;
 function moveKeys(m) { return m === 'turn' ? [labelFor('left'), labelFor('right')] : m ? [labelFor(m)] : []; }
@@ -933,14 +1049,17 @@ function showBrief(m, tr, song) {
   $('brAlsoH').hidden = !old.length; const also = $('brAlso'); also.textContent = ''; also.className = fresh.length ? 'chips' : 'cards';
   for (const t of old) { if (fresh.length) { const c = document.createElement('span'); c.className = 'chip'; c.textContent = TYPES[t][0]; also.appendChild(c); } else also.appendChild(card(t, false)); }
   let nSh = 0, nSl = 0; if (tr.end !== Infinity) for (const r in tr.I) { if (tr.I[r].t === 'shield') nSh++; else if (tr.I[r].t === 'slow') nSl++; }
-  $('brNote').textContent = 'Sparks mark the line: over each jump and past each opening. Each is worth 100 points (200 in the air) and adds speed, most of it from the first few, up to +' + Math.round(PACE.boostMax * 100) + '%. That is how you beat par.'
-    + ' A press at the last moment is a perfect: a burst of speed that grows with each one in a row.'
-    + (tr.nRisk || tr.end === Infinity ? ' Red sparks sit off the safe line: three times the points, and speed beyond the usual top speed, if you get back before the strip ends.' : '')
-    + (nSh ? ' ' + (nSh > 1 ? nSh + ' shields sit' : 'A shield sits') + ' on your route before the walls.' : '')
-    + (nSl ? ' Slow-mo sits one lane off the route before ' + (nSl > 1 ? 'the rhythm sections' : 'a rhythm section') + ': it helps, but it costs time.' : '')
-    + (tr.end === Infinity ? ' Shields and slow-mo turn up before the sections they suit.' : '');
+  let nHigh = 0; if (tr.end !== Infinity) for (const r in tr.I) if (tr.I[r].t === 'high') nHigh++;
+  const note = $('brNote'); note.textContent = '';
+  const row = (pic, name, text) => { const a = document.createElement('span'), b = document.createElement('span'), st = document.createElement('b'); a.innerHTML = pic; st.textContent = name; b.appendChild(st); b.appendChild(document.createTextNode(text)); note.appendChild(a); note.appendChild(b); };
+  row(IC.spark, 'Sparks', ' mark the line. 100 points each, and each makes you a little faster, up to +' + pct(PACE.boostMax) + '. That is how you beat par.');
+  if (nHigh || tr.end === Infinity) row(IC.high, 'Ringed sparks', ' hang in the air: jump through them. 200 points.');
+  if (tr.nRisk || tr.end === Infinity) row(IC.risk, 'Red sparks', ' are optional, on a red strip off the safe line: 300 points and speed beyond the usual top speed. Get back before the strip ends at the white bar.');
+  row(IC.perfect, 'Perfect:', ' press at the last moment for a burst of speed. Each one in a row is stronger.');
+  if (nSh || tr.end === Infinity) row(IC.shield, nSh > 1 ? nSh + ' shields' : 'A shield', tr.end === Infinity ? ' turns up now and then: it saves you from one hit.' : (nSh > 1 ? ' sit' : ' sits') + ' on your route before the walls: each saves you from one hit.');
+  if (nSl || tr.end === Infinity) row(IC.slow, 'Slow-mo', tr.end === Infinity ? ' turns up before the fiddly sections: time runs slower for a moment.' : ' sits one lane off the route before ' + (nSl > 1 ? 'the rhythm sections' : 'a rhythm section') + ': it helps, but it costs time.');
   $('brKey').textContent = (practice() ? 'Practice options are on: this run will not be recorded. ' : '') + (touchSeen ? '' : 'Press ' + labelFor('jump') + ' or Enter to start, Esc to go back.');
-  $('briefSheet').hidden = false; $('briefSheet').scrollTop = 0; $('btnGo').focus(); syncCss(true);
+  $('briefSheet').hidden = false; $('btnGo').focus({ preventScroll: true }); $('briefSheet').scrollTop = 0; syncCss(true);
 }
 function go() { if (!pending) return; const p = pending; pending = null; launchRun(p.m, p.tr, p.song); }
 function enter(m, tr, song, skip) { if (skip || opts.brief === false) launchRun(m, tr, song); else showBrief(m, tr, song); }
@@ -1016,7 +1135,7 @@ function onWin() {
   $('winTitle').textContent = tut ? 'You are set.' : lv && mode === LEVELS.length - 1 ? 'All eight. Done.' : 'Through.';
   $('winStat').textContent = tut ? '' : [fmtN(res.total) + ' points' + (res.newScore ? ' (new best)' : ''), fmtT(runT) + (res.newTime ? ' (new best)' : '') + ', par ' + fmtT(parOf(track)), sparkText() + (perfect ? ', all of them' : ''), (pace.perfects ? pace.perfects + ' perfect' + (pace.best > 1 ? ' (best run of ' + pace.best + ')' : '') : 'no perfects'), 'attempt ' + tries].join('  ·  ');
   $('winParts').textContent = tut ? '' : res.parts.filter(p => p[1] > 0).map(p => p[0] + ' ' + fmtN(p[1])).join('  +  ');
-  $('winText').textContent = tut ? 'That is every move. Key bindings and a practice speed are under Controls & options.'
+  $('winText').textContent = tut ? 'That is every move. Legend, on the menu and when paused, shows every item and marking. Key bindings and a practice speed are under Controls & options.'
     : practice() ? 'Cleared in practice: the next level unlocks, but the score is not recorded.'
     : lv && mode < LEVELS.length - 1 ? LEVELS[mode + 1].name + ' is unlocked.' : mode === 'daily' ? 'Daily cleared. Streak: ' + (stats.daily.streak || 1) + '.' : '';
   $('btnNext').hidden = !(tut || (lv && mode < LEVELS.length - 1));
@@ -1035,6 +1154,46 @@ function setPause(p) {
   else if (!p && state === 'pause') { hidePanels(); state = 'play'; if (telCur && pauseAt) { telCur.pzT += performance.now() - pauseAt; pauseAt = 0; } Snd.wake(); if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); }
 }
 
+// ---------- risk routes ----------
+// The optional strips the red sparks sit on, worked out from the course: which lane, which rows, where the way out is
+// taken and where the strip ends. Used to draw the strip so its end can be seen, and for the reminder below.
+function riskMap(tr) {
+  const m = tr._rk || (tr._rk = { i: 0, rows: {}, list: [], out: [], home: [] }), ev = tr.events;
+  for (; m.i < ev.length; m.i++) {
+    const e = ev[m.i]; if (!e.opt || (e.kind !== 'riskFar' && e.kind !== 'riskSide')) continue;
+    // a route's events come as the presses out (all at nearly the same place), then as many presses home
+    if (!m.out.length || (!m.home.length && e.z0 - m.out[0].e.z0 < .5)) { m.out.push({ e, i: m.i }); continue; }
+    m.home.push({ e, i: m.i }); if (m.home.length < m.out.length) continue;
+    const o = m.out[0].e, h = m.home[0].e, b = Math.round(h.z1 - .6); let lane = -1;
+    for (let r = Math.floor(h.z0); r >= Math.floor(h.z0) - 4 && lane < 0; r--) if (tr.I[r] && tr.I[r].t === 'risk') lane = tr.I[r].lane;
+    if (lane >= 0) {
+      const st = { i0: m.out[0].i, n: m.out.length, far: e.kind === 'riskFar', key: o.key, home: h.key, z0: o.z0, z1: o.z1, back: h.z0, b, lane, first: b };
+      for (let r = b; r >= Math.floor(o.z0) && (tr.S[r] & (1 << lane)); r--) { m.rows[r] = st; st.first = r; }
+      m.list.push(st);
+    }
+    m.out = []; m.home = [];
+  }
+  return m;
+}
+// The first few times a risk route comes up: say that it is optional and how to take it, then, once on it, how to get back.
+let rkI = 0, rkOn = null, rkSeen = null;
+function riskTip() {
+  const list = riskMap(track).list, z = runner.z;
+  while (rkI < list.length && list[rkI].b + 1.2 < z) rkI++;
+  const st = list[rkI]; if (!st) return '';
+  const did = st.far ? 'riskFar' : 'riskSide', shown = did + 'Tip';   // counted for each kind: the strip beside the floor and the one overhead are different moves
+  if ((stats.know[did] | 0) >= 2 || (stats.know[shown] | 0) >= 6) return '';
+  const keys = (k, n) => { let h = ''; for (let i = 0; i < n; i++) h += '<kbd>' + keyHtml(k) + '</kbd>'; return h; };
+  const on = (runner.lane & 7) === st.lane && z >= st.first - 2;
+  if (on) { rkOn = st; return 'Back before the red strip ends: ' + keys(st.home, st.n) + (st.far ? ' flip' : ' turn'); }
+  if (rkOn === st) { rkOn = null; if (!st.done) { st.done = 1; stats.know[did] = (stats.know[did] | 0) + 1; } return ''; }   // out and back: that is the whole move
+  if (!st.done && z >= st.z0 - track.speedAt(z) * 1.6 && z <= st.z1 + .4) {
+    if (rkSeen !== st) { rkSeen = st; stats.know[shown] = (stats.know[shown] | 0) + 1; }
+    return 'Red sparks, optional: ' + keys(st.key, st.n) + (st.far ? ' flip up to the strip' : ' turn out to the strip');
+  }
+  return '';
+}
+
 // ---------- tutorial: the run freezes at each obstacle until the right key is pressed ----------
 const keyHtml = k => touchSeen ? ({ L: '\u25C0', R: '\u25B6', F: 'Flip', J: 'Jump' })[k] : esc(labelFor(actionForMove(k)));
 const MOVE = { L: 'turn', R: 'turn', F: 'flip', J: 'jump' };
@@ -1043,9 +1202,11 @@ function coach() {
   const ev = track.events, z = runner.z;
   while (coachI < ev.length && (ev[coachI].opt || ev[coachI].z1 + 1 < z || pace.hit[coachI])) coachI++;
   const e = ev[coachI], g = e && GROUP[e.kind], T = g && TYPES[g], tip = $('tip');
-  if (T && T[2] && (stats.know[g] | 0) < 2 && z >= e.z0 - track.speedAt(z) * 1.5) {
-    if (coachOn !== e) { coachOn = e; tip.innerHTML = esc(T[0]) + ': <kbd>' + keyHtml(e.key) + '</kbd> ' + MOVE[e.key]; tip.className = 'tip coach'; tip.hidden = false; }
-  } else if (coachOn) { coachOn = null; tip.hidden = true; }
+  let key = null, html = '';
+  if (T && T[2] && (stats.know[g] | 0) < 2 && z >= e.z0 - track.speedAt(z) * 1.5) { key = e; html = esc(T[0]) + ': <kbd>' + keyHtml(e.key) + '</kbd> ' + MOVE[e.key]; }
+  else { html = riskTip(); key = html || null; }
+  if (key) { if (coachOn !== key) { coachOn = key; tip.innerHTML = html; tip.className = 'tip coach'; tip.hidden = false; } }
+  else if (coachOn) { coachOn = null; tip.hidden = true; }
 }
 function tipHtml(e) {
   if (touchSeen) return esc(e.tip.replace('Press {K}', 'Tap {K}').replace('press {K}', 'tap {K}')).replace('{K}', '<kbd>' + ({ L: '\u25C0', R: '\u25B6', F: 'Flip', J: 'Jump' })[e.key] + '</kbd>');
@@ -1103,7 +1264,7 @@ function resize() {
 const streaks = [];
 for (let i = 0; i < 44; i++) streaks.push({ a: Math.random() * 6.283, r: 1.8 + Math.random() * 2.8, z: Math.random() * VIEW, l: .6 + Math.random() * 1.6 });
 const mixc = (c, d, t, k) => [c[0] * k + (d[0] - c[0] * k) * t, c[1] * k + (d[1] - c[1] * k) * t, c[2] * k + (d[2] - c[2] * k) * t];
-const WHITE = [255, 255, 255];
+const WHITE = [255, 255, 255], RISK = [255, 56, 84], RISKCSS = 'rgb(255,56,84)';   // red sparks and their strip: the same red in every level, whatever its palette
 // Colour strings are cached by value (6 bits a channel), so the draw loop creates no garbage once warm.
 const CSSTAB = new Array(262144);
 function css(r, g, b) {
@@ -1156,9 +1317,9 @@ function drawItem(it, dm, fog) {
   const x = cx + PT[0] * s, y = cy + (PT[1] - CAMY) * s, u = s * .075;
   ctx.globalAlpha = 1 - fog * .85;
   if (risk) {   // a red spark: bigger, in the hazard colour, with a white heart
-    const q = u * 1.5; ctx.fillStyle = rgb(pal.hz); ctx.beginPath(); ctx.moveTo(x, y - q * 1.35); ctx.lineTo(x + q, y); ctx.lineTo(x, y + q * 1.35); ctx.lineTo(x - q, y); ctx.closePath(); ctx.fill();
+    const q = u * 1.5; ctx.fillStyle = RISKCSS; ctx.beginPath(); ctx.moveTo(x, y - q * 1.35); ctx.lineTo(x + q, y); ctx.lineTo(x, y + q * 1.35); ctx.lineTo(x - q, y); ctx.closePath(); ctx.fill();
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(x, y - q * .55); ctx.lineTo(x + q * .42, y); ctx.lineTo(x, y + q * .55); ctx.lineTo(x - q * .42, y); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = rgb(pal.hz); ctx.lineWidth = Math.max(1, u * .3); ctx.beginPath(); ctx.arc(x, y, q * 1.9, 0, 6.2832); ctx.stroke();
+    ctx.strokeStyle = RISKCSS; ctx.lineWidth = Math.max(1, u * .3); ctx.beginPath(); ctx.arc(x, y, q * 1.9, 0, 6.2832); ctx.stroke();
   } else if (it.t === 'spark' || high) {
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(x, y - u * 1.35); ctx.lineTo(x + u, y); ctx.lineTo(x, y + u * 1.35); ctx.lineTo(x - u, y); ctx.closePath(); ctx.fill();
     if (high) { ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, u * .28); ctx.beginPath(); ctx.arc(x, y, u * 2.1, 0, 6.2832); ctx.stroke(); }
@@ -1233,6 +1394,7 @@ function render(fdt, lead) {
   const far = PC.far, lit = 1 + .09 * pulse;
   const j0 = Math.floor(z - CAMBACK + NEAR / RL), j1 = Math.floor(z) + VIEW, zb = Math.floor(z);
   track.cell(j1, 0);   // make sure the endless track is generated this far
+  const RKM = riskMap(track).rows;
   const rows = Math.min(track.end, track.S.length);
   const speed = track.speedAt(z), settle = Math.max(2.5, speed * .35), travel = speed * 1.1;
   ctx.lineWidth = 1; ctx.lineJoin = 'round';
@@ -1244,6 +1406,7 @@ function render(fdt, lead) {
       let fog = clamp((dn - 6) / (VIEW * RL - 4), 0, 1); fog = fog * (2 - fog);
       const S = ok ? track.S[j] : 255, B = ok ? track.B[j] : 0, Hh = ok ? track.H[j] : 0, PD = ok ? track.PD[j] : 0, zone = ok ? track.Z[j] : 0;
       const Sp = j >= 1 && j - 1 < rows ? track.S[j - 1] : 255, fin = j >= track.end, G = ok ? track.G[j] : null;
+      const RK = ok ? RKM[j] : null;   // a risk strip runs through this row
       let mark = 0;   // lanes where a moving obstacle will come to rest
       if (G) { if (G.t === 'sweep') for (const it of G.items) mark |= 1 << (it.lane & 7); else for (const a of G.arms) mark |= (1 << (a & 7)) | (1 << ((a + 4) & 7)); }
       if (j % 4 === 0 || j === bestRow) {   // tunnel ribs; a brighter one marks your best distance
@@ -1264,6 +1427,7 @@ function render(fdt, lead) {
         let base = fin ? (((j + k) & 1) ? WHITE : pal.bg) : pattern(pat, j, k) ? (zone === 1 ? PC.sprA : pal.a) : (zone === 1 ? PC.sprB : pal.b);
         if (PD & kb) base = WHITE;
         if (mark & kb) base = mixc(base, pal.hz, .55, 1);
+        const rk = RK && k === RK.lane; if (rk) base = mixc(base, RISK, j > RK.back ? .85 : .32, 1);   // the strip is tinted; after its last spark it goes full red: time to leave
         if (!(Sp & kb)) {   // slab edge facing the camera
           ctx.fillStyle = tint(base, far, fog, shade[k] * .42 * dark);
           quad(xa, ya, xb, yb, cx + cxr[k1] * (1 + TH) * sN, cy + (cyr[k1] * (1 + TH) - CAMY) * sN, cx + cxr[k] * (1 + TH) * sN, cy + (cyr[k] * (1 + TH) - CAMY) * sN);
@@ -1271,6 +1435,10 @@ function render(fdt, lead) {
         }
         ctx.fillStyle = tint(base, far, fog, Math.min(1, shade[k] * lit) * dark);
         quad(xa, ya, xb, yb, xc, yc, xd, yd); ctx.fill();
+        if (rk && j === RK.b) {   // a white bar across the strip's last tile: it ends here
+          ctx.strokeStyle = '#fff'; ctx.globalAlpha = 1 - fog * .8; ctx.lineWidth = Math.max(2, Math.hypot(xc - xd, yc - yd) * .1);
+          ctx.beginPath(); ctx.moveTo(xd, yd); ctx.lineTo(xc, yc); ctx.stroke(); ctx.globalAlpha = 1; ctx.lineWidth = 1;
+        }
         if (PD & kb) {   // launch pad: arrow pointing down the tunnel
           ctx.fillStyle = tint(pal.glow, far, fog, 1);
           ctx.beginPath(); ctx.moveTo(xa + (xb - xa) * .22, ya + (yb - ya) * .22); ctx.lineTo(xa + (xb - xa) * .78, ya + (yb - ya) * .78); ctx.lineTo((xc + xd) / 2, (yc + yd) / 2); ctx.closePath(); ctx.fill();
@@ -1387,7 +1555,7 @@ function toggleSound() { Snd.setMuted(!Snd.muted); soundLabel(); telEv(Snd.muted
 // ---------- scores sheet ----------
 let overlay = null, wipeArmed = false;
 function openSheet(id) { telEv('open:' + id.replace('Sheet', '')); overlay = id; $(id).hidden = false; $(id).scrollTop = 0; const b = $(id).querySelector('header button'); if (b) b.focus(); }
-function closeSheet() { if (!overlay) return; if (overlay === 'tuneSheet') return closeTune(false); $(overlay).hidden = true; overlay = null; listening = null; if (state === 'menu') buildMenu(); else if (state === 'pause') $('btnResume').focus(); }
+function closeSheet() { if (!overlay) return; if (overlay === 'tuneSheet') return closeTune(false); if (overlay === 'boardSheet' && stats.name) postAll(); $(overlay).hidden = true; overlay = null; listening = null; if (state === 'menu') buildMenu(); else if (state === 'pause') $('btnResume').focus(); else if (state === 'brief') $('btnGo').focus(); }
 function cell(tr, t, cls) { const td = document.createElement('td'); td.textContent = t; if (cls) td.className = cls; tr.appendChild(td); }
 function buildScores() {
   const tb = $('scoreBody'); tb.textContent = '';
@@ -1546,43 +1714,103 @@ function copyText(text, area, btn, label) {   // clipboard if allowed; otherwise
 // ---------- leaderboard ----------
 // A run that beats what this player has already posted is sent to the relay with its presses. It is played back on the
 // real engine before it is listed, so what the boards show is what the presses really give.
+// The best run not yet on its board is kept in this browser, whole, until the relay has taken it: it survives a missing
+// name, a busy relay, a dropped connection and a closed tab, and is sent again until it lands.
 let lastRun = null, boardsData = null, boardsAt = 0, boardSel = 'E';
 const fmtTime = t => t.toFixed(2) + ' s';
-// the board the run just finished belongs on, and its value there, or null if it does not go on one
-function boardFor() {
-  if (!relayOn() || !scored() || !lastRun || mode == null || !lastRun.tr || lastRun.pr * 2 !== lastRun.tr.length) return null;
-  let id = null, v = 0;
-  if (lastRun.res === 'win' && typeof mode === 'number') { id = 'L' + (mode + 1); v = lastRun.d; }
-  else if (lastRun.res === 'win' && mode === 'daily') { id = 'D' + today().key; v = lastRun.d; }
-  else if (mode === 'endless' && track.rankDay && lastRun.res !== 'win' && lastRun.z >= 30) { id = 'E' + track.rankDay; v = lastRun.z; }
-  if (!id) return null;
-  const was = stats.posted[id], far = id[0] === 'E';
-  if (was && was.cs === lastRun.cs && (far ? v < was.v || (v === was.v && lastRun.pts <= (was.pts | 0)) : v >= was.v)) return null;   // not better than what is already posted
-  return { id, v, far };
+const LEVEL_CS = [], levelCs = i => LEVEL_CS[i] || (LEVEL_CS[i] = new Track(LEVELS[i].seed, LEVELS[i]).checksum());
+// the board a run on the current course goes on, or null (a random Endless course and the tutorial have none)
+const modeBoard = () => typeof mode === 'number' ? 'L' + (mode + 1) : mode === 'daily' ? 'D' + today().key : mode === 'endless' && track && track.rankDay ? 'E' + track.rankDay : null;
+const boardLabel = id => id[0] === 'L' ? 'Level ' + (+id.slice(1)) : id[0] === 'D' ? 'Daily' : 'Endless';
+const showV = (id, v) => id[0] === 'E' ? fmtN(v) + ' m' : fmtTime(v);
+const beats = (far, v, pts, o) => far ? v > o.v || (v === o.v && pts > (o.pts | 0)) : v < o.v || (v === o.v && pts > (o.pts | 0));   // further, or faster; points settle a tie
+const postBusy = {}, postWhy = {}, postMsg = {}; let postTimer = 0, postFails = 0;
+// runs kept for a course that has since changed, or for a day that is over, are let go
+function prunePending() {
+  const t = today().key; let cut = false;
+  for (const id in stats.pending) {
+    const q = stats.pending[id], n = +id.slice(1) - 1;
+    if (!(q && q.run && (id[0] === 'L' ? LEVELS[n] && q.cs === levelCs(n) : id.slice(1) === t))) { delete stats.pending[id]; cut = true; }
+  }
+  if (cut) saveStats();
 }
+// a run has just ended: if it is this player's best on its board, keep it; post it at once if they have a name
+function keepBest() {
+  const run = lastRun, id = modeBoard();
+  if (!id || !run || !relayOn() || !scored() || !run.tr || run.pr * 2 !== run.tr.length) return;
+  const far = id[0] === 'E';
+  if (far ? !(run.res === 'fall' || run.res === 'crash') || run.z < 30 : run.res !== 'win') return;
+  const v = far ? run.z : run.d, pts = run.pts | 0, was = stats.posted[id], pen = stats.pending[id];
+  if ((was && was.cs === run.cs && !beats(far, v, pts, was)) || (pen && pen.cs === run.cs && !beats(far, v, pts, pen))) return;
+  stats.pending[id] = { v, pts, cs: run.cs, run }; postWhy[id] = ''; saveStats();
+  if (stats.name) postBest(id);
+}
+function postBest(id) {
+  const q = stats.pending[id];
+  if (!q || !stats.name || !relayOn() || postBusy[id]) return;
+  const name = stats.name; postBusy[id] = true; postUi();
+  // ok: it is filed. final: the relay will never take this run, so it is let go. Otherwise it keeps, and is sent again.
+  const end = (ok, why, final) => {
+    postBusy[id] = false;
+    if (ok) {
+      stats.posted[id] = { cs: q.cs, v: q.v, pts: q.pts }; if (stats.pending[id] === q) delete stats.pending[id];
+      postMsg[id] = 'Posted as ' + name + ': ' + showV(id, q.v) + '. It shows once it has been checked, in about a minute. ';
+      postWhy[id] = ''; postFails = 0; saveStats(); telEv('post:' + id); boardsAt = 0;
+      if (stats.pending[id]) postBest(id);   // a better run finished while this one was on its way
+    } else if (final) {
+      if (stats.pending[id] === q) delete stats.pending[id];
+      postMsg[id] = 'Could not post this run' + (why ? ': ' + why : '') + '.'; postWhy[id] = ''; saveStats(); telEv('postno:' + id);
+    } else {
+      postWhy[id] = why || 'no answer'; postFails++; telEv('postwait:' + id);
+      if (!postTimer && postFails <= 8) postTimer = setTimeout(() => { postTimer = 0; postAll(); }, [4, 10, 25, 60, 120, 300, 600, 900][postFails - 1] * 1000);
+    }
+    postUi();
+  };
+  try {
+    fetch(relayUrl('score'), { method: 'POST', body: JSON.stringify({ v: 1, board: id, name, pid: tel.pid, core: CORE_ID, run: q.run, test: location.hash === '#test' || undefined }), headers: { 'Content-Type': 'text/plain;charset=UTF-8' } })
+      .then(r => r.ok ? end(true) : r.json().then(j => (j && j.error) || '', () => '').then(why => end(false, why, r.status >= 400 && r.status < 500 && r.status !== 408 && r.status !== 429)), () => end(false, 'no connection'));
+  } catch (e) { end(false, ''); }
+}
+function postAll() { prunePending(); for (const id in stats.pending) postBest(id); }
+// redraw whatever is showing the state of a post, unless the player is in the middle of typing a name into it
+function postUi() {
+  if (!(document.activeElement && document.activeElement.id === 'postName')) { if (state === 'fail') postRow($('failPost')); else if (state === 'win') postRow($('winPost')); }
+  if (overlay === 'boardSheet') drawPending();
+}
+// the line on the result screen: where this course's best unposted run stands
 function postRow(el) {
   el.textContent = ''; el.hidden = true;
-  const b = boardFor(); if (!b) return;
-  el.hidden = false;
-  const send = () => {
-    el.textContent = 'Posting to the leaderboard as ' + stats.name + '…';
-    const ok = () => {
-      stats.posted[b.id] = { cs: lastRun.cs, v: b.v, pts: lastRun.pts | 0 }; saveStats(); telEv('post:' + b.id); boardsAt = 0;
-      el.textContent = 'Posted as ' + stats.name + (b.far ? ': ' + b.v + ' m. ' : ': ' + fmtTime(b.v) + '. ') + 'It shows once it has been checked, in about a minute. ';
-      const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'btn sm'; btn.textContent = 'Leaderboard'; btn.addEventListener('click', () => openBoard(b.id)); el.appendChild(btn);
-    };
-    const no = why => { el.textContent = 'Could not post this run' + (why ? ': ' + why : '') + '.'; };
-    try {
-      fetch(relayUrl('score'), { method: 'POST', body: JSON.stringify({ v: 1, board: b.id, name: stats.name, pid: tel.pid, core: CORE_ID, run: lastRun, test: location.hash === '#test' || undefined }), headers: { 'Content-Type': 'text/plain;charset=UTF-8' } })
-        .then(r => r.ok ? ok() : r.json().then(j => no(j && j.error), () => no('')), () => no('no connection'));
-    } catch (e) { no(''); }
+  const id = modeBoard(); if (!id || !relayUp()) return;
+  const q = stats.pending[id];
+  const say = (text, label, fn) => {
+    el.hidden = false; el.textContent = text; if (!label) return;
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'btn sm'; b.textContent = label; b.addEventListener('click', fn); el.appendChild(b);
   };
-  if (stats.name) return send();
-  const l = document.createElement('label'); l.textContent = (b.far ? b.v + ' m' : fmtTime(b.v)) + '. Put it on the leaderboard as '; l.htmlFor = 'postName';
-  const inp = document.createElement('input'); inp.id = 'postName'; inp.className = 'nm3'; inp.maxLength = 3; inp.autocomplete = 'off'; inp.spellcheck = false; inp.setAttribute('aria-label', 'Three letters or digits');
-  const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'btn sm'; btn.id = 'btnPost'; btn.textContent = 'Post';
-  btn.addEventListener('click', () => { const n = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3); if (!n) { inp.focus(); return; } stats.name = n; saveStats(); send(); });
-  el.appendChild(l); el.appendChild(inp); el.appendChild(btn);
+  if (!q) { if (postMsg[id]) say(postMsg[id], postMsg[id].indexOf('Posted') === 0 ? 'Leaderboard' : '', () => openBoard(id)); return; }
+  if (!stats.name) {   // no name yet: ask, on every result screen, until the run is posted or beaten
+    el.hidden = false;
+    const mine = lastRun && lastRun.s === q.run.s && lastRun.i === q.run.i;
+    const l = document.createElement('label'); l.htmlFor = 'postName';
+    l.textContent = mine ? showV(id, q.v) + '. Put it on the leaderboard as ' : 'Your best ' + (id[0] === 'L' ? 'clear' : 'today') + ', ' + showV(id, q.v) + ', is not on the leaderboard yet. Put it there as ';
+    const inp = document.createElement('input'); inp.id = 'postName'; inp.className = 'nm3'; inp.maxLength = 3; inp.autocomplete = 'off'; inp.spellcheck = false; inp.setAttribute('aria-label', 'Three letters or digits');
+    const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'btn sm'; btn.id = 'btnPost'; btn.textContent = 'Post';
+    btn.addEventListener('click', () => { const n = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3); if (!n) { inp.focus(); return; } stats.name = n; saveStats(); inp.blur(); postAll(); postUi(); });
+    el.appendChild(l); el.appendChild(inp); el.appendChild(btn);
+    return;
+  }
+  if (postBusy[id]) say('Posting ' + showV(id, q.v) + ' to the leaderboard as ' + stats.name + '\u2026');
+  else if (postWhy[id]) say('Not posted yet (' + postWhy[id] + '). Your ' + showV(id, q.v) + ' is kept and will be sent again. ', 'Try now', () => postBest(id));
+  else postBest(id);
+}
+// on the leaderboard sheet: runs still waiting to go up
+function drawPending() {
+  const el = $('boardPend'); el.textContent = ''; prunePending();
+  const ids = Object.keys(stats.pending); el.hidden = !ids.length || !relayUp(); if (el.hidden) return;
+  const list = ids.map(id => boardLabel(id) + ' ' + showV(id, stats.pending[id].v)).join(', '), busy = ids.some(id => postBusy[id]), why = ids.map(id => postWhy[id]).find(Boolean);
+  el.textContent = busy ? 'Posting: ' + list + '\u2026' : !stats.name ? 'Not on the boards yet: ' + list + '. Enter a name above, then ' : why ? 'Not posted yet (' + why + '): ' + list + '. It is kept and will be sent again. ' : 'Waiting to be posted: ' + list + '. ';
+  if (busy) return;
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'btn sm'; b.id = 'btnPostAll'; b.textContent = 'Post'; el.appendChild(b);
+  b.addEventListener('click', () => { if (!stats.name) { $('boardName').focus(); return; } postAll(); drawPending(); });
 }
 const BOARD_TABS = () => LEVELS.map((lv, i) => ['L' + (i + 1), pad2(i + 1)]).concat([['D', 'Daily'], ['E', 'Endless']]);
 function drawBoard() {
@@ -1604,15 +1832,20 @@ function drawBoard() {
   if (!relayUp()) line('—');
   else if (!rows) line(boardsData === false ? 'The boards could not be reached. Try again in a moment.' : 'Fetching…');
   else if (!rows.length) line('Nobody yet. ' + (far ? 'Play Endless to be first.' : 'Clear it to be first.'));
-  else rows.forEach((e, i) => {
-    const tr = document.createElement('tr'); if (e.p === tel.pid.slice(0, 6)) tr.className = 'me';
-    cell(tr, String(i + 1)); cell(tr, String(e.n)); cell(tr, far ? (e.m | 0) + ' m' : fmtTime(+e.t)); cell(tr, String(e.pf | 0)); cell(tr, fmtN(e.pts | 0)); body.appendChild(tr);
-  });
+  else {
+    const same = {}; for (const e of rows) same[e.n] = (same[e.n] || 0) + 1;   // names are not reserved: two players with the same one each get a short tag
+    rows.forEach((e, i) => {
+    const tr = document.createElement('tr'), me = e.p === tel.pid.slice(0, 6); if (me) tr.className = 'me';
+    cell(tr, String(i + 1)); cell(tr, String(e.n) + (same[e.n] > 1 ? ' \u00B7' + String(e.p).slice(0, 3) : '') + (me ? ' (you)' : '')); cell(tr, far ? (e.m | 0) + ' m' : fmtTime(+e.t)); cell(tr, String(e.pf | 0)); cell(tr, fmtN(e.pts | 0)); body.appendChild(tr);
+    });
+  }
   const mine = stats.posted[key];
-  $('boardNote').textContent = (mine ? 'Your best posted here: ' + (far ? mine.v + ' m' : fmtTime(mine.v)) + '. ' : '')
-    + 'Only a run that beats your own best is posted. Each one is played back from its presses before it is listed, which takes about a minute. A board starts again when its course changes.'
+  $('boardNote').textContent = (mine ? 'Your best posted here: ' + showV(key, mine.v) + '. ' : '')
+    + 'Only a run that beats your own best is posted. Each one is played back from its presses before it is listed, which takes about a minute, so a distance or time cannot be made up. '
+    + 'Each browser gets one row per board: changing your name relabels your later runs, it does not add a row. Names are not reserved, so two players can pick the same letters; when they do, a short code after the name tells them apart. A board starts again when its course changes.'
     + (tel.on ? '' : ' Recording is off, so runs are not posted: switch it on under Play data.');
   const nm = $('boardName'); if (document.activeElement !== nm) nm.value = stats.name;
+  drawPending();
 }
 function loadBoards() {
   if (!relayUp()) return;
@@ -1701,8 +1934,9 @@ function buildData() {
 }
 
 // ================= input =================
-function act(m, src) {   // m: 'L' | 'R' | 'F' | 'J'; src: 0 keyboard, 1 touch on the tunnel, 2 on-screen button, 3 mouse
+function act(m, src, ts) {   // m: 'L' | 'R' | 'F' | 'J'; src: 0 keyboard, 1 touch on the tunnel, 2 on-screen button, 3 mouse; ts: when the key or touch happened
   if (state !== 'play') return;
+  if (telCur && ts > 0) { const nowMs = performance.now(), d = nowMs - ts; if (d >= 0 && d < 2000) { const q = telCur.il; q[0]++; q[1] += d; if (d > q[2]) q[2] = d; if (telCur.iq.length < 8) telCur.iq.push(nowMs); } }
   if (mode === 'tutorial') {
     const e = track.events[tutI];
     const c = telCur; if (c) { c.pr++; c.inp[src | 0]++; }
@@ -1731,7 +1965,8 @@ window.addEventListener('keydown', e => {
   }
   if (listening) { e.preventDefault(); setBind(k); return; }
   if (overlay) { if (k === 'Escape' || (k === 't' && overlay === 'tuneSheet')) { e.preventDefault(); closeSheet(); } return; }
-  const a = actionOf(k);
+  // a keyboard set to another alphabet still has W, A, S, D where they always are: go by the key's place when its letter means nothing here
+  const a = actionOf(k) || (k.length === 1 && k.charCodeAt(0) > 127 && /^Key[A-Z]$/.test(e.code || '') ? actionOf(e.code.slice(3).toLowerCase()) : null);
   if (k === 't' && a == null && !e.repeat && openTune()) { e.preventDefault(); return; }
   if (state === 'menu') { if (k.length === 1 && k >= '1' && k <= '8') startLevel(+k - 1); else if (a === 'sound') toggleSound(); return; }
   if (a === 'sound') { toggleSound(); return; }
@@ -1744,7 +1979,7 @@ window.addEventListener('keydown', e => {
     else if (a === 'left' || a === 'right') e.preventDefault();
     return;
   }
-  if (a === 'left' || a === 'right' || a === 'flip' || a === 'jump') { e.preventDefault(); if (!e.repeat) act(a === 'flip' ? 'F' : a === 'jump' ? 'J' : turn(a === 'left'), 0); return; }
+  if (a === 'left' || a === 'right' || a === 'flip' || a === 'jump') { e.preventDefault(); if (!e.repeat) act(a === 'flip' ? 'F' : a === 'jump' ? 'J' : turn(a === 'left'), 0, e.timeStamp); return; }
   if (a === 'pause') { e.preventDefault(); setPause(true); }
   else if (a === 'restart' && !e.repeat && state === 'play') { record(false); retry(true); }
 });
@@ -1784,6 +2019,9 @@ on('btnAgain', () => { if (mode === 'daily') startDaily(true); else if (mode ===
 on('btnGo', go); on('btnBack', toMenu);
 on('btnNext', () => { if (mode === 'tutorial') startLevel(0); else startLevel(Math.min(LEVELS.length - 1, mode + 1)); });
 on('btnScores', () => { buildScores(); openSheet('scoreSheet'); });
+for (const id of ['btnGuide', 'btnGuide2', 'btnGuide3', 'btnGuide4']) on(id, openGuide);
+on('btnCloseGuide', closeSheet); on('btnGuideTut', startTutorial);
+on('btnGuideKeys', () => { $('guideSheet').hidden = true; overlay = null; buildControls(); openSheet('ctrlSheet'); });
 on('btnControls', () => { buildControls(); openSheet('ctrlSheet'); });
 on('btnControls2', () => { buildControls(); openSheet('ctrlSheet'); });
 on('btnCloseScores', closeSheet); on('btnCloseCtrl', closeSheet);
@@ -1796,7 +2034,8 @@ on('btnTuneCopy', e => { tuneText(); copyText($('tuneOut').value, $('tuneOut'), 
 on('btnData', () => { buildData(); openSheet('dataSheet'); });
 on('btnCloseData', closeSheet);
 on('btnBoard', () => openBoard()); on('btnCloseBoard', closeSheet);
-$('boardName').addEventListener('input', e => { const n = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3); stats.name = n; saveStats(); });
+$('boardName').addEventListener('input', e => { const n = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3); stats.name = n; saveStats(); drawPending(); });
+$('boardName').addEventListener('keydown', e => { if (e.key === 'Enter' && stats.name) { e.target.blur(); postAll(); drawPending(); } });
 for (const id of ['btnNote', 'btnNote2', 'btnNote3', 'btnNote4']) on(id, openNote);
 on('btnCloseNote', closeSheet); on('btnNoteSend', sendNote);
 on('btnDataCopy', e => copyText(dataExport(), $('dataOut'), e.currentTarget, 'Copy'));
@@ -1816,13 +2055,13 @@ on('btnDataClear', () => {
 });
 on('btnWipe', () => {
   if (!wipeArmed) { wipeArmed = true; $('btnWipe').textContent = 'Erase everything? Click again'; return; }
-  stats = { lv: [], endless: [], daily: {} }; saveStats(); store.set('best', null); buildScores();
+  stats = { lv: [], endless: [], daily: {}, know: {}, posted: {}, pending: {}, name: stats.name || '' }; saveStats(); store.set('best', null); buildScores();
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden) { setPause(true); telEv('hide'); saveTel(); telSend(true); } else telEv('show'); });
 window.addEventListener('blur', () => setPause(true));
 window.addEventListener('pointerdown', e => { if (e.pointerType === 'touch') touchSeen = true; }, true);
 window.addEventListener('resize', resize);
-window.addEventListener('pagehide', () => { if (state === 'play' || state === 'pause' || state === 'dead') telEnd('left'); telEv('leave'); saveTel(); telSend(true); });
+window.addEventListener('pagehide', () => { if (state === 'play' || state === 'pause' || state === 'dead') telEnd('left'); telEv('leave'); saveTel(); telSend('bye'); });
 
 // ================= main loop =================
 const STEP = 1 / 240, pf = { ms: 0, n: 0 };
@@ -1844,6 +2083,7 @@ function frame(ts) {
   }
   if (state === 'fail') failT += dt;
   if (telCur && state === 'play' && dt > 0) { telCur.fn++; telCur.ft += dt; if (dt > .025) telCur.fj++; }
+  if (telCur && telCur.iq.length) { const q = telCur.il; for (const t of telCur.iq) { const d = ts - t; if (d >= 0 && d < 500) { q[3]++; q[4] += d; } } telCur.iq.length = 0; }
   boostVis += ((pace ? pace.gain() : 0) - boostVis) * Math.min(1, dt * 5); if (kick > 0) kick = Math.max(0, kick - dt * 3);
   Snd.rate = 1 + (state === 'play' && mode !== 'tutorial' ? boostVis : 0) * .6;   // the music speeds up with you
   // screens where nothing moves (paused, result, briefing, or a sheet covering the tunnel) are drawn for a moment, then left alone
@@ -1874,7 +2114,7 @@ function frame(ts) {
   requestAnimationFrame(frame);
 }
 function start(saved) {
-  telCatchUp();
+  telCatchUp(); setTimeout(() => { if (stats.name) postAll(); else prunePending(); }, 3000);
   resize(); soundLabel(); toMenu(); syncCss(true);
   if (saved && typeof saved.focus === 'number') { const b = $('lv' + (saved.focus + 1)); if (b && !b.disabled) b.focus(); }
   requestAnimationFrame(frame);
@@ -1887,6 +2127,9 @@ window.__eightfold = {
   sig() { let h = 0; track.cell(300, 0); for (let r = 0; r < 300; r++) h = (h * 31 + track.S[r] + 7 * track.B[r]) | 0; return h; },
   pilot() { bot = new Bot(track, .5, false); },
   kill() { runner.die('fall'); },
+  risk() { return riskMap(track).list.map(x => ({ z0: x.z0, z1: x.z1, back: x.back, b: x.b, first: x.first, lane: x.lane, far: x.far, n: x.n })); },
+  stats() { return stats; },
+  post() { return { busy: Object.assign({}, postBusy), why: Object.assign({}, postWhy), msg: Object.assign({}, postMsg), fails: postFails }; },
   boards(j) { boardsData = j; boardsAt = performance.now(); },
   pace() { return { boost: pace.boost, over: pace.over, surge: pace.surge, streak: pace.streak, best: pace.best, perfects: pace.perfects, t: pace.t, scale: pace.scale() }; },
   tune(o) { if (o) { Object.assign(tune, o); applyTune(); } return Object.assign({}, tune); },

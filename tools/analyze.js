@@ -114,6 +114,20 @@ for (const [k, o] of Object.entries(mach).sort((a, b) => med(a[1].fps) - med(b[1
   out(pad(k.slice(0, 62), 64) + lpad(o.fps.length, 12) + lpad(med(o.fps), 12) + lpad(o.hz || '-', 12) + lpad(o.rm.length ? med(o.rm).toFixed(1) : '-', 12) + lpad(Math.max(...o.fx), 12) + lpad(pct(o.slow, o.fr), 12) + (o.q < 1 ? `   resolution dropped to ${Math.round(o.q * 100)}%` : ''));
 const below = runs.filter(a => a.fps && a._s.hz && a.fps < a._s.hz * .8).length, known = runs.filter(a => a.fps && a._s.hz).length;
 if (known) out(`runs well below the screen's refresh rate: ${below} of ${known}`);
+// key presses: how long from the key going down to the game acting on it, and on to the next frame (recorded from build 2026-11-23m)
+{
+  const il = runs.filter(a => Array.isArray(a.il));
+  if (il.length) {
+    const by = {}; for (const a of il) { const k = a._s.os + ', ' + a._s.br + (a._s.hz ? ', ' + a._s.hz + ' Hz' : ''); (by[k] || (by[k] = [])).push(a.il); }
+    out('key presses, ms from the key to the game acting on it (typical / worst), then on to the next frame:');
+    for (const [k, v] of Object.entries(by)) out('   ' + pad(k, 40) + lpad(med(v.map(x => x[0])).toFixed(1), 8) + ' /' + lpad(Math.max(...v.map(x => x[1])), 5) + lpad(med(v.map(x => x[2])).toFixed(1), 10) + `   (${v.length} runs)`);
+  }
+}
+// leaderboard posts: sent, held back for another try, refused for good
+{
+  const ev = [].concat(...visits.map(d => (d.session.ev || []).filter((x, i) => i % 2 && /^post/.test(x)))), n = re => ev.filter(x => re.test(x)).length;
+  if (ev.length) out(`leaderboard posts: ${n(/^post:/)} filed, ${n(/^postwait:/)} held for another try, ${n(/^postno:/)} refused`);
+}
 
 const notes = [].concat(...visits.map(d => (d.session.notes || []).map(n => [d.session, n])));
 head(`What players said (${notes.length})`);

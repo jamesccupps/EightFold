@@ -53,13 +53,19 @@ The level clock is not wall-clock time. It is stepped with the physics, so the s
 - **Levels and the Daily course:** fastest clear, to the hundredth of a second.
 - **Endless:** how far you got on today's course. Endless is one course a day, the same for everyone; *Random course* on the result screen gives any other course for practice. Ties go to points.
 
-A run that beats what the player has already posted is sent with its presses, under a name of up to three letters or digits. Nothing is listed on trust: a GitHub Action on the `play-data` branch plays each run back on the real engine (`tools/boards.js`), and the time, distance and points shown are the ones the playback gives. That takes about a minute. Runs made with practice options or changed tuning do not count, and a board starts again when its course changes.
+A run that beats what the player has already posted is sent with its presses, under a name of up to three letters or digits. The best run not yet on its board is kept in the browser, whole, until the relay has taken it: if the player has not chosen a name yet, every result screen offers it until they do; if the relay is busy or the connection drops, it is sent again by itself (and on the next visit, if the tab was closed). Nothing is listed on trust: a GitHub Action on the `play-data` branch plays each run back on the real engine (`tools/boards.js`), and the time, distance and points shown are the ones the playback gives. That takes about a minute. Runs made with practice options or changed tuning do not count, and a board starts again when its course changes.
+
+What is checked is the run, not the person. Each browser has one row per board, so changing the name relabels later runs instead of adding a row; names are not reserved, and when two players pick the same letters the board shows a short code after each so they can be told apart. Clearing the browser's storage makes a new player. Tying a name to one person would need sign-in, which the game does not have.
 
 The version of the game and of its engine is shown at the bottom of the menu.
 
 ### Help for new players
 
-The first two times each kind of obstacle comes up outside the tutorial, a one-line reminder names it and the key that answers it. After a fall, the result screen says what the run ended on and which move it needed.
+**Legend** (on the menu, the briefing, the pause screen and the result screen) shows everything in one place: the three moves, each thing that can be picked up, the floor markings, every obstacle, what the readouts along the top mean, and how speed, points and the leaderboard work. The briefing before a level lists what matters in it, with the same pictures.
+
+The first two times each kind of obstacle comes up outside the tutorial, a one-line reminder names it and the key that answers it. Risk routes get the same: that the red sparks are optional and how to reach them, then, once on the strip, how to get back. The strip is tinted red, turns full red after its last spark and ends at a white bar, so the moment to leave can be seen. Red sparks and their strip are the same red in every level. A shield, slow-mo and a red spark each say what they do the first couple of times one is picked up. After a fall, the result screen says what the run ended on and which move it needed.
+
+Keys: a press acts at the next physics step (1/240 s), and a press made in the air is held until landing. On a keyboard set to another alphabet, W, A, S, D work by position. Each run records how long its key presses took to reach the game, so a slow machine or browser shows up in the play data.
 
 ## Tuning and play data (temporary)
 
@@ -157,6 +163,7 @@ python3 test/browser/tuning.py          # the tuning drawer and the play recordi
 python3 test/browser/relay.py           # play data from the page, through the relay, to a stand-in for GitHub
 python3 test/browser/mechanics.py       # perfect timing, risk routes, reminders, the missed-move line
 python3 test/browser/leaderboard.py     # play, post, check and read a board, end to end
+python3 test/browser/posting.py         # a post with no name yet, a silent relay, colliding writes, a closed tab; play-data resends
 python3 test/browser/experiments.py     # experiments, ratings, engine id, tap and swipe
 ```
 

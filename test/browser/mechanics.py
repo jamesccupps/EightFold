@@ -25,7 +25,7 @@ async def main():
         await pg.add_init_script("if (!localStorage.getItem('eightfold.opts')) localStorage.setItem('eightfold.opts', JSON.stringify({unlockAll: true}))")
         await pg.goto(URL); await pg.wait_for_timeout(300)
         # a new player who skipped the tutorial: reminders name each kind of obstacle and its key, the first two times only
-        await pg.keyboard.press('1'); await pg.wait_for_timeout(300); r['brief_mentions'] = ['perfect' in (await pg.evaluate('document.getElementById("brNote").textContent')), 'Red sparks' in (await pg.evaluate('document.getElementById("brNote").textContent'))]
+        await pg.keyboard.press('1'); await pg.wait_for_timeout(300); r['brief_mentions'] = ['Perfect' in (await pg.evaluate('document.getElementById("brNote").textContent')), 'Red sparks' in (await pg.evaluate('document.getElementById("brNote").textContent'))]
         await pg.keyboard.press('Enter'); await pg.wait_for_timeout(300)
         seen, n, total = await play(pg, .5, take_opt=True)
         r['early_presses'] = {'state': (await pg.evaluate(S))['state'], 'pressed': (n, total), 'perfects': seen['perf'], 'top_speed_scale': round(seen['maxscale'], 3)}
