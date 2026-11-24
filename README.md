@@ -51,7 +51,7 @@ The level clock is not wall-clock time. It is stepped with the physics, so the s
 ### Leaderboard
 
 - **Levels and the Daily course:** fastest clear, to the hundredth of a second.
-- **Endless:** how far you got on today's course. Endless is one course a day, the same for everyone; *Random course* on the result screen gives any other course for practice. Ties go to points.
+- **Endless:** how far you got. Endless is one course, the same for everyone and the same every day, so its board keeps from one day to the next. (The course is named by a date in `src/page.html`, `ENDLESS_COURSE`; changing that date starts a new course and a new board.) *Random course* on the result screen gives any other course for practice, unranked; the Daily course is the one that changes every day. Ties go to points.
 
 A run that beats what the player has already posted is sent with its presses, under a name of up to three letters or digits. The best run not yet on its board is kept in the browser, whole, until the relay has taken it: if the player has not chosen a name yet, every result screen offers it until they do; if the relay is busy or the connection drops, it is sent again by itself (and on the next visit, if the tab was closed). Nothing is listed on trust: a GitHub Action on the `play-data` branch plays each run back on the real engine (`tools/boards.js`), and the time, distance and points shown are the ones the playback gives. That takes about a minute. Runs made with practice options or changed tuning do not count, and a board starts again when its course changes.
 

@@ -10,6 +10,9 @@ const fs = require('fs'), path = require('path');
 const { replay, courseFor, engine, NOW } = require('./replay.js');
 const dir = process.argv[2]; if (!dir) { console.error('usage: node tools/boards.js <folder>'); process.exit(2); }
 const E = engine(NOW), TOP = 50, DAYS = 7;
+// Endless is one fixed course, named by the date it was laid out for. The game says which; read it from there.
+const ENDLESS = 'E' + ((fs.readFileSync(path.join(__dirname, '..', 'src', 'page.html'), 'utf8').match(/const ENDLESS_COURSE = '(\d{4}-\d\d-\d\d)'/) || [])[1] || '');
+if (ENDLESS.length !== 11) { console.error('cannot tell which Endless course is ranked'); process.exit(2); }
 const BAD = new Set(['ASS', 'FAG', 'FUK', 'FUC', 'FCK', 'KKK', 'NIG', 'NGR', 'CUM', 'JEW', 'JIZ', 'SEX', 'TIT', 'COK', 'CNT', 'DIK', 'DIC', 'GAY', 'HOE', 'PIS', 'POO', 'VAG', 'WOP', 'KYS', 'SUK', 'FAP', 'NAZ', 'SS']);
 const files = d => fs.existsSync(d) ? [].concat(...fs.readdirSync(d).map(f => { const p = path.join(d, f); return fs.statSync(p).isDirectory() ? files(p) : f.endsWith('.json') ? [p] : []; })) : [];
 const dayNum = date => +date.replace(/-/g, '');
@@ -18,7 +21,7 @@ const courses = {};
 function boardCourse(board) {
   if (!(board in courses)) {
     let t = null;
-    try { t = board[0] === 'L' ? courseFor({ m: board }, E) : board[0] === 'D' ? courseFor({ m: board }, E) : E.endlessSeed ? courseFor({ m: 'E', seed: E.endlessSeed(dayNum(board.slice(1))) }, E) : null; } catch (e) { t = null; }
+    try { t = board[0] === 'L' ? courseFor({ m: board }, E) : board[0] === 'D' ? courseFor({ m: board }, E) : board === ENDLESS && E.endlessSeed ? courseFor({ m: 'E', seed: E.endlessSeed(dayNum(board.slice(1))) }, E) : null; } catch (e) { t = null; }
     courses[board] = t ? { cs: t.checksum(), seed: t.seed } : null;
   }
   return courses[board];
@@ -29,7 +32,7 @@ function check(s) {
   if (!c) return { no: 'no such course' };
   if (run.tu || run.prac || run.cp) return { no: 'not a standard run' };
   if (board[0] === 'E' ? run.m !== 'E' || run.seed !== c.seed : run.m !== board) return { no: 'run is not on this board\'s course' };
-  if (board[0] !== 'L') {   // dated boards: posted on or around that day (players' own dates run up to a day either side of the server's)
+  if (board[0] === 'D') {   // the daily course: posted on or around that day (players' own dates run up to a day either side of the server's)
     const day = Date.parse(board.slice(1) + 'T00:00:00Z'), at = s.at || 0;
     if (!(at > day - 14 * 3600e3 && at < day + 50 * 3600e3)) return { no: 'posted on another day' };
   }
@@ -62,10 +65,10 @@ for (const key in cache) {
   if (!B[e.p] || better(e, B[e.p])) B[e.p] = e;
   counted++;
 }
-const dated = Object.keys(boards).filter(b => b[0] !== 'L').map(b => b.slice(1)).sort().reverse(), keep = new Set([...new Set(dated)].slice(0, DAYS));
+const dated = Object.keys(boards).filter(b => b[0] === 'D').map(b => b.slice(1)).sort().reverse(), keep = new Set([...new Set(dated)].slice(0, DAYS));   // the last few daily courses; levels and Endless always
 const out = { updated: new Date().toISOString(), core: NOW, boards: {} };
 for (const b of Object.keys(boards).sort()) {
-  if (b[0] !== 'L' && !keep.has(b.slice(1))) continue;
+  if (b[0] === 'D' && !keep.has(b.slice(1))) continue;
   const endless = b[0] === 'E';
   out.boards[b] = Object.values(boards[b]).sort((x, y) => endless ? (y.m - x.m || y.pts - x.pts || x.at - y.at) : (x.t - y.t || y.pts - x.pts || x.at - y.at)).slice(0, TOP)
     .map(e => endless ? { n: e.n, m: e.m, pts: e.pts, pf: e.pf, p: e.p, at: e.at } : { n: e.n, t: e.t, pts: e.pts, pf: e.pf, p: e.p, at: e.at });

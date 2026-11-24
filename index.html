@@ -1135,7 +1135,7 @@ function applyTune() {
 // ---------- play recording (temporary: so the game can be tuned from how it is really played) ----------
 // One small record per attempt: where it ended and on what, the time, sparks, how early or late each press came inside
 // the window the course allows for it, and the frame rate. Kept in this browser; see the Play data sheet.
-const BUILD = '2026-11-23m', CORE_ID = 'c39af8186c';   // CORE_ID: which engine (generator + physics) this page was built from
+const BUILD = '2026-11-24a', CORE_ID = 'c39af8186c';   // CORE_ID: which engine (generator + physics) this page was built from
 // Where play records are sent from the public copy of the game: a small relay that files them on the play-data branch
 // of the game's GitHub repository (see relay/ in the repository). Empty = nothing is sent.
 let RELAY = 'https://eightfold-relay.jamesccupps.workers.dev/', relayAnywhere = false;
@@ -1581,9 +1581,14 @@ let bestRow = -1;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 function launchRun(m, tr, song) { mode = m; track = tr; tries = 0; resumeCp = null; telEv('run:' + telMode()); Snd.wake(); Snd.song(song); begin(true); }
 function startLevel(i, skip) { if (!unlocked(i)) return; store.set('last', i); pal = PALS[i]; enter(i, new Track(LEVELS[i].seed, LEVELS[i]), i, skip); }
-// Endless is one course a day, the same for everyone, so distances can be compared. random: any other course, for practice.
+// Endless is one course, the same for everyone and the same every day, so distances can be compared and its board
+// keeps. It is named by the date it was laid out for; a new date here would be a new course with a new, empty board.
+// (tools/boards.js reads this line, so the checker and the game cannot disagree about which course is ranked.)
+const ENDLESS_COURSE = '2026-11-23';
+const ENDLESS = { key: ENDLESS_COURSE, seed: +ENDLESS_COURSE.replace(/-/g, '') };
+// random: any other course, for practice; it is not ranked.
 function startEndless(skip, random) {
-  const d = today(), tr = new Track(random ? (Math.random() * 1e9) | 0 : endlessSeed(d.seed), null); if (!random) tr.rankDay = d.key;
+  const d = ENDLESS, tr = new Track(random ? (Math.random() * 1e9) | 0 : endlessSeed(d.seed), null); if (!random) tr.rankDay = d.key;
   hue0 = random ? Math.random() * 360 : d.seed * 47 % 360; palZ = -99; enter('endless', tr, random ? 3 + ((Math.random() * 5) | 0) : 3 + d.seed % 5, skip);
 }
 function startDaily(skip) { const d = today(); pal = PALS[d.seed % 8]; enter('daily', new Track(d.seed, Object.assign({}, DAILY, { pat: d.seed % 5 })), d.seed % 8, skip); }
@@ -1665,7 +1670,7 @@ function buildGuide() {
     ['A perfect is a press at the last moment', ' before it would be too late. It gives a burst of speed that fades over ' + PACE.surgeSecs + ' seconds and is stronger with each perfect in a row, plus 50 points.'],
     ['Red sparks go past the limit.', ' Each adds ' + pct(PACE.risk) + ' speed on top of the usual top speed, for the rest of the run.'],
     ['Points.', ' Sparks 100, ringed 200, red 300. Perfects 50. In Endless, 10 a metre. In a level: 10 a percent, 1,000 for clearing it, 100 for every second under par, 1,000 for taking every spark.'],
-    ['Leaderboard.', ' Levels and the daily course rank the fastest clear. Endless ranks how far you got on the day\u2019s course, which is the same for everyone; points settle a tie. Runs are played back and checked before they are listed.']];
+    ['Leaderboard.', ' Levels and the daily course rank the fastest clear. Endless ranks how far you got; it is one course, the same for everyone and the same every day, so its board keeps. Points settle a tie. Runs are played back and checked before they are listed.']];
   const ul = $('gdScore'); ul.textContent = ''; for (const [a, b] of pts) { const li = document.createElement('li'), st = document.createElement('b'); st.textContent = a; li.appendChild(st); li.appendChild(document.createTextNode(b)); ul.appendChild(li); }
 }
 function openGuide() { if (state === 'play') setPause(true); buildGuide(); openSheet('guideSheet'); }
@@ -1687,7 +1692,7 @@ function showBrief(m, tr, song) {
   const fresh = lv ? types.filter(t => !seen[t]) : [], old = types.filter(t => fresh.indexOf(t) < 0);
   $('brNo').textContent = lv ? 'Level ' + pad2(m + 1) + ' of ' + pad2(LEVELS.length) : m === 'daily' ? 'Daily course · ' + today().label : 'Endless';
   $('brName').textContent = modeName();
-  $('brHint').textContent = m === 'endless' ? (tr.rankDay ? 'No finish line. Today\u2019s course is the same for everyone, so distances can be compared. ' : 'No finish line. A random course, for practice. ') + 'It starts with turns, flips and blocks, then adds everything else as it speeds up.' : tr.level.hint;
+  $('brHint').textContent = m === 'endless' ? (tr.rankDay ? 'No finish line. The course is the same for everyone and does not change from day to day, so distances can be compared and the leaderboard keeps. ' : 'No finish line. A random course, for practice: it is not ranked. ') + 'It starts with turns, flips and blocks, then adds everything else as it speeds up.' : tr.level.hint;
   const st = $('brStats'); st.textContent = '';
   const stat = (k, v, html) => { const d = document.createElement('div'), a = document.createElement('dt'), b = document.createElement('dd'); a.textContent = k; if (html) b.innerHTML = v; else b.textContent = v; d.appendChild(a); d.appendChild(b); st.appendChild(d); };
   const sp = tr.speedAt(0), on = clamp(Math.round((sp - 6.8) / .75), 1, 8); let pips = '<span class="pips" role="img" aria-label="' + on + ' of 8">'; for (let i = 0; i < 8; i++) pips += '<i' + (i < on ? ' class="on"' : '') + '></i>'; stat('Speed', pips + '</span>', true);
@@ -1773,7 +1778,7 @@ function showFail() {
   fn.hidden = !(NT && NT[2]);
   if (!fn.hidden) { fn.innerHTML = esc(NT[0]) + ': ' + esc(NT[1]) + ' <kbd>' + keyHtml(need.key) + '</kbd>'; }
   $('failStat').textContent = bits.join('  ·  ');
-  $('btnNew').hidden = mode !== 'endless'; $('btnNew').textContent = track.rankDay ? 'Random course' : 'Today\u2019s course';
+  $('btnNew').hidden = mode !== 'endless'; $('btnNew').textContent = track.rankDay ? 'Random course' : 'Ranked course';
   $('failHint').textContent = (practice() && mode !== 'tutorial' ? 'Practice run: not recorded. ' : '') + (touchSeen ? 'Restart replays' : 'Press ' + labelFor('restart') + ' or ' + labelFor('jump') + ' to restart') + (resumeCp ? ' from the checkpoint.' : ' the same course.');
   postRow($('failPost'));
   rateRow($('failRate'), tries >= 4, 'fb', feelQ(), FEEL);
@@ -2197,7 +2202,7 @@ function buildMenu() {
     menuRow('lv' + (i + 1), pad2(i + 1), lv.name, meta, st.clears > 0, () => startLevel(i), '', !open, lv.hint);
   });
   const top = stats.endless[0];
-  menuRow('lvEndless', '∞', 'Endless', top ? top.m + ' m' : '—', false, () => startEndless(), 'alt', false, 'No finish line. One course a day, the same for everyone: how far can you get?');
+  menuRow('lvEndless', '∞', 'Endless', top ? top.m + ' m' : '—', false, () => startEndless(), 'alt', false, 'No finish line. One course, the same for everyone: how far can you get?');
   const d = dailyS();
   menuRow('lvDaily', '☀', 'Daily · ' + today().label, d.cleared ? 'cleared' : d.best ? d.best + '%' : '—', !!d.cleared, () => startDaily(), 'alt', false, DAILY.hint + ' Sixty seconds, a bit of everything.');
 }
@@ -2374,15 +2379,16 @@ const LEVEL_CS = [], levelCs = i => LEVEL_CS[i] || (LEVEL_CS[i] = new Track(LEVE
 // the board a run on the current course goes on, or null (a random Endless course and the tutorial have none)
 const modeBoard = () => typeof mode === 'number' ? 'L' + (mode + 1) : mode === 'daily' ? 'D' + today().key : mode === 'endless' && track && track.rankDay ? 'E' + track.rankDay : null;
 const boardLabel = id => id[0] === 'L' ? 'Level ' + (+id.slice(1)) : id[0] === 'D' ? 'Daily' : 'Endless';
+const boardWhen = id => id[0] === 'L' ? 'clear' : id[0] === 'E' ? 'run' : 'today';
 const showV = (id, v) => id[0] === 'E' ? fmtN(v) + ' m' : fmtTime(v);
 const beats = (far, v, pts, o) => far ? v > o.v || (v === o.v && pts > (o.pts | 0)) : v < o.v || (v === o.v && pts > (o.pts | 0));   // further, or faster; points settle a tie
 const postBusy = {}, postWhy = {}, postMsg = {}; let postTimer = 0, postFails = 0;
-// runs kept for a course that has since changed, or for a day that is over, are let go
+// runs kept for a course that has since changed, or for a daily course whose day is over, are let go
 function prunePending() {
   const t = today().key; let cut = false;
   for (const id in stats.pending) {
     const q = stats.pending[id], n = +id.slice(1) - 1;
-    if (!(q && q.run && (id[0] === 'L' ? LEVELS[n] && q.cs === levelCs(n) : id.slice(1) === t))) { delete stats.pending[id]; cut = true; }
+    if (!(q && q.run && (id[0] === 'L' ? LEVELS[n] && q.cs === levelCs(n) : id.slice(1) === (id[0] === 'E' ? ENDLESS.key : t)))) { delete stats.pending[id]; cut = true; }
   }
   if (cut) saveStats();
 }
@@ -2443,7 +2449,7 @@ function postRow(el) {
     el.hidden = false;
     const mine = lastRun && lastRun.s === q.run.s && lastRun.i === q.run.i;
     const l = document.createElement('label'); l.htmlFor = 'postName';
-    l.textContent = mine ? showV(id, q.v) + '. Put it on the leaderboard as ' : 'Your best ' + (id[0] === 'L' ? 'clear' : 'today') + ', ' + showV(id, q.v) + ', is not on the leaderboard yet. Put it there as ';
+    l.textContent = mine ? showV(id, q.v) + '. Put it on the leaderboard as ' : 'Your best ' + boardWhen(id) + ', ' + showV(id, q.v) + ', is not on the leaderboard yet. Put it there as ';
     const inp = document.createElement('input'); inp.id = 'postName'; inp.className = 'nm3'; inp.maxLength = 3; inp.autocomplete = 'off'; inp.spellcheck = false; inp.setAttribute('aria-label', 'Three letters or digits');
     const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'btn sm'; btn.id = 'btnPost'; btn.textContent = 'Post';
     btn.addEventListener('click', () => { const n = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3); if (!n) { inp.focus(); return; } stats.name = n; saveStats(); inp.blur(); postAll(); postUi(); });
@@ -2473,9 +2479,9 @@ function drawBoard() {
     b.addEventListener('click', () => { boardSel = id; drawBoard(); });
     tabs.appendChild(b);
   }
-  const far = boardSel === 'E', key = boardSel.length === 1 ? boardSel + today().key : boardSel, rows = boardsData && boardsData.boards ? boardsData.boards[key] || [] : null;
+  const far = boardSel === 'E', key = far ? 'E' + ENDLESS.key : boardSel.length === 1 ? boardSel + today().key : boardSel, rows = boardsData && boardsData.boards ? boardsData.boards[key] || [] : null;
   $('boardInfo').textContent = !relayUp() ? 'The leaderboard is on the public game, at jamesccupps.github.io/EightFold.'
-    : far ? 'Endless, today’s course (' + today().label + '): how far you got. Ties go to points.'
+    : far ? 'Endless: how far you got. One course, the same every day, so this board does not start again each morning. Ties go to points.'
     : boardSel === 'D' ? 'Daily course, ' + today().label + ': fastest clear.'
     : 'Level ' + (+boardSel.slice(1)) + ', ' + LEVELS[+boardSel.slice(1) - 1].name + ': fastest clear.';
   const head = $('boardHead'); head.textContent = ''; for (const h of ['#', 'Name', far ? 'Distance' : 'Time', 'Perfects', 'Points']) { const th = document.createElement('th'); th.textContent = h; head.appendChild(th); }
