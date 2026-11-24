@@ -48,6 +48,15 @@ On level 1 the same course takes about 45 s on the safe line with early presses,
 
 The level clock is not wall-clock time. It is stepped with the physics, so the same presses give the same time on any machine, and a run's time can be worked out again from its recording (`tools/replay.js` does this).
 
+### Leaderboard
+
+- **Levels and the Daily course:** fastest clear, to the hundredth of a second.
+- **Endless:** how far you got on today's course. Endless is one course a day, the same for everyone; *Random course* on the result screen gives any other course for practice. Ties go to points.
+
+A run that beats what the player has already posted is sent with its presses, under a name of up to three letters or digits. Nothing is listed on trust: a GitHub Action on the `play-data` branch plays each run back on the real engine (`tools/boards.js`), and the time, distance and points shown are the ones the playback gives. That takes about a minute. Runs made with practice options or changed tuning do not count, and a board starts again when its course changes.
+
+The version of the game and of its engine is shown at the bottom of the menu.
+
 ### Help for new players
 
 The first two times each kind of obstacle comes up outside the tutorial, a one-line reminder names it and the key that answers it. After a fall, the result screen says what the run ended on and which move it needed.
@@ -112,7 +121,7 @@ test/levels.js        every course can be finished; every spark can be collected
 test/shortcuts.js     no course can be finished while skipping its intended moves
 test/curve.js         prints speed, input rate, obstacle variety and difficulty per level
 test/browser/         play-throughs in a real browser (Python + Playwright)
-tools/                seed search used to pick each level's course; analyze.js reports on play data; replay.js plays recorded runs back; feedback.js lists player feedback
+tools/                seed search used to pick each level's course; analyze.js reports on play data; replay.js plays recorded runs back; boards.js checks posted scores and builds the leaderboards; feedback.js lists player feedback
 relay/                the Cloudflare Worker that files play data on the play-data branch, and its test
 ```
 
@@ -146,6 +155,9 @@ python3 test/browser/play.py 1,2,3      # play levels with human-like timing err
 python3 test/browser/flows.py           # tutorial, restart, pause, unlock, rebinding, endless, phone layout
 python3 test/browser/tuning.py          # the tuning drawer and the play recording
 python3 test/browser/relay.py           # play data from the page, through the relay, to a stand-in for GitHub
+python3 test/browser/mechanics.py       # perfect timing, risk routes, reminders, the missed-move line
+python3 test/browser/leaderboard.py     # play, post, check and read a board, end to end
+python3 test/browser/experiments.py     # experiments, ratings, engine id, tap and swipe
 ```
 
 They need Python with Playwright and its Chromium (`pip install playwright && playwright install chromium`).

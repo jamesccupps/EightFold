@@ -10,6 +10,11 @@
 // attempts to it and writes it back. It only ever writes inside sessions/ on that one branch. It stores what
 // it can verify the shape of and drops everything else, and it never stores the sender's address.
 //
+// Leaderboard: the game also posts the run behind a personal best to /score, presses included. That is filed under
+// scores/ on the same branch. Playing a run back to check it takes more processor time than a free Worker gets, so the
+// checking is done by a GitHub Action on that branch (tools/boards.js), which writes boards/all.json. /boards hands
+// that file to the game.
+//
 // Settings (Worker > Settings > Variables and Secrets):
 //   GITHUB_TOKEN  secret, required. A fine-grained token: this repository only, Contents: Read and write.
 //   REPO          optional, default "jamesccupps/EightFold"
@@ -17,12 +22,13 @@
 //   ORIGINS       optional, comma-separated pages allowed to post, default "https://jamesccupps.github.io"
 //   OFF           optional. Set to "1" to refuse everything without deleting the Worker.
 
-const VERSION = '2026-11-23.8';   // shown on the status line, so a deploy can be told from the one before
+const VERSION = '2026-11-23.9';   // shown on the status line, so a deploy can be told from the one before
 const DEFAULTS = { REPO: 'jamesccupps/EightFold', BRANCH: 'play-data', ORIGINS: 'https://jamesccupps.github.io' };
 const MAX_BODY = 64 * 1024;        // bytes per post
 const MAX_ATTEMPTS = 400;          // attempts per session file
 const MAX_FILE = 900 * 1024;       // bytes per session file (GitHub hands back file contents up to 1 MB)
 const MAX_FILES_PER_DAY = 300;     // new session files per day, across everyone
+const MAX_SCORES_PER_DAY = 600;    // posted scores per day, across everyone
 const MAX_POSTS = 40, WINDOW_MS = 10 * 60 * 1000;   // posts per sender per ten minutes (best effort, per Worker instance)
 
 // ---------- checking what was sent: keep known fields of the right type, drop the rest ----------
@@ -144,6 +150,42 @@ function check(data, now, country) {
   return { sid, date: new Date(t).toISOString().slice(0, 10), body: { v: 1, session, n: attempts.length, attempts } };
 }
 
+// ---------- a posted score ----------
+const BOARD = /^(L[1-9]|[DE]\d{4}-\d{2}-\d{2})$/;
+const RUN_NUMS = { d: [0, 1e5], z: [-10, 1e7], pc: [0, 1e6], pts: [0, 1e8], sp: [0, 1e5], ns: [0, 1e4], pr: [0, 1e5], seed: [0, 4294967296], cs: [0, 4294967296], cp: [0, 1e7], prac: [0, 1] };
+// returns { path, body } or a string saying what is wrong. Nothing is judged here beyond shape: the checker plays the run back.
+function checkScore(data, now) {
+  if (!data || typeof data !== 'object' || data.v !== 1 || !data.run || typeof data.run !== 'object') return 'not a score';
+  const board = str(data.board, BOARD), name = str(String(data.name || '').toUpperCase(), /^[A-Z0-9]{1,3}$/), pid = str(data.pid, /^[a-z0-9]{12}$/), core = str(data.core, /^[a-f0-9]{10}$/);
+  if (!board) return 'no such board'; if (!name) return 'a name is one to three letters or digits'; if (!pid || !core) return 'not a score';
+  const a = data.run, run = {};
+  put(run, 'm', str(a.m, MODE)); put(run, 'res', str(a.res, /^(win|fall|crash)$/));
+  for (const k in RUN_NUMS) put(run, k, num(a[k], RUN_NUMS[k][0], RUN_NUMS[k][1]));
+  if (Array.isArray(a.tr) && a.tr.length % 2 === 0) put(run, 'tr', nums(a.tr, 6000, -1000, 1e9));
+  put(run, 'tu', numMap(a.tu, 16));
+  if (Array.isArray(a.pf) && a.pf.length === 2) put(run, 'pf', nums(a.pf, 2, 0, 1e5));
+  if (!run.m || !run.res || !run.tr || run.cs === undefined || run.pr === undefined) return 'the run is incomplete';
+  return { path: 'scores/' + new Date(now).toISOString().slice(0, 10) + '/' + pid + '-' + board + '-' + now.toString(36) + '.json', dir: 'scores/' + new Date(now).toISOString().slice(0, 10),
+    body: Object.assign({ v: 1, at: now, board, name, pid, core, run }, data.test === true ? { test: true } : {}) };   // test: posted while checking the game; checked like any other, but never listed
+}
+async function saveScore(env, ok) {
+  const branch = env.BRANCH || DEFAULTS.BRANCH;
+  const list = await gh(env, ok.dir + '?ref=' + encodeURIComponent(branch), { method: 'GET' });
+  if (list.status === 200) { const files = await list.json(); if (Array.isArray(files) && files.length >= MAX_SCORES_PER_DAY) return { status: 429, error: 'enough for today' }; }
+  const res = await gh(env, ok.path, { method: 'PUT', body: JSON.stringify({ message: 'score ' + ok.body.board + ' ' + ok.body.name, content: btoa(JSON.stringify(ok.body)), branch, committer: { name: 'eightfold-relay', email: 'eightfold-relay@users.noreply.github.com' } }) });
+  return res.status === 200 || res.status === 201 ? { status: 200 } : { status: 502, error: 'storage said ' + res.status };
+}
+// the boards, as the checker last wrote them; kept for a few seconds so a busy moment does not mean a call to GitHub per player
+let boardsAt = 0, boardsText = '';
+async function boards(env, now) {
+  if (boardsText && now - boardsAt < 15000) return boardsText;
+  const res = await gh(env, 'boards/all.json?ref=' + encodeURIComponent(env.BRANCH || DEFAULTS.BRANCH), { method: 'GET' });
+  let text = '{"boards":{}}';
+  if (res.status === 200) { try { text = atob(String((await res.json()).content || '').replace(/\s/g, '')) || text; JSON.parse(text); } catch (e) { text = '{"boards":{}}'; } }
+  else if (res.status !== 404) return boardsText || text;
+  boardsAt = now; boardsText = text; return text;
+}
+
 // ---------- GitHub ----------
 function gh(env, path, init) {
   const repo = env.REPO || DEFAULTS.REPO;
@@ -210,6 +252,12 @@ export default {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: okOrigin ? 204 : 403, headers: okOrigin ? { 'Access-Control-Allow-Origin': okOrigin, 'Access-Control-Allow-Methods': 'POST', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400', 'Vary': 'Origin' } : {} });
     }
+    const route = new URL(request.url).pathname.replace(/\/+$/, '').split('/').pop();   // '', 'score' or 'boards'
+    if (request.method === 'GET' && route === 'boards') {
+      if (!env.GITHUB_TOKEN) return reply(500, { error: 'no token set' }, okOrigin);
+      let text; try { text = await boards(env, Date.now()); } catch (e) { text = boardsText || '{"boards":{}}'; }
+      return new Response(text, { status: 200, headers: Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Vary': 'Origin' }, okOrigin ? { 'Access-Control-Allow-Origin': okOrigin } : {}) });
+    }
     if (request.method === 'GET') return reply(200, { ok: true, what: 'Eightfold play-data relay', version: VERSION, ready: !!env.GITHUB_TOKEN && env.OFF !== '1' }, okOrigin);
     if (request.method !== 'POST') return reply(405, { error: 'POST only' }, okOrigin);
     if (env.OFF === '1') return reply(503, { error: 'switched off' }, okOrigin);
@@ -221,6 +269,12 @@ export default {
     let text; try { text = await request.text(); } catch (e) { return reply(400, { error: 'unreadable' }, okOrigin); }
     if (text.length > MAX_BODY) return reply(413, { error: 'too large' }, okOrigin);
     let data; try { data = JSON.parse(text); } catch (e) { return reply(400, { error: 'not JSON' }, okOrigin); }
+    if (route === 'score') {
+      const sc = checkScore(data, now);
+      if (typeof sc === 'string') return reply(400, { error: sc }, okOrigin);
+      let r; try { r = await saveScore(env, sc); } catch (e) { r = { status: 502, error: 'storage unreachable' }; }
+      return reply(r.status, r.status === 200 ? { ok: true } : { error: r.error }, okOrigin);
+    }
     const ok = check(data, now, request.cf && request.cf.country);
     if (typeof ok === 'string') return reply(400, { error: ok }, okOrigin);
     let res; try { res = await save(env, ok); } catch (e) { res = { status: 502, error: 'storage unreachable' }; }

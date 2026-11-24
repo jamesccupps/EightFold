@@ -577,6 +577,26 @@ class Bot {
   }
 }
 
+// Par: the time the course takes at its own speed, with no boosts.
+function parTime(tr) { if (tr.end === Infinity) return 0; if (tr.par == null) { let t = 0; for (let r = 0; r < tr.end; r++) t += 1 / tr.V[r]; tr.par = t; } return tr.par; }
+// What a run is worth, part by part. z: where it ended (for a fall, where the ball left the floor). Shared by the game
+// and by the leaderboard's checker, so both arrive at the same number.
+function scoreParts(track, runner, pace, win, z) {
+  const parts = [['Sparks', runner.pts]];
+  if (pace && pace.perfects) parts.push(['Perfect timing', pace.perfects * 50]);
+  if (track.end === Infinity) parts.push(['Distance', Math.floor(z) * 10]);
+  else {
+    parts.push(['Progress', Math.min(100, Math.floor(100 * z / track.end)) * 10]);
+    if (win) {
+      parts.push(['Clear', 1000], ['Time under par', Math.round(Math.max(0, parTime(track) - (pace ? pace.t : 0)) * 100)]);
+      if (track.nSparks && runner.sparks >= track.nSparks) parts.push(['Every spark', 1000]);
+    }
+  }
+  return parts;
+}
+// The one Endless course everyone shares on a given day (day as a number, 20261123), so distances can be compared.
+const endlessSeed = day => (Math.imul(day, 2654435761) ^ 0x45d9f3b) >>> 0;
+
 // The clock of a run. It is stepped with the physics and fed the same events, so the same presses always give the same
 // time: a run's time can be worked out again from its recording, on any machine.
 class Pace {

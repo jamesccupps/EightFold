@@ -6,6 +6,8 @@ The game is a static page on GitHub Pages, so it cannot write to GitHub by itsel
 game (browser)  --POST one session's records-->  Worker  --commit-->  play-data branch: sessions/<date>/<session>.json
 ```
 
+It has three addresses: `/` takes play data, `/score` takes a run for the leaderboard (filed under `scores/`), and `/boards` hands the game the boards that the checker wrote to `boards/all.json`. The checker is a GitHub Action on the `play-data` branch running `tools/boards.js`; a free Worker does not get enough processor time to play a run back itself.
+
 What it does with a post:
 
 - accepts it only from the game's own page (`https://jamesccupps.github.io`), up to 64 KB;

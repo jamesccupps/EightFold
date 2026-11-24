@@ -18,6 +18,7 @@ globalThis.fetch = async (url, init) => {
 };
 http.createServer(async (req, res) => {
   if (req.url === '/files') { res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify({ posts, files })); }
+  if (req.url.startsWith('/setfile/')) { const chunks = []; for await (const c of req) chunks.push(c); files[decodeURIComponent(req.url.slice(9))] = { sha: 's' + (++shaN), branch: 'play-data', data: JSON.parse(Buffer.concat(chunks).toString()) }; return res.end('ok'); }
   if (req.url.startsWith('/relay')) {
     const chunks = []; for await (const c of req) chunks.push(c);
     if (req.method === 'POST') posts++;

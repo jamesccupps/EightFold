@@ -6,7 +6,7 @@
 const fs = require('fs'), path = require('path'), crypto = require('crypto'), { execFileSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const NAMES = 'LEVELS,DAILY,TUTORIAL,Track,Runner';
-const compile = src => new Function(src + `; return {${NAMES}, setFeel: typeof setFeel === 'function' ? setFeel : null, Pace: typeof Pace === 'function' ? Pace : null, setPace: typeof setPace === 'function' ? setPace : null};`)();
+const compile = src => new Function(src + `; return {${NAMES}, setFeel: typeof setFeel === 'function' ? setFeel : null, Pace: typeof Pace === 'function' ? Pace : null, setPace: typeof setPace === 'function' ? setPace : null, scoreParts: typeof scoreParts === 'function' ? scoreParts : null, endlessSeed: typeof endlessSeed === 'function' ? endlessSeed : null};`)();
 const idOf = src => crypto.createHash('sha1').update(src).digest('hex').slice(0, 10);
 const nowSrc = fs.readFileSync(path.join(ROOT, 'src', 'core.js'), 'utf8'), NOW = idOf(nowSrc);
 const engines = { [NOW]: compile(nowSrc) };
@@ -58,6 +58,7 @@ function replay(rec, core) {
     }
     const res = r.dead ? r.dead.kind : r.z >= track.end ? 'win' : rec.res;
     out = { res, z: Math.floor(r.z), sparks: r.sparks, track, exact: res === rec.res && (!ended || res === 'win' || Math.abs(Math.floor(r.z) - rec.z) <= 1) };
+    if (pace && E.scoreParts) out.pts = E.scoreParts(track, r, pace, res === 'win', r.z).reduce((t, p) => t + p[1], 0);
     if (pace && ended) { out.time = pace.t; out.perfects = pace.perfects; out.timeOk = rec.pf !== undefined || rec.rk !== undefined || pace.perfects === 0 ? Math.abs(pace.t - rec.d) < .011 : null; }
   } finally { if (E.setFeel) E.setFeel({}); if (E.setPace) E.setPace({}); }
   return out;

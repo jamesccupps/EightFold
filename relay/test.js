@@ -118,5 +118,24 @@ ok('a flood of new sessions in one day is cut off', r.status === 429 && !files['
 r = await post({ v: 1, session, attempts: [attempt({})] });
 ok('but sessions already started that day can still save', r.status === 200);
 
+// ---------- leaderboard ----------
+const run = { m: 'L1', res: 'win', d: 39.48, z: 379, pc: 100, pts: 12405, sp: 54, pr: 2, cs: 123456, tr: [1200, 0, 1890, 3], pf: [2, 2], junk: 'x' };
+const score = (o, opt) => worker.fetch(new Request('https://relay.example/score', { method: 'POST', headers: Object.assign({ Origin: ORIGIN, 'CF-Connecting-IP': '203.0.113.200' }, (opt && opt.headers) || {}), body: JSON.stringify(Object.assign({ v: 1, board: 'L1', name: 'jmc', pid: 'abcdef012345', core: '0a1b2c3d4e', run }, o)) }), env);
+r = await score({});
+const sf = Object.keys(files).filter(p => p.startsWith('scores/'));
+ok('a posted score is filed under scores/', r.status === 200 && sf.length === 1 && /^scores\/\d{4}-\d{2}-\d{2}\/abcdef012345-L1-[a-z0-9]+\.json$/.test(sf[0]), sf);
+const filed = sf.length ? JSON.parse(atob(files[sf[0]].content)) : {};
+ok('with the name in capitals, the presses, and nothing unknown', filed.name === 'JMC' && filed.board === 'L1' && JSON.stringify(filed.run.tr) === '[1200,0,1890,3]' && !('junk' in filed.run) && typeof filed.at === 'number', filed);
+r = await score({ name: 'toolong' }); ok('a name longer than three characters is refused', r.status === 400);
+r = await score({ name: '<b>' }); ok('a name with anything but letters and digits is refused', r.status === 400);
+r = await score({ board: '../../main' }); ok('an unknown board is refused', r.status === 400);
+r = await score({ run: { m: 'L1', res: 'win' } }); ok('a score without its presses is refused', r.status === 400);
+r = await score({}, { headers: { Origin: 'https://evil.example' } }); ok('scores from other sites are refused', r.status === 403);
+files['boards/all.json'] = { sha: 'b1', content: btoa(JSON.stringify({ updated: 'now', boards: { L1: [{ n: 'JMC', t: 39.48, pts: 12405, pf: 22, p: 'abcdef' }] } })) };
+r = await worker.fetch(new Request('https://relay.example/boards', { method: 'GET', headers: { Origin: ORIGIN } }), env);
+const bj = await r.json();
+ok('the boards come back to the game', r.status === 200 && bj.boards.L1[0].n === 'JMC' && r.headers.get('Access-Control-Allow-Origin') === ORIGIN, bj);
+ok('the status line still answers', (await (await worker.fetch(new Request('https://relay.example/', { method: 'GET' }), env)).json()).ready === true);
+
 console.log(fails ? fails + ' FAILED' : 'relay: all checks passed');
 process.exit(fails ? 1 : 0);

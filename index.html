@@ -186,6 +186,8 @@ td.done { color: var(--tile); }
 @media (max-width: 520px) { .optrow { grid-template-columns: 1fr; } }
 .rate { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; justify-content: center; font-size: 12.5px; color: var(--dim); }
 .btn.sm { padding: 6px 9px; font-size: 11px; }
+input.nm3 { width: 5.5em; padding: 7px 9px; border: 1px solid var(--line); border-radius: 3px; background: rgb(247 244 255 / .06); color: var(--ink); font: 600 14px/1 var(--body); letter-spacing: .18em; text-transform: uppercase; text-align: center; -webkit-user-select: text; user-select: text; }
+td.me, tr.me td { color: var(--tile); }
 .menu .note { margin: 0; max-width: 46ch; font-size: 11.5px; line-height: 1.4; color: var(--dim); }
 /* ---------- tuning drawer and play data (temporary tools) ---------- */
 .drawer {
@@ -239,7 +241,8 @@ textarea.out {
   <h1 class="title" aria-label="Eightfold"><span>EIGHT</span><span>F<svg viewBox="0 0 100 100" aria-hidden="true"><polygon points="92.5,32.4 92.5,67.6 67.6,92.5 32.4,92.5 7.5,67.6 7.5,32.4 32.4,7.5 67.6,7.5" fill="none" stroke="currentColor" stroke-width="17"/></svg>LD</span></h1>
   <p class="tag" id="tagline">Eight walls, one way through. Turn the tunnel, jump, flip to the far wall, and do not fall out.</p>
   <ol class="levels" id="levels"></ol>
-  <div class="menu-row"><button class="btn" id="btnScores" type="button">Scores</button><button class="btn" id="btnControls" type="button">Controls &amp; options</button><button class="btn" id="btnTune" type="button">Tuning</button><button class="btn" id="btnData" type="button">Play data</button><button class="btn" id="btnNote" type="button">Feedback</button></div>
+  <div class="menu-row"><button class="btn" id="btnBoard" type="button">Leaderboard</button><button class="btn" id="btnScores" type="button">Scores</button><button class="btn" id="btnControls" type="button">Controls &amp; options</button><button class="btn" id="btnTune" type="button">Tuning</button><button class="btn" id="btnData" type="button">Play data</button><button class="btn" id="btnNote" type="button">Feedback</button></div>
+  <p class="note" id="verNote"></p>
   <p class="note" id="telNote" hidden>While the game is being tuned, how each run goes is recorded and sent to its developer, with no name or contact details. See Play data to look at it or switch it off.</p>
 </div></nav>
 
@@ -254,6 +257,7 @@ textarea.out {
   <p class="stat" id="failNeed" hidden></p>
   <div class="row"><button class="btn go" id="btnRetry" type="button">Restart</button><button class="btn" id="btnFromStart" type="button" hidden>From the start</button><button class="btn" id="btnNew" type="button" hidden>New course</button><button class="btn" id="btnQuit3" type="button">Level select</button><button class="btn" id="btnNote3" type="button">Feedback</button></div>
   <p id="failHint"></p>
+  <div class="rate" id="failPost" hidden></div>
   <div class="rate" id="failRate" hidden></div>
 </div>
 <div class="panel" id="winPanel" hidden>
@@ -263,6 +267,7 @@ textarea.out {
   <p id="winText"></p>
   <div class="rate" id="winRate" hidden></div>
   <div class="rate" id="winFun" hidden></div>
+  <div class="rate" id="winPost" hidden></div>
   <div class="row"><button class="btn go" id="btnNext" type="button">Next level</button><button class="btn" id="btnAgain" type="button">Play again</button><button class="btn" id="btnQuit2" type="button">Level select</button><button class="btn" id="btnNote4" type="button">Feedback</button></div>
 </div>
 
@@ -310,6 +315,15 @@ textarea.out {
   <textarea class="out" id="tuneOut" readonly rows="3" aria-label="Tuning values to send back"></textarea>
   <p>When it feels right, send these values back and they become the game's defaults.</p>
 </aside>
+
+<div class="sheet" id="boardSheet" hidden><div class="sheet-in">
+  <header><h2>Leaderboard</h2><button class="btn" id="btnCloseBoard" type="button">Close</button></header>
+  <div><span class="seg" role="group" aria-label="Which board" id="boardTabs"></span></div>
+  <p id="boardInfo"></p>
+  <div class="tablewrap"><table><thead><tr id="boardHead"></tr></thead><tbody id="boardBody"></tbody></table></div>
+  <div class="optrow"><label for="boardName">Your name on the boards: up to three letters or digits</label><input class="nm3" id="boardName" maxlength="3" autocomplete="off" spellcheck="false"></div>
+  <p id="boardNote"></p>
+</div></div>
 
 <div class="sheet" id="noteSheet" hidden><div class="sheet-in">
   <header><h2>Feedback</h2><button class="btn" id="btnCloseNote" type="button">Close</button></header>
@@ -915,6 +929,26 @@ class Bot {
   }
 }
 
+// Par: the time the course takes at its own speed, with no boosts.
+function parTime(tr) { if (tr.end === Infinity) return 0; if (tr.par == null) { let t = 0; for (let r = 0; r < tr.end; r++) t += 1 / tr.V[r]; tr.par = t; } return tr.par; }
+// What a run is worth, part by part. z: where it ended (for a fall, where the ball left the floor). Shared by the game
+// and by the leaderboard's checker, so both arrive at the same number.
+function scoreParts(track, runner, pace, win, z) {
+  const parts = [['Sparks', runner.pts]];
+  if (pace && pace.perfects) parts.push(['Perfect timing', pace.perfects * 50]);
+  if (track.end === Infinity) parts.push(['Distance', Math.floor(z) * 10]);
+  else {
+    parts.push(['Progress', Math.min(100, Math.floor(100 * z / track.end)) * 10]);
+    if (win) {
+      parts.push(['Clear', 1000], ['Time under par', Math.round(Math.max(0, parTime(track) - (pace ? pace.t : 0)) * 100)]);
+      if (track.nSparks && runner.sparks >= track.nSparks) parts.push(['Every spark', 1000]);
+    }
+  }
+  return parts;
+}
+// The one Endless course everyone shares on a given day (day as a number, 20261123), so distances can be compared.
+const endlessSeed = day => (Math.imul(day, 2654435761) ^ 0x45d9f3b) >>> 0;
+
 // The clock of a run. It is stepped with the physics and fed the same events, so the same presses always give the same
 // time: a run's time can be worked out again from its recording, on any machine.
 class Pace {
@@ -1011,7 +1045,9 @@ if (!stats || typeof stats !== 'object') stats = {};
 if (!Array.isArray(stats.lv)) stats.lv = [];
 if (!Array.isArray(stats.endless)) stats.endless = [];
 if (!stats.daily || typeof stats.daily !== 'object') stats.daily = {};
-if (!stats.know || typeof stats.know !== 'object') stats.know = {};   // how many times the player has made each kind of move: reminders stop after two
+if (!stats.know || typeof stats.know !== 'object') stats.know = {};
+if (!stats.posted || typeof stats.posted !== 'object') stats.posted = {};   // per board: the best run already posted, and the course it was on
+if (typeof stats.name !== 'string' || !/^[A-Z0-9]{1,3}$/.test(stats.name)) stats.name = '';   // how many times the player has made each kind of move: reminders stop after two
 const lvS = i => stats.lv[i] || (stats.lv[i] = { best: 0, clears: 0, tries: 0, sparks: 0, perfect: false, pclear: false });
 { const old = store.get('best', null); if (Array.isArray(old)) old.forEach((b, i) => { if (b && i < LEVELS.length) { const s = lvS(i); s.best = Math.max(s.best, b); if (b >= 100) s.clears = Math.max(1, s.clears); } }); }
 const saveStats = () => store.set('stats', stats);
@@ -1066,11 +1102,13 @@ function applyTune() {
 // ---------- play recording (temporary: so the game can be tuned from how it is really played) ----------
 // One small record per attempt: where it ended and on what, the time, sparks, how early or late each press came inside
 // the window the course allows for it, and the frame rate. Kept in this browser; see the Play data sheet.
-const BUILD = '2026-11-23i', CORE_ID = '1ebcb7c5d3';   // CORE_ID: which engine (generator + physics) this page was built from
+const BUILD = '2026-11-23j', CORE_ID = 'c39af8186c';   // CORE_ID: which engine (generator + physics) this page was built from
 // Where play records are sent from the public copy of the game: a small relay that files them on the play-data branch
 // of the game's GitHub repository (see relay/ in the repository). Empty = nothing is sent.
 let RELAY = 'https://eightfold-relay.jamesccupps.workers.dev/', relayAnywhere = false;
-const relayOn = () => !!RELAY && tel.on && !relayDead && (relayAnywhere || (location.protocol === 'https:' && !window.claude));
+const relayUp = () => !!RELAY && (relayAnywhere || (location.protocol === 'https:' && !window.claude));   // this copy of the game can reach the relay
+const relayOn = () => relayUp() && tel.on && !relayDead;
+const relayUrl = what => RELAY.replace(/\/+$/, '') + '/' + what;
 function browserName() {   // "Chrome 158" and "Windows": enough to tell machines apart, without the full browser string
   const u = String(navigator.userAgent || ''), m = u.match(/(Edg|OPR|Firefox|Chrome|CriOS|FxiOS)\/(\d+)/) || (/Safari/.test(u) && u.match(/(Version)\/(\d+)/));
   const names = { Edg: 'Edge', OPR: 'Opera', CriOS: 'Chrome', FxiOS: 'Firefox', Version: 'Safari' };
@@ -1169,7 +1207,7 @@ function telStart(cp) {
 function telPress(m, src, hit) {
   const c = telCur; if (!c) return; c.pr++; c.inp[src | 0]++;
   // the trace: every press as position (hundredths of a row) and move, so the run can be replayed against its course
-  if (c.tr.length >= 400) c.tr.splice(0, 2); c.tr.push(Math.floor(runner.z * 100), 'LRFJ'.indexOf(m));
+  if (c.tr.length < 6000) c.tr.push(Math.floor(runner.z * 100), 'LRFJ'.indexOf(m)); else c.cut = true;
   if (!hit) { c.px++; return; }   // a press the route did not call for
   const e = hit.e, f = hit.f, ms = Math.round(hit.left / timeScale() * 1000);
   c.fh[f < 0 ? 0 : f >= 1 ? 11 : 1 + Math.floor(f * 10)]++;
@@ -1192,7 +1230,7 @@ function telEnd(res) {
   }
   const kk = {}; let any = false; for (const k in c.kk) { const a = c.kk[k]; kk[k] = [a[0], Math.round(a[1] / a[0] * 100), a[2], a[3], a[4]]; any = true; }
   if (any) rec.kk = kk;
-  if (c.tr.length) rec.tr = c.tr;
+  if (c.tr.length) rec.tr = c.tr.length > 400 ? c.tr.slice(-400) : c.tr;
   if (c.pr) rec.in = c.inp;
   if (track.end !== Infinity) rec.ns = track.nSparks; else rec.seed = track.seed;
   if (pace.boost > 0) rec.bo = Math.round(pace.boost * 100);
@@ -1206,6 +1244,7 @@ function telEnd(res) {
   if (practice()) rec.prac = 1;
   const td = tuneFromBase(); for (const k in td) { rec.tu = td; break; }
   telLast = { m: rec.m, at: performance.now() };
+  lastRun = c.cut ? null : Object.assign({}, rec, { tr: c.tr });   // whole, in case it goes on a leaderboard
   tel.log.push(rec); if (tel.log.length > 400) tel.log.splice(0, tel.log.length - 400);
   telSession(); saveTel(); telSync(); telSend(false);
 }
@@ -1419,19 +1458,10 @@ let shards = [], ballAt = { x: 0, y: 0, R: 10 }, lastPc = '', lastSp = '', lastT
 let pace = null, perfAt = 0, perfFlash = 0, deathZ = 0, coachI = 0, coachOn = null;
 let boostVis = 0, kick = 0;   // eased copy of the speed-up for the view, music and streaks; kick is a brief pulse on each pickup
 const fmtN = n => Math.round(n).toLocaleString('en-US');
-function parOf(tr) { if (tr.end === Infinity) return 0; if (tr.par == null) { let t = 0; for (let r = 0; r < tr.end; r++) t += 1 / tr.V[r]; tr.par = t; } return tr.par; }
-// points for the run so far (or the finished run): what each part is worth
+const parOf = parTime;
+// points for the run so far (or the finished run): what each part is worth. The sums are the engine's, so the leaderboard's checker gets the same.
 function tally(win) {
-  const parts = [['Sparks', runner.pts]];
-  if (pace && pace.perfects) parts.push(['Perfect timing', pace.perfects * 50]);
-  if (track.end === Infinity) parts.push(['Distance', Math.floor(runner.z) * 10]);
-  else {
-    parts.push(['Progress', score() * 10]);
-    if (win) {
-      parts.push(['Clear', 1000], ['Time under par', Math.round(Math.max(0, parOf(track) - runT) * 100)]);
-      if (track.nSparks && runner.sparks >= track.nSparks) parts.push(['Every spark', 1000]);
-    }
-  }
+  const parts = scoreParts(track, runner, pace, win, runner.dead ? deathZ : runner.z);
   let total = 0; for (const p of parts) total += p[1];
   return { total, parts };
 }
@@ -1465,7 +1495,7 @@ function startAttract() {
   track = new Track((Math.random() * 1e9) | 0, null); attach(); bot = new Bot(track, .5, false);
 }
 function modeName() { return mode === 'endless' ? 'Endless' : mode === 'daily' ? 'Daily' : mode === 'tutorial' ? 'How to play' : LEVELS[mode].name; }
-function hidePanels() { for (const id of ['menu', 'pausePanel', 'failPanel', 'winPanel', 'scoreSheet', 'ctrlSheet', 'briefSheet', 'tuneSheet', 'dataSheet', 'noteSheet']) $(id).hidden = true; overlay = null; }
+function hidePanels() { for (const id of ['menu', 'pausePanel', 'failPanel', 'winPanel', 'scoreSheet', 'ctrlSheet', 'briefSheet', 'tuneSheet', 'dataSheet', 'noteSheet', 'boardSheet']) $(id).hidden = true; overlay = null; }
 function begin(first, cp) {
   telEnd('restart'); attach(); bot = null; state = 'play'; telStart(cp);
   pace = new Pace(track, mode === 'tutorial' ? 1 : opts.speed * tune.pace, mode === 'tutorial'); coachI = 0; coachOn = null; perfFlash = 0; lastPerf = -1;
@@ -1495,7 +1525,11 @@ let bestRow = -1;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 function launchRun(m, tr, song) { mode = m; track = tr; tries = 0; resumeCp = null; telEv('run:' + telMode()); Snd.wake(); Snd.song(song); begin(true); }
 function startLevel(i, skip) { if (!unlocked(i)) return; store.set('last', i); pal = PALS[i]; enter(i, new Track(LEVELS[i].seed, LEVELS[i]), i, skip); }
-function startEndless(skip) { hue0 = Math.random() * 360; palZ = -99; enter('endless', new Track((Math.random() * 1e9) | 0, null), 3 + ((Math.random() * 5) | 0), skip); }
+// Endless is one course a day, the same for everyone, so distances can be compared. random: any other course, for practice.
+function startEndless(skip, random) {
+  const d = today(), tr = new Track(random ? (Math.random() * 1e9) | 0 : endlessSeed(d.seed), null); if (!random) tr.rankDay = d.key;
+  hue0 = random ? Math.random() * 360 : d.seed * 47 % 360; palZ = -99; enter('endless', tr, random ? 3 + ((Math.random() * 5) | 0) : 3 + d.seed % 5, skip);
+}
 function startDaily(skip) { const d = today(); pal = PALS[d.seed % 8]; enter('daily', new Track(d.seed, Object.assign({}, DAILY, { pat: d.seed % 5 })), d.seed % 8, skip); }
 // ---------- level briefing: what the level is, what is new in it, and how to deal with each thing ----------
 const GROUP = { step: 'turns', stairs: 'turns', zigzag: 'turns', spiral: 'turns', flipGate: 'overhead', pingpong: 'overhead', dodge1: 'blocks', dodge2: 'blocks', slalom: 'blocks',
@@ -1535,7 +1569,7 @@ function showBrief(m, tr, song) {
   const fresh = lv ? types.filter(t => !seen[t]) : [], old = types.filter(t => fresh.indexOf(t) < 0);
   $('brNo').textContent = lv ? 'Level ' + pad2(m + 1) + ' of ' + pad2(LEVELS.length) : m === 'daily' ? 'Daily course · ' + today().label : 'Endless';
   $('brName').textContent = modeName();
-  $('brHint').textContent = m === 'endless' ? 'No finish line. It starts with turns, flips and blocks, then adds everything else as it speeds up. Restart replays the same course.' : tr.level.hint;
+  $('brHint').textContent = m === 'endless' ? (tr.rankDay ? 'No finish line. Today\u2019s course is the same for everyone, so distances can be compared. ' : 'No finish line. A random course, for practice. ') + 'It starts with turns, flips and blocks, then adds everything else as it speeds up.' : tr.level.hint;
   const st = $('brStats'); st.textContent = '';
   const stat = (k, v, html) => { const d = document.createElement('div'), a = document.createElement('dt'), b = document.createElement('dd'); a.textContent = k; if (html) b.innerHTML = v; else b.textContent = v; d.appendChild(a); d.appendChild(b); st.appendChild(d); };
   const sp = tr.speedAt(0), on = clamp(Math.round((sp - 6.8) / .75), 1, 8); let pips = '<span class="pips" role="img" aria-label="' + on + ' of 8">'; for (let i = 0; i < 8; i++) pips += '<i' + (i < on ? ' class="on"' : '') + '></i>'; stat('Speed', pips + '</span>', true);
@@ -1567,7 +1601,7 @@ function lastCp() {
   if (!opts.cp || track.end === Infinity || mode === 'tutorial') return null;
   let c = null; for (const p of track.cps) { if (p.z <= runner.z - 2) c = p; else break; } return c;
 }
-function score() { return track.end === Infinity ? Math.floor(runner.z) : Math.min(100, Math.floor(100 * runner.z / track.end)); }
+function score() { const z = runner.dead && state !== 'menu' ? deathZ : runner.z; return track.end === Infinity ? Math.floor(z) : Math.min(100, Math.floor(100 * z / track.end)); }   // a fall is measured where the ball left the floor
 const fmtT = t => t.toFixed(1) + ' s';
 
 function record(win) {   // returns { best, rec, total, parts, newScore, newTime }
@@ -1618,8 +1652,9 @@ function showFail() {
   fn.hidden = !(NT && NT[2]);
   if (!fn.hidden) { fn.innerHTML = esc(NT[0]) + ': ' + esc(NT[1]) + ' <kbd>' + keyHtml(need.key) + '</kbd>'; }
   $('failStat').textContent = bits.join('  ·  ');
-  $('btnNew').hidden = mode !== 'endless';
+  $('btnNew').hidden = mode !== 'endless'; $('btnNew').textContent = track.rankDay ? 'Random course' : 'Today\u2019s course';
   $('failHint').textContent = (practice() && mode !== 'tutorial' ? 'Practice run: not recorded. ' : '') + (touchSeen ? 'Restart replays' : 'Press ' + labelFor('restart') + ' or ' + labelFor('jump') + ' to restart') + (resumeCp ? ' from the checkpoint.' : ' the same course.');
+  postRow($('failPost'));
   rateRow($('failRate'), tries >= 4, 'fb', feelQ(), FEEL);
   $('failPanel').hidden = false; $('btnRetry').focus();
 }
@@ -1637,7 +1672,7 @@ function onWin() {
   $('btnNext').hidden = !(tut || (lv && mode < LEVELS.length - 1));
   $('btnNext').textContent = tut ? 'Start level 1' : 'Next level';
   $('btnAgain').hidden = tut;
-  rateRow($('winRate'), true, 'fb', feelQ(), FEEL); rateRow($('winFun'), true, 'fun', 'Was it fun?', FUN);
+  rateRow($('winRate'), true, 'fb', feelQ(), FEEL); rateRow($('winFun'), true, 'fun', 'Was it fun?', FUN); postRow($('winPost'));
   $('winPanel').hidden = false; ($('btnNext').hidden ? $('btnAgain') : $('btnNext')).focus();
 }
 function toMenu() {
@@ -1982,7 +2017,7 @@ function menuRow(id, n, name, meta, done, onClick, cls, locked, hint) {
   if (hint) { const on = () => { $('tagline').textContent = hint; }, off = () => { $('tagline').textContent = TAG; }; li.addEventListener('mouseenter', on); li.addEventListener('mouseleave', off); b.addEventListener('focus', on); b.addEventListener('blur', off); }
 }
 function buildMenu() {
-  $('telNote').hidden = !relayOn();
+  $('telNote').hidden = !relayOn(); $('verNote').textContent = 'Version ' + BUILD + ' \u00B7 engine ' + CORE_ID;
   $('levels').textContent = '';
   $('tagline').textContent = TAG;
   menuRow('lvTut', '?', 'How to play', stats.tut ? 'done' : 'start here', !!stats.tut, startTutorial, 'alt', false, 'Every move, one at a time. The run waits for you at each obstacle.');
@@ -1992,7 +2027,7 @@ function buildMenu() {
     menuRow('lv' + (i + 1), pad2(i + 1), lv.name, meta, st.clears > 0, () => startLevel(i), '', !open, lv.hint);
   });
   const top = stats.endless[0];
-  menuRow('lvEndless', '∞', 'Endless', top ? top.m + ' m' : '—', false, () => startEndless(), 'alt', false, 'No finish line. It gets faster and adds new obstacles the further you go.');
+  menuRow('lvEndless', '∞', 'Endless', top ? top.m + ' m' : '—', false, () => startEndless(), 'alt', false, 'No finish line. One course a day, the same for everyone: how far can you get?');
   const d = dailyS();
   menuRow('lvDaily', '☀', 'Daily · ' + today().label, d.cleared ? 'cleared' : d.best ? d.best + '%' : '—', !!d.cleared, () => startDaily(), 'alt', false, DAILY.hint + ' Sixty seconds, a bit of everything.');
 }
@@ -2158,6 +2193,90 @@ function copyText(text, area, btn, label) {   // clipboard if allowed; otherwise
   try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => done(true), byHand); else byHand(); } catch (e) { byHand(); }
 }
 
+// ---------- leaderboard ----------
+// A run that beats what this player has already posted is sent to the relay with its presses. It is played back on the
+// real engine before it is listed, so what the boards show is what the presses really give.
+let lastRun = null, boardsData = null, boardsAt = 0, boardSel = 'E';
+const fmtTime = t => t.toFixed(2) + ' s';
+// the board the run just finished belongs on, and its value there, or null if it does not go on one
+function boardFor() {
+  if (!relayOn() || !scored() || !lastRun || mode == null || !lastRun.tr || lastRun.pr * 2 !== lastRun.tr.length) return null;
+  let id = null, v = 0;
+  if (lastRun.res === 'win' && typeof mode === 'number') { id = 'L' + (mode + 1); v = lastRun.d; }
+  else if (lastRun.res === 'win' && mode === 'daily') { id = 'D' + today().key; v = lastRun.d; }
+  else if (mode === 'endless' && track.rankDay && lastRun.res !== 'win' && lastRun.z >= 30) { id = 'E' + track.rankDay; v = lastRun.z; }
+  if (!id) return null;
+  const was = stats.posted[id], far = id[0] === 'E';
+  if (was && was.cs === lastRun.cs && (far ? v < was.v || (v === was.v && lastRun.pts <= (was.pts | 0)) : v >= was.v)) return null;   // not better than what is already posted
+  return { id, v, far };
+}
+function postRow(el) {
+  el.textContent = ''; el.hidden = true;
+  const b = boardFor(); if (!b) return;
+  el.hidden = false;
+  const send = () => {
+    el.textContent = 'Posting to the leaderboard as ' + stats.name + '…';
+    const ok = () => {
+      stats.posted[b.id] = { cs: lastRun.cs, v: b.v, pts: lastRun.pts | 0 }; saveStats(); telEv('post:' + b.id); boardsAt = 0;
+      el.textContent = 'Posted as ' + stats.name + (b.far ? ': ' + b.v + ' m. ' : ': ' + fmtTime(b.v) + '. ') + 'It shows once it has been checked, in about a minute. ';
+      const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'btn sm'; btn.textContent = 'Leaderboard'; btn.addEventListener('click', () => openBoard(b.id)); el.appendChild(btn);
+    };
+    const no = why => { el.textContent = 'Could not post this run' + (why ? ': ' + why : '') + '.'; };
+    try {
+      fetch(relayUrl('score'), { method: 'POST', body: JSON.stringify({ v: 1, board: b.id, name: stats.name, pid: tel.pid, core: CORE_ID, run: lastRun, test: location.hash === '#test' || undefined }), headers: { 'Content-Type': 'text/plain;charset=UTF-8' } })
+        .then(r => r.ok ? ok() : r.json().then(j => no(j && j.error), () => no('')), () => no('no connection'));
+    } catch (e) { no(''); }
+  };
+  if (stats.name) return send();
+  const l = document.createElement('label'); l.textContent = (b.far ? b.v + ' m' : fmtTime(b.v)) + '. Put it on the leaderboard as '; l.htmlFor = 'postName';
+  const inp = document.createElement('input'); inp.id = 'postName'; inp.className = 'nm3'; inp.maxLength = 3; inp.autocomplete = 'off'; inp.spellcheck = false; inp.setAttribute('aria-label', 'Three letters or digits');
+  const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'btn sm'; btn.id = 'btnPost'; btn.textContent = 'Post';
+  btn.addEventListener('click', () => { const n = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3); if (!n) { inp.focus(); return; } stats.name = n; saveStats(); send(); });
+  el.appendChild(l); el.appendChild(inp); el.appendChild(btn);
+}
+const BOARD_TABS = () => LEVELS.map((lv, i) => ['L' + (i + 1), pad2(i + 1)]).concat([['D', 'Daily'], ['E', 'Endless']]);
+function drawBoard() {
+  const tabs = $('boardTabs'); tabs.textContent = '';
+  for (const [id, text] of BOARD_TABS()) {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = text; b.setAttribute('aria-pressed', String(boardSel === id));
+    if (id[0] === 'L') b.setAttribute('aria-label', 'Level ' + (+id.slice(1)) + ': ' + LEVELS[+id.slice(1) - 1].name);
+    b.addEventListener('click', () => { boardSel = id; drawBoard(); });
+    tabs.appendChild(b);
+  }
+  const far = boardSel === 'E', key = boardSel.length === 1 ? boardSel + today().key : boardSel, rows = boardsData && boardsData.boards ? boardsData.boards[key] || [] : null;
+  $('boardInfo').textContent = !relayUp() ? 'The leaderboard is on the public game, at jamesccupps.github.io/EightFold.'
+    : far ? 'Endless, today’s course (' + today().label + '): how far you got. Ties go to points.'
+    : boardSel === 'D' ? 'Daily course, ' + today().label + ': fastest clear.'
+    : 'Level ' + (+boardSel.slice(1)) + ', ' + LEVELS[+boardSel.slice(1) - 1].name + ': fastest clear.';
+  const head = $('boardHead'); head.textContent = ''; for (const h of ['#', 'Name', far ? 'Distance' : 'Time', 'Perfects', 'Points']) { const th = document.createElement('th'); th.textContent = h; head.appendChild(th); }
+  const body = $('boardBody'); body.textContent = '';
+  const line = t => { const tr = document.createElement('tr'); cell(tr, ''); cell(tr, t); cell(tr, ''); cell(tr, ''); cell(tr, ''); body.appendChild(tr); };
+  if (!relayUp()) line('—');
+  else if (!rows) line(boardsData === false ? 'The boards could not be reached. Try again in a moment.' : 'Fetching…');
+  else if (!rows.length) line('Nobody yet. ' + (far ? 'Play Endless to be first.' : 'Clear it to be first.'));
+  else rows.forEach((e, i) => {
+    const tr = document.createElement('tr'); if (e.p === tel.pid.slice(0, 6)) tr.className = 'me';
+    cell(tr, String(i + 1)); cell(tr, String(e.n)); cell(tr, far ? (e.m | 0) + ' m' : fmtTime(+e.t)); cell(tr, String(e.pf | 0)); cell(tr, fmtN(e.pts | 0)); body.appendChild(tr);
+  });
+  const mine = stats.posted[key];
+  $('boardNote').textContent = (mine ? 'Your best posted here: ' + (far ? mine.v + ' m' : fmtTime(mine.v)) + '. ' : '')
+    + 'Only a run that beats your own best is posted. Each one is played back from its presses before it is listed, which takes about a minute. A board starts again when its course changes.'
+    + (tel.on ? '' : ' Recording is off, so runs are not posted: switch it on under Play data.');
+  const nm = $('boardName'); if (document.activeElement !== nm) nm.value = stats.name;
+}
+function loadBoards() {
+  if (!relayUp()) return;
+  if (boardsData && performance.now() - boardsAt < 20000) return;
+  boardsAt = performance.now();
+  try { fetch(relayUrl('boards')).then(r => r.json()).then(j => { boardsData = j && j.boards ? j : { boards: {} }; if (overlay === 'boardSheet') drawBoard(); }, () => { if (!boardsData) boardsData = false; if (overlay === 'boardSheet') drawBoard(); }); } catch (e) { boardsData = false; }
+}
+function openBoard(id) {
+  if (state === 'play') setPause(true);
+  if (id) boardSel = id[0] === 'L' ? id : id[0]; else if (typeof mode === 'number') boardSel = 'L' + (mode + 1); else if (mode === 'daily') boardSel = 'D'; else if (mode === 'endless') boardSel = 'E';
+  if (boardsData === false) boardsData = null;
+  drawBoard(); openSheet('boardSheet'); loadBoards();
+}
+
 // ---------- feedback: a few words from the player, sent with the play data ----------
 const NOTE_KINDS = [['idea', 'Suggestion'], ['bug', 'Problem'], ['other', 'Other']];
 let noteKind = 'idea';
@@ -2255,6 +2374,11 @@ const turn = left => (left !== opts.invert) ? 'L' : 'R';
 window.addEventListener('keydown', e => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const k = keyNorm(e);
+  if (e.target && e.target.tagName === 'INPUT' && e.target.type !== 'range') {   // typing a name is typing, not playing
+    if (k === 'Enter' && e.target.id === 'postName') { e.preventDefault(); const b = $('btnPost'); if (b) b.click(); }
+    else if (k === 'Escape') e.target.blur();
+    return;
+  }
   if (listening) { e.preventDefault(); setBind(k); return; }
   if (overlay) { if (k === 'Escape' || (k === 't' && overlay === 'tuneSheet')) { e.preventDefault(); closeSheet(); } return; }
   const a = actionOf(k);
@@ -2305,7 +2429,7 @@ on('btnRestart', () => { Snd.wake(); record(false); retry(true); });
 on('btnFromStart', () => retry(true));
 on('btnQuit', toMenu); on('btnQuit2', toMenu); on('btnQuit3', toMenu);
 on('btnRetry', () => { if (failT > .15) retry(); });
-on('btnNew', () => startEndless(true));
+on('btnNew', () => startEndless(true, !!track.rankDay));
 on('btnAgain', () => { if (mode === 'daily') startDaily(true); else if (mode === 'endless') startEndless(true); else startLevel(mode, true); });
 on('btnGo', go); on('btnBack', toMenu);
 on('btnNext', () => { if (mode === 'tutorial') startLevel(0); else startLevel(Math.min(LEVELS.length - 1, mode + 1)); });
@@ -2321,6 +2445,8 @@ on('btnTuneReset', () => { for (const t of TUNE) if (typeof t !== 'string' && !t
 on('btnTuneCopy', e => { tuneText(); copyText($('tuneOut').value, $('tuneOut'), e.currentTarget, 'Copy values'); });
 on('btnData', () => { buildData(); openSheet('dataSheet'); });
 on('btnCloseData', closeSheet);
+on('btnBoard', () => openBoard()); on('btnCloseBoard', closeSheet);
+$('boardName').addEventListener('input', e => { const n = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3); stats.name = n; saveStats(); });
 for (const id of ['btnNote', 'btnNote2', 'btnNote3', 'btnNote4']) on(id, openNote);
 on('btnCloseNote', closeSheet); on('btnNoteSend', sendNote);
 on('btnDataCopy', e => copyText(dataExport(), $('dataOut'), e.currentTarget, 'Copy'));
