@@ -149,6 +149,9 @@ button:focus-visible { outline: 2px solid var(--tile); outline-offset: 2px; }
 .hud .tg.bump { animation: bump .35s ease-out; }
 @keyframes bump { 0% { transform: scale(1.16); } 100% { transform: scale(1); } }
 .hud .tg { display: inline-block; font: 600 11px/1 var(--body); letter-spacing: .1em; padding: 4px 6px; border: 1px solid currentColor; border-radius: 2px; }
+/* slow-mo: the tag is filled for as much of the time as is left, and turns white for the last second */
+.hud .slowtg { background: linear-gradient(90deg, rgba(217,184,255,.3) var(--f, 100%), transparent 0); font-variant-numeric: tabular-nums; min-width: 9.5ch; }
+.hud .slowtg.last { color: #fff !important; }
 .bar b { position: absolute; top: 0; bottom: -4px; width: 2px; background: var(--ink); }
 .corner { position: fixed; top: 10px; right: clamp(10px, 3vw, 24px); display: flex; gap: 8px; }
 @media (max-width: 560px) { #btnFull { display: none; } .hud { max-width: calc(100% - 200px); } }
@@ -299,7 +302,7 @@ textarea.out {
 <div class="hud" id="hud" hidden>
   <span class="no" id="hudNo">01</span><span class="nm" id="hudNm">First Light</span><span class="pc" id="hudPc">0%</span>
   <span class="sp" id="hudSp"></span><span class="tm" id="hudTm"></span><span class="sp" id="hudPts"></span>
-  <span class="tg" id="tgShield" hidden style="color:#7fe7ff">Shield</span><span class="tg" id="tgSlow" hidden style="color:#d9b8ff">Slow-mo</span><span class="tg" id="tgBoost" hidden style="color:var(--tile)"></span><span class="tg" id="tgPerf" hidden style="color:#fff"></span><span class="tg" id="tgPrac" hidden>Practice</span>
+  <span class="tg" id="tgShield" hidden style="color:#7fe7ff">Shield</span><span class="tg slowtg" id="tgSlow" hidden style="color:#d9b8ff">Slow-mo</span><span class="tg" id="tgBoost" hidden style="color:var(--tile)"></span><span class="tg" id="tgPerf" hidden style="color:#fff"></span><span class="tg" id="tgPrac" hidden>Practice</span>
 </div>
 <div class="corner">
   <button class="btn" id="btnPause" type="button" hidden>Pause</button>
@@ -552,7 +555,7 @@ function applyTune() {
 // ---------- play recording (temporary: so the game can be tuned from how it is really played) ----------
 // One small record per attempt: where it ended and on what, the time, sparks, how early or late each press came inside
 // the window the course allows for it, and the frame rate. Kept in this browser; see the Play data sheet.
-const BUILD = '2026-11-24a', CORE_ID = '/*COREID*/';   // CORE_ID: which engine (generator + physics) this page was built from
+const BUILD = '2026-11-24b', CORE_ID = '/*COREID*/';   // CORE_ID: which engine (generator + physics) this page was built from
 // Where play records are sent from the public copy of the game: a small relay that files them on the play-data branch
 // of the game's GitHub repository (see relay/ in the repository). Empty = nothing is sent.
 let RELAY = 'https://eightfold-relay.jamesccupps.workers.dev/', relayAnywhere = false;
@@ -1064,7 +1067,7 @@ function buildGuide() {
     info(IC.high, 'Ringed spark', 'Hangs in the air over a bar or a gap. Jump through it: 200 points.', 'jump'),
     info(IC.risk, 'Red spark', 'Optional, on a strip off the safe line. 300 points, and speed beyond the usual top speed. Three at a time.'),
     info(IC.shield, 'Shield', 'Saves you from one hit. A blue ring shows around the ball while you have it. It does not stop a fall.'),
-    info(IC.slow, 'Slow-mo', 'Time runs slower for ' + PACE.slowSecs + ' seconds. Easier, but the clock keeps going, so it costs time.')]);
+    info(IC.slow, 'Slow-mo', 'Time runs slower for ' + PACE.slowSecs + ' seconds. A purple ring around the ball empties as it runs out and flickers white for the last second; the tag at the top counts down too. Easier, but the clock keeps going, so it costs time.')]);
   fill('gdFloor', [
     info(IC.strip, 'Red strip', 'Where red sparks sit: beside the floor (turn out to it) or overhead (flip to it). It turns full red after the last spark and ends at the white bar. Be back on the main floor by then.'),
     info(IC.mark, 'Marked tile', 'A sliding block or a swinging bar is about to stop here. Be on another tile.'),
@@ -1574,11 +1577,17 @@ function drawRunner(v, cam) {
   ctx.fillStyle = g; ctx.beginPath(); ctx.arc(bx, by, R, 0, 6.2832); ctx.fill();
   ctx.lineWidth = Math.max(1.5, R * .09); ctx.strokeStyle = sk === 'void' ? '#fff' : rgba(pal.bg, .55); ctx.stroke();
   if (runner.shield) { ctx.strokeStyle = '#7fe7ff'; ctx.lineWidth = Math.max(2, R * .14); ctx.beginPath(); ctx.arc(bx, by, R * 1.45, 0, 6.2832); ctx.stroke(); }
+  if (pace.slowT > 0) {   // slow-mo: a ring that empties as the time runs out, where the eyes already are; it flickers in the last second
+    const f = Math.min(1, pace.slowT / PACE.slowSecs), rr = R * 1.82, last = pace.slowT < 1;
+    ctx.lineWidth = Math.max(2, R * .16); ctx.strokeStyle = 'rgba(217,184,255,.22)'; ctx.beginPath(); ctx.arc(bx, by, rr, 0, 6.2832); ctx.stroke();
+    ctx.globalAlpha = last && !calm() ? .55 + .45 * Math.cos(pace.slowT * 25) : 1; ctx.strokeStyle = last ? '#fff' : '#d9b8ff'; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(bx, by, rr, -1.5708, -1.5708 + 6.2832 * f); ctx.stroke(); ctx.globalAlpha = 1; ctx.lineCap = 'butt';
+  }
   ctx.restore(); ctx.lineWidth = 1;
 }
 
 // ================= HUD + menu =================
-let lastFlags = -1, lastProg = '';
+let lastFlags = -1, lastProg = '', lastSlow = -1;
 const EL = {};
 for (const id of ['hudPc', 'hudSp', 'hudTm', 'hudPts', 'tgBoost', 'prog', 'tgShield', 'tgSlow', 'pad']) EL[id] = $(id);
 let lastPts = '', lastBoost = -1, lastPerf = -1;
@@ -1595,6 +1604,8 @@ function hud() {
   const bp = mode === 'tutorial' ? 0 : Math.round(pace.gain() * 100); if (bp !== lastBoost) { const up = bp > lastBoost; lastBoost = bp; EL.tgBoost.hidden = !bp; EL.tgBoost.textContent = '+' + bp + '% speed'; if (bp && up) { EL.tgBoost.classList.remove('bump'); void EL.tgBoost.offsetWidth; EL.tgBoost.classList.add('bump'); } }
   const flags = (runner.shield ? 1 : 0) | (pace.slowT > 0 ? 2 : 0) | (touchSeen && (state === 'play' || state === 'dead') ? 4 : 0);
   if (flags !== lastFlags) { lastFlags = flags; EL.tgShield.hidden = !(flags & 1); EL.tgSlow.hidden = !(flags & 2); EL.pad.hidden = !(flags & 4); }
+  const sl = pace.slowT > 0 ? Math.ceil(pace.slowT * 10) : 0;   // tenths of a second of slow-mo left
+  if (sl !== lastSlow) { lastSlow = sl; if (sl) { EL.tgSlow.textContent = 'Slow-mo ' + (sl / 10).toFixed(1); EL.tgSlow.style.setProperty('--f', Math.min(100, sl / PACE.slowSecs * 10).toFixed(1) + '%'); EL.tgSlow.classList.toggle('last', sl <= 10); } }
   const top = stats.endless[0] ? stats.endless[0].m : 0;
   const pr = (endless ? clamp(runner.z / Math.max(80, top), 0, 1) : clamp(runner.z / track.end, 0, 1)).toFixed(3);
   if (pr !== lastProg) { lastProg = pr; EL.prog.style.transform = 'scaleX(' + pr + ')'; }
@@ -2202,6 +2213,7 @@ window.__eightfold = {
   sig() { let h = 0; track.cell(300, 0); for (let r = 0; r < 300; r++) h = (h * 31 + track.S[r] + 7 * track.B[r]) | 0; return h; },
   pilot() { bot = new Bot(track, .5, false); },
   kill() { runner.die('fall'); },
+  slow() { pace.slow(); },
   risk() { return riskMap(track).list.map(x => ({ z0: x.z0, z1: x.z1, back: x.back, b: x.b, first: x.first, lane: x.lane, far: x.far, n: x.n })); },
   stats() { return stats; },
   post() { return { busy: Object.assign({}, postBusy), why: Object.assign({}, postWhy), msg: Object.assign({}, postMsg), fails: postFails }; },
