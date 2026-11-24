@@ -1011,9 +1011,11 @@ const RM = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)'
 const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
 const calm = () => RM || opts.calm;   // fewer effects: no shake, flash, streaks or beat pulse
 const pad2 = n => String(n).padStart(2, '0');
+// Opened with #test on the address, the game keeps its saved state apart, so checking it never touches a player's own scores, name or settings.
+const PFX = location.hash === '#test' ? 'eightfold.test.' : 'eightfold.';
 const store = {
-  get(k, d) { try { const v = localStorage.getItem('eightfold.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
-  set(k, v) { try { localStorage.setItem('eightfold.' + k, JSON.stringify(v)); } catch (e) {} }
+  get(k, d) { try { const v = localStorage.getItem(PFX + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(PFX + k, JSON.stringify(v)); } catch (e) {} }
 };
 // anything that goes wrong in the page, as short plain text with where it happened (for the play recording)
 const errLog = [], T00 = performance.now();
@@ -1102,7 +1104,7 @@ function applyTune() {
 // ---------- play recording (temporary: so the game can be tuned from how it is really played) ----------
 // One small record per attempt: where it ended and on what, the time, sparks, how early or late each press came inside
 // the window the course allows for it, and the frame rate. Kept in this browser; see the Play data sheet.
-const BUILD = '2026-11-23j', CORE_ID = 'c39af8186c';   // CORE_ID: which engine (generator + physics) this page was built from
+const BUILD = '2026-11-23k', CORE_ID = 'c39af8186c';   // CORE_ID: which engine (generator + physics) this page was built from
 // Where play records are sent from the public copy of the game: a small relay that files them on the play-data branch
 // of the game's GitHub repository (see relay/ in the repository). Empty = nothing is sent.
 let RELAY = 'https://eightfold-relay.jamesccupps.workers.dev/', relayAnywhere = false;
