@@ -14,7 +14,7 @@ let n = 0;
 for (const s of [].concat(...process.argv.slice(2).map(sessions))) for (const note of s.notes || []) {
   n++;
   const when = s.t ? new Date((s.t + (note.t || 0)) * 1000).toISOString().slice(0, 16).replace('T', ' ') : '';
-  console.log(`[${when}] ${KIND[note.k] || 'note'}${note.m ? ' at ' + note.m + (note.pc != null ? ' ' + note.pc + '%' : '') : ''}  (${[s.br, s.os, s.touch ? 'touch' : '', s.cc, 'visit ' + (s.vn || '?')].filter(Boolean).join(', ')}; player ${s.pid || s.id})`);
+  console.log(`[${when}] ${KIND[note.k] || 'note'}${note.m ? ' at ' + note.m + (note.pc != null ? ' ' + note.pc + (note.m === 'E' ? ' m' : '%') : '') : ''}  (${[s.br, s.os, s.touch ? 'touch' : '', s.cc, 'visit ' + (s.vn || '?')].filter(Boolean).join(', ')}; player ${s.pid || s.id})`);
   console.log('    ' + JSON.stringify(note.x));
 }
 console.log(n + (n === 1 ? ' note' : ' notes'));

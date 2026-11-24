@@ -117,7 +117,7 @@ if (known) out(`runs well below the screen's refresh rate: ${below} of ${known}`
 
 const notes = [].concat(...visits.map(d => (d.session.notes || []).map(n => [d.session, n])));
 head(`What players said (${notes.length})`);
-for (const [s, n] of notes) out(`   [${({ idea: 'suggestion', bug: 'problem', other: 'other' })[n.k] || 'note'}${n.m ? ', ' + course(n.m) + (n.pc != null ? ' at ' + n.pc + '%' : '') : ''}; ${[s.os, s.touch ? 'touch' : ''].filter(Boolean).join(' ')}] ${JSON.stringify(n.x)}`);
+for (const [s, n] of notes) out(`   [${({ idea: 'suggestion', bug: 'problem', other: 'other' })[n.k] || 'note'}${n.m ? ', ' + course(n.m) + (n.pc != null ? ' at ' + n.pc + (n.m === 'E' ? ' m' : '%') : '') : ''}; ${[s.os, s.touch ? 'touch' : ''].filter(Boolean).join(' ')}] ${JSON.stringify(n.x)}`);
 const fb = count([].concat(...visits.map(d => Object.entries(d.session.fb || {}).map(e => course(e[0]) + ': ' + e[1]))));
 if (fb.length) out('   ratings: ' + fb.map(e => e[0] + ' x' + e[1]).join(', '));
 
