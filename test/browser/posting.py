@@ -9,6 +9,11 @@ S = 'window.__eightfold.state()'; KEY = {'L': 'ArrowLeft', 'R': 'ArrowRight', 'F
 def get(path): return urllib.request.urlopen(BASE + path).read().decode()
 def stored(): return json.loads(get('/files'))
 def scores(): return sorted((v['data']['run']['z'], v['data']['name']) for k, v in stored()['files'].items() if k.startswith('scores/'))
+from _check import report, done
+EXPECT = { '1_prompt_after_good_run': lambda v: 'Put it on the leaderboard as' in v[1], '1_prompt_after_worse_run': lambda v: v[1].startswith('Your best run,') and v[0] < 200, '1_nothing_filed_yet': [],
+  '2_relay_silent': lambda v: v.startswith('Not posted yet'), '2_sent_again': lambda v: v[0].startswith('Posted as ABC') and len(v[1]) == 1, '3_collisions': lambda v: v[0].startswith('Posted as ABC') and len(v[1]) == 2,
+  '4_waiting': lambda v: v[0].startswith('Not posted yet') and v[1] == 2, '4_next_visit': lambda v: len(v[0]) == 3 and v[1] == 0, '5_leaving_sends_once_then_nothing': (1, 0),
+  '6_send_failed': lambda v: v[0] == 0, '6_sent_again': lambda v: v[0] == 1 }
 async def play(pg, stop_at):
     i = 0; ev = []
     for n in range(20000):
@@ -76,5 +81,5 @@ async def main():
     finally:
         srv.terminate()
     r['errors'] = errs
-    for k, v in r.items(): print('  ', k, '=', v)
+    report('', r, EXPECT); done()
 asyncio.run(main())

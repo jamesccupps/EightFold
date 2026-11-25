@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+const HID = pid => createHash('sha256').update('eightfold:' + pid).digest('hex').slice(0, 16);   // what the relay files in place of a player's code
 // Runs the relay Worker in Node against a stand-in for GitHub's contents API.  node relay/test.mjs
 import worker from './worker.js';
 
@@ -56,7 +58,7 @@ ok('the visit trail, ratings and progress are stored, even with no new runs', r.
 r = await post({ v: 1, session: Object.assign({}, session, { pid: 'abcdef012345', vn: 3, first: '2026-11-20', ref: 'news.ycombinator.com', kb: 'left:j|a,flip:k|', err: [12, "Cannot read properties of undefined (reading 'z') @1203:14"], cc: 'ZZ' }),
   attempts: [attempt({ i: 4, m: 'T', res: 'win', tt: [0, 850, 0, 1, 2400, 2] })] }, { cf: { country: 'US' } });
 const s2 = stored().session, t2 = stored().attempts.find(a => a.i === 4);
-ok('player code, visit number, referrer, changed keys and errors are stored', r.status === 200 && s2.pid === 'abcdef012345' && s2.vn === 3 && s2.ref === 'news.ycombinator.com' && s2.kb === 'left:j|a,flip:k|' && s2.err.length === 2, s2);
+ok('player code, visit number, referrer, changed keys and errors are stored', r.status === 200 && s2.pid === HID('abcdef012345') && !JSON.stringify(files).includes('abcdef012345') && s2.vn === 3 && s2.ref === 'news.ycombinator.com' && s2.kb === 'left:j|a,flip:k|' && s2.err.length === 2, s2);
 ok('country comes from the relay, not from the page', s2.cc === 'US', s2.cc);
 r = await post({ v: 1, session: Object.assign({}, session, { hz: 144, px: [3441, 1237], gpu: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 (0x00002786) Direct3D11 vs_5_0 ps_5_0, D3D11)' }), attempts: [attempt({ i: 7, ft: [0, 10, 300, 1800, 40, 2, 1], rm: 11.42 })] });
 const s3 = stored().session, a7 = stored().attempts.find(a => a.i === 7);
@@ -124,15 +126,18 @@ const run = { m: 'L1', res: 'win', d: 39.48, z: 379, pc: 100, pts: 12405, sp: 54
 const score = (o, opt) => worker.fetch(new Request('https://relay.example/score', { method: 'POST', headers: Object.assign({ Origin: ORIGIN, 'CF-Connecting-IP': '203.0.113.200' }, (opt && opt.headers) || {}), body: JSON.stringify(Object.assign({ v: 1, board: 'L1', name: 'jmc', pid: 'abcdef012345', core: '0a1b2c3d4e', run }, o)) }), env);
 r = await score({});
 const sf = Object.keys(files).filter(p => p.startsWith('scores/'));
-ok('a posted score is filed under scores/', r.status === 200 && sf.length === 1 && /^scores\/\d{4}-\d{2}-\d{2}\/abcdef012345-L1-[a-z0-9]+\.json$/.test(sf[0]), sf);
+ok('a posted score is filed under scores/, under a hash of the player code and never the code itself', r.status === 200 && sf.length === 1 && new RegExp('^scores/\\d{4}-\\d{2}-\\d{2}/' + HID('abcdef012345') + '-L1-[a-z0-9]+\\.json$').test(sf[0]) && !JSON.stringify(files[sf[0]]).includes('abcdef012345'), sf);
 const filed = sf.length ? JSON.parse(atob(files[sf[0]].content)) : {};
 ok('with the name in capitals, the presses, and nothing unknown', filed.name === 'JMC' && filed.board === 'L1' && JSON.stringify(filed.run.tr) === '[1200,0,1890,3]' && !('junk' in filed.run) && typeof filed.at === 'number', filed);
 failNextPut = 3; r = await score({ pid: 'abcdef0123zz' });
-ok('a score whose write collides with other writes is tried again until it lands', r.status === 200 && Object.keys(files).some(p => /abcdef0123zz-L1-/.test(p)), r.status);
+ok('a score whose write collides with other writes is tried again until it lands', r.status === 200 && Object.keys(files).some(p => p.includes(HID('abcdef0123zz') + '-L1-')), r.status);
 failNextPut = 9; r = await score({ pid: 'abcdef0123yy' });
-ok('and says so if it never does, so the game can send it again', r.status === 502 && (await r.json()).error === 'storage busy' && !Object.keys(files).some(p => /abcdef0123yy-L1-/.test(p))); failNextPut = 0;
+ok('and says so if it never does, so the game can send it again', r.status === 502 && (await r.json()).error === 'storage busy' && !Object.keys(files).some(p => p.includes(HID('abcdef0123yy') + '-L1-'))); failNextPut = 0;
 failNextPut = 3; r = await post({ v: 1, session, attempts: [attempt({ i: 30, il: [3, 41, 6] })] });
 ok('play data gets the same retries, and the key-press delays are stored', r.status === 200 && JSON.stringify(stored().attempts.find(a => a.i === 30).il) === '[3,41,6]', r.status);
+{ const day = Object.keys(files).find(p => p.startsWith('scores/')).split('/')[1], h = HID('abcdef0123cc'); for (let i = 0; i < 60; i++) files['scores/' + day + '/' + h + '-L1-x' + i + '.json'] = { sha: 'x', content: '' }; }
+r = await score({ pid: 'abcdef0123cc' });
+ok('one player cannot post more than sixty scores in a day', r.status === 429, r.status);
 r = await score({ name: 'toolong' }); ok('a name longer than three characters is refused', r.status === 400);
 r = await score({ name: '<b>' }); ok('a name with anything but letters and digits is refused', r.status === 400);
 r = await score({ board: '../../main' }); ok('an unknown board is refused', r.status === 400);

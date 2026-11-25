@@ -18,7 +18,7 @@ What it does with a post:
 
 Every write is a commit, and two commits at the same moment collide, so a refused write is tried again (up to five times, with short uneven pauses) before the game is told the store is busy; the game then sends it again itself.
 
-Limits against misuse: 240 posts per sender per ten minutes (a household shares one address, so this has to fit several people playing at once), 250 attempts per session, 300 new session files per day in total. The address is public, so junk is possible within those limits; it lands on the data branch only and is easy to delete.
+Limits against misuse: 240 posts per sender per ten minutes (a household shares one address, so this has to fit several people playing at once), 400 attempts per session, 300 new session files per day in total. The address is public, so junk is possible within those limits; it lands on the data branch only and is easy to delete.
 
 ## Set up (about ten minutes, once)
 
@@ -43,7 +43,7 @@ Sign up at cloudflare.com (the free plan is enough), then in the dashboard:
 
 Open the Worker's address (it looks like `https://eightfold-relay.<your-name>.workers.dev`). It should show `{"ok":true,"what":"Eightfold play-data relay","version":"...","ready":true}`.
 
-That address goes into `RELAY` near the top of the recording code in `src/page.html`; then `node build.js`, commit and push. From then on the public game sends play data, and says so on its menu.
+That address goes into `RELAY` near the top of `src/telemetry.js`; then `node build.js`, commit and push. From then on the public game sends play data, and says so on its menu.
 
 ## Updating the Worker
 
@@ -72,3 +72,7 @@ The token above can write to any branch of this repository, although the Worker 
 ## Test
 
 `node relay/test.js` runs the Worker against a stand-in for GitHub. `python3 test/browser/relay.py` drives the real page in a browser through the same Worker code.
+
+## The player's code
+
+The game sends each browser's random code with its play data and scores. The Worker replaces it with a hash (`sha256('eightfold:' + code)`, first 16 hex characters) before anything is filed, in the file names as well. One player may post at most 60 scores a day.

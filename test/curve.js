@@ -1,9 +1,8 @@
 // How hard is each level, measured rather than assumed.
 const fs = require('fs');
 const src = fs.readFileSync(require('path').join(__dirname, '..', 'src', 'core.js'), 'utf8');
-const { LEVELS, Track, Runner, rng } = new Function(src + '; return {LEVELS,Track,Runner,rng};')();
-const GROUP = { step: 'turns', stairs: 'turns', zigzag: 'turns', spiral: 'turns', flipGate: 'overhead', pingpong: 'overhead', dodge1: 'blocks', dodge2: 'blocks', slalom: 'blocks',
-  blockFlip: 'blockflip', hurdle: 'bars', hurdles: 'bars', laneGap: 'gaps', stones: 'gaps', ringGap: 'ringgap', sweep: 'sweepers', beam: 'beams', fan: 'beams', fans: 'beams', launch: 'pads', sprint: 'sprint', crawl: 'slow', field: 'holes' };
+const { LEVELS, Track, Runner, rng, KGROUP } = new Function(src + '; return {LEVELS,Track,Runner,rng,KGROUP};')();
+const GROUP = KGROUP;   // the engine's own table of which kind of obstacle each section is
 function human(track, sigma, seed) {
   const rnd = rng(seed), gauss = () => { let u = 0; for (let i = 0; i < 6; i++) u += rnd(); return (u - 3) / Math.sqrt(.5); };
   const r = new Runner(track); let i = 0, target = null, frame = 0; const ev = track.events;

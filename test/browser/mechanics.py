@@ -4,6 +4,10 @@ from playwright.async_api import async_playwright
 # Usage: python3 test/browser/mechanics.py      (needs: node build.js --test)
 HERE = os.path.dirname(os.path.abspath(__file__)); URL = 'file://' + os.path.join(HERE, 'build.html'); S = 'window.__eightfold.state()'
 KEY = {'L': 'ArrowLeft', 'R': 'ArrowRight', 'F': 'ArrowUp', 'J': ' '}
+from _check import report, done
+EXPECT = { 'brief_mentions': [True, True], 'early_presses': lambda v: v['state'] == 'win' and v['perfects'] == 0, 'late_presses': lambda v: v['state'] == 'win' and v['perfects'] >= 20,
+  'reminders_shown': lambda v: len(v) >= 3 and any('Red sparks' in t for t in v), 'no_reminders_second_time': [], 'times_mid_vs_late': lambda v: v[1] < v[0] - 2,
+  'safe_line_only': lambda v: v[0] == 'win', 'fail_names_the_move': lambda v: 'Shifting floor' in v, 'replay': lambda v: '4 replay to the recorded ending, 4 of 4 to the recorded time' in v, 'risk_events_in_level2': lambda v: v >= 6 }
 async def play(pg, frac, take_opt=True, stop_at=None):
     info = await pg.evaluate('window.__eightfold.info()'); ev = [e for e in info['events'] if take_opt or not e['opt']]; i = 0; seen = {'tip': [], 'perf': 0, 'maxscale': 0}
     for _ in range(12000):
@@ -57,5 +61,5 @@ async def main():
         r['risk_events_in_level2'] = len(risk)
         await b.close()
     r['errors'] = errs
-    for k, v in r.items(): print('  ', k, '=', v)
+    report('', r, EXPECT); done()
 asyncio.run(main())

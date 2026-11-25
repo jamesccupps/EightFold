@@ -22,7 +22,7 @@
 //   ORIGINS       optional, comma-separated pages allowed to post, default "https://jamesccupps.github.io"
 //   OFF           optional. Set to "1" to refuse everything without deleting the Worker.
 
-const VERSION = '2026-11-23.10';   // shown on the status line, so a deploy can be told from the one before
+const VERSION = '2026-11-25.1';   // shown on the status line, so a deploy can be told from the one before
 const DEFAULTS = { REPO: 'jamesccupps/EightFold', BRANCH: 'play-data', ORIGINS: 'https://jamesccupps.github.io' };
 const MAX_BODY = 64 * 1024;        // bytes per post
 const MAX_ATTEMPTS = 400;          // attempts per session file
@@ -31,6 +31,7 @@ const MAX_FILES_PER_DAY = 300;     // new session files per day, across everyone
 const MAX_SCORES_PER_DAY = 600;    // posted scores per day, across everyone
 const MAX_POSTS = 240, WINDOW_MS = 10 * 60 * 1000;  // posts per sender per ten minutes (best effort, per Worker instance). A household shares one address:
                                                     // several people playing at once must fit under it, so it only stops a script, not a family.
+const MAX_SCORES_PER_PLAYER = 60; // scores one player may post in a day
 const TRIES = 5;                   // times a write is tried when someone else's write gets in first
 
 // ---------- checking what was sent: keep known fields of the right type, drop the rest ----------
@@ -49,7 +50,7 @@ function put(out, key, v) { if (v !== undefined) out[key] = v; }
 const MODE = /^(L[1-9]|D\d{4}-\d{2}-\d{2}|E|T)$/;
 const nums = (v, len, lo, hi) => Array.isArray(v) && v.length <= len && v.every(x => num(x, lo, hi) !== undefined) ? v : undefined;
 const ATTEMPT_NUMS = { cs: [0, 4294967296], i: [0, 1e5], ln: [0, 7], am: [0, 3], pts: [0, 1e8], rt: [0, 600], fx: [0, 9999], sg: [0, 1e4], q: [0, 4], t: [1.6e9, 4e9], a: [0, 1e5], pc: [0, 1e6], z: [-10, 1e7], d: [0, 1e5], sp: [0, 1e5], pr: [0, 1e5], px: [0, 1e5], fps: [0, 1000], fj: [0, 1e6],
-  ns: [0, 1e4], seed: [0, 4294967296], bo: [0, 100], cp: [0, 1e7], sh: [0, 1e4], sl: [0, 1e4], prac: [0, 1] };
+  ns: [0, 1e4], seed: [0, 4294967296], bo: [0, 100], cp: [0, 1e7], sh: [0, 1e4], sl: [0, 1e4], mg: [0, 1e4], x2: [0, 1e4], prac: [0, 1] };
 function cleanAttempt(a, sid) {
   if (!a || typeof a !== 'object') return null;
   const out = { s: sid };
@@ -153,6 +154,14 @@ function check(data, now, country) {
   return { sid, date: new Date(t).toISOString().slice(0, 10), body: { v: 1, session, n: attempts.length, attempts } };
 }
 
+// The player's code is what a leaderboard row belongs to, and everything filed is public. So the code itself is never
+// filed: what is written is a one-way hash of it. Reading the files does not give anyone what they would need to send
+// to post under another player's row.
+async function hid(pid) {
+  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('eightfold:' + pid));
+  return [...new Uint8Array(d)].slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 // ---------- a posted score ----------
 const BOARD = /^(L[1-9]|[DE]\d{4}-\d{2}-\d{2})$/;
 const RUN_NUMS = { d: [0, 1e5], z: [-10, 1e7], pc: [0, 1e6], pts: [0, 1e8], sp: [0, 1e5], ns: [0, 1e4], pr: [0, 1e5], seed: [0, 4294967296], cs: [0, 4294967296], cp: [0, 1e7], prac: [0, 1] };
@@ -179,7 +188,10 @@ const busy = status => status === 409 || status === 422 || status === 500 || sta
 async function saveScore(env, ok) {
   const branch = env.BRANCH || DEFAULTS.BRANCH;
   const list = await gh(env, ok.dir + '?ref=' + encodeURIComponent(branch), { method: 'GET' });
-  if (list.status === 200) { const files = await list.json(); if (Array.isArray(files) && files.length >= MAX_SCORES_PER_DAY) return { status: 429, error: 'enough for today' }; }
+  if (list.status === 200) {
+    const files = await list.json();
+    if (Array.isArray(files) && (files.length >= MAX_SCORES_PER_DAY || files.filter(f => String(f.name || f.path || '').split('/').pop().startsWith(ok.body.pid + '-')).length >= MAX_SCORES_PER_PLAYER)) return { status: 429, error: 'enough for today' };
+  }
   let last = 0;
   for (let n = 0; n < TRIES; n++) {
     if (n) await pause(n);
@@ -292,11 +304,13 @@ export default {
     if (route === 'score') {
       const sc = checkScore(data, now);
       if (typeof sc === 'string') return reply(400, { error: sc }, okOrigin);
+      { const h = await hid(sc.body.pid); sc.path = sc.path.replace('/' + sc.body.pid + '-', '/' + h + '-'); sc.body.pid = h; }
       let r; try { r = await saveScore(env, sc); } catch (e) { r = { status: 502, error: 'storage unreachable' }; }
       return reply(r.status, r.status === 200 ? { ok: true } : { error: r.error }, okOrigin);
     }
     const ok = check(data, now, request.cf && request.cf.country);
     if (typeof ok === 'string') return reply(400, { error: ok }, okOrigin);
+    if (ok.body.session.pid) ok.body.session.pid = await hid(ok.body.session.pid);
     let res; try { res = await save(env, ok); } catch (e) { res = { status: 502, error: 'storage unreachable' }; }
     return reply(res.status, res.status === 200 ? { ok: true, n: res.n } : { error: res.error }, okOrigin);
   }

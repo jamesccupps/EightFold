@@ -8,13 +8,15 @@ function setFeel(o) {
   for (const k in FEEL0) if (typeof src[k] === 'number' && isFinite(src[k])) o[k] = src[k];   // anything missing keeps its default
   HOP = o.hop; FLIP = o.flip; JUMP = o.jump; COYOTE = Math.max(LANDGRACE + .005, o.coyote); PEND = o.buffer;
 }
-const HZ0 = .38, HZ1 = .62;
+const HZ0 = .38, HZ1 = .62;   // the slice of a row a low bar occupies
 // Pace: how fast time runs. Sparks add lasting speed, a press at the last moment adds a short surge, slow-mo stretches time.
 //   boostMax: the most ordinary sparks can add.  risk: what each red spark adds on top of that, for good.  perfect: seconds before a move's last moment that count as "at the last moment".
 //   surge: the burst a perfect press gives; each perfect in a row adds surgeStep, up to surgeMax; it fades over surgeSecs.
 const PACE = { boostMax: .25, risk: .01, perfect: .09, surge: .12, surgeStep: .02, surgeMax: .24, surgeSecs: 3, slow: .6, slowSecs: 3.5 };
 const PACE0 = Object.assign({}, PACE);
-function setPace(o) { Object.assign(PACE, PACE0); for (const k in PACE0) if (o && typeof o[k] === 'number' && isFinite(o[k])) PACE[k] = o[k]; }   // the slice of a row a low bar occupies
+function setPace(o) { Object.assign(PACE, PACE0); for (const k in PACE0) if (o && typeof o[k] === 'number' && isFinite(o[k])) PACE[k] = o[k]; }
+// Pickups that last a while, in seconds of run time: the magnet draws in every ordinary spark passed, double doubles what sparks are worth.
+const POWER = { magnet: 6, double: 8 };
 
 function rng(a) {
   return function () {
@@ -205,13 +207,15 @@ class Track {
   // (hop out, hop back before it ends). Worth more points and more speed. Built from its own random stream and with
   // the corridor put back as it was, so the course around it is unchanged.
   riskStretch() {
-    const P = this.P = this.params(this.S.length), v = P.speed, s0 = this.S.length, e0 = this.events.length, w0 = this.w, dec = this.decor;
+    const P = this.P = this.params(this.S.length), v = P.speed, s0 = this.S.length, w0 = this.w, dec = this.decor;
     this.decor = []; this.noDecor = true;
     const far = this.rnd2() < .5, s = this.rnd2() < .5 ? 1 : -1;
     this.narrow(far ? 2 : 1);
     const hops = far ? 0 : this.w + 1, air = far ? FLIP * v : hops * HOP * v, lane = far ? this.L + 4 : this.L + s * hops;
     const a = this.S.length, p0 = a + .3 + Math.ceil(v * .12), p1 = p0 + Math.max(1.5, v * .28);       // the window to set off in
-    const q0 = Math.ceil(p1 + air) + 1, back0 = q0 + 2.25, b = Math.ceil(back0 + Math.max(1.3, v * .2));   // sparks at q0..q0+2; the strip ends after row b
+    // sparks at q0..q0+2; the strip ends after row b. The time to get back after the last spark is about what the level allows
+    // for its own moves (never under .45 s), so the detour is a matter of nerve and not of reflexes the level does not ask for.
+    const q0 = Math.ceil(p1 + air) + 1, back0 = q0 + 2.25, b = Math.ceil(back0 + Math.max(1.3, v * Math.max(.45, P.react * .9)));
     const n = Math.ceil(b + .6 + air) + 2 - a;
     this.plain(n, { noHoles: true });
     for (let r = Math.floor(p0 + air); r <= b; r++) this.S[r] |= this.bit(lane);
@@ -295,7 +299,7 @@ class Track {
     if (this.w < 1) this.w = 1;
     const G = Math.ceil(P.speed * P.react * .8) + Math.ceil(hr) + 1, n = 2 * G + 2, s0 = this.S.length, c = s0 + G;
     this.plain(n, { noHoles: true });
-    if (what === 'slow') this.item(c, this.L + s, 'slow');
+    if (what) this.item(c, this.L + s, what);
     else { this.spark(c, this.L + s); this.spark(c + 1, this.L + s); this.nOpt = (this.nOpt || 0) + 2; }
     this.events.push({ z0: s0 + .1, z1: c - hr - .3, key: s > 0 ? 'L' : 'R', opt: 1 }, { z0: c + 1.9, z1: s0 + n - .6, key: s > 0 ? 'R' : 'L', opt: 1 });
   }
@@ -304,7 +308,8 @@ class Track {
     const kind = this.draw(this.lastKind); this.lastKind = kind;
     const x = this.rnd(), offer = PRECISION[kind] && x < .14 ? 'slow' : CRASH[kind] && x < .3 ? 'shield' : null;
     if (this.S.length > 150 && this.mult === 1 && this.rnd2() < .16) this.riskStretch();
-    this.lead(.5, offer); this.runKind(kind);
+    const y = this.S.length > 100 && this.mult === 1 ? this.rnd2() : 1, bonus = y < .06 ? 'magnet' : y < .12 ? 'double' : null;
+    this.lead(.5, offer); if (bonus) this.detour(bonus); this.runKind(kind);
   }
   // change pace: 1.35 = sprint, .7 = slow zone; eased in over four rows
   setMult(m) {
@@ -315,7 +320,7 @@ class Track {
   // funnel the corridor down a lane at a time so nobody is stranded on its edge
   narrow(to) { while (this.w > to) { this.w--; this.plain(Math.ceil(this.P.speed * (this.P.taper || .3)) + 1, { noHoles: true }); } }
   // single-file floor jogs one lane sideways; the old lane ends, so everyone has to turn
-  step(dir, wNew, k) {
+  step(dir, k) {
     const P = this.P; dir = dir || this.dir();
     this.narrow(0);
     const U = Math.ceil(P.speed * P.react * (k || 1)) + Math.ceil(HOP * P.speed);
@@ -325,9 +330,9 @@ class Track {
     this.L += dir; this.w = 0; this.plain(k ? 1 : 2, { noHoles: true });
     if (!k) this.spark(this.S.length - 1, this.L);
   }
-  stairs() { const d = this.dir(), n = this.ri(2, 4); this.narrow(0); this.plain(2, { noHoles: true }); for (let i = 0; i < n; i++) { this.step(d, 0, .7); this.plain(this.ri(0, 1), { noHoles: true }); } this.plain(2, { noHoles: true }); this.spark(this.S.length - 1, this.L); }
-  zigzag() { let d = this.dir(); const n = this.ri(3, 5); this.narrow(0); this.plain(2, { noHoles: true }); for (let i = 0; i < n; i++) { this.step(d, 0, .7); this.plain(this.ri(0, 1), { noHoles: true }); d = -d; } this.plain(2, { noHoles: true }); this.spark(this.S.length - 1, this.L); }
-  spiral() { const d = this.dir(), n = this.ri(6, 9); this.narrow(0); this.plain(2, { noHoles: true }); for (let i = 0; i < n; i++) this.step(d, 0, .6); this.plain(3, { noHoles: true }); this.spark(this.S.length - 2, this.L); this.spark(this.S.length - 1, this.L); }
+  stairs() { const d = this.dir(), n = this.ri(2, 4); this.narrow(0); this.plain(2, { noHoles: true }); for (let i = 0; i < n; i++) { this.step(d, .7); this.plain(this.ri(0, 1), { noHoles: true }); } this.plain(2, { noHoles: true }); this.spark(this.S.length - 1, this.L); }
+  zigzag() { let d = this.dir(); const n = this.ri(3, 5); this.narrow(0); this.plain(2, { noHoles: true }); for (let i = 0; i < n; i++) { this.step(d, .7); this.plain(this.ri(0, 1), { noHoles: true }); d = -d; } this.plain(2, { noHoles: true }); this.spark(this.S.length - 1, this.L); }
+  spiral() { const d = this.dir(), n = this.ri(6, 9); this.narrow(0); this.plain(2, { noHoles: true }); for (let i = 0; i < n; i++) this.step(d, .6); this.plain(3, { noHoles: true }); this.spark(this.S.length - 2, this.L); this.spark(this.S.length - 1, this.L); }
   // floor ends; it carries on along the opposite wall. Both sides are narrow, so no lane is shared and turning cannot reach it
   flipGate() {
     const P = this.P; this.narrow(1); this.plain(2, { noHoles: true });
@@ -343,7 +348,9 @@ class Track {
   // otherwise the floor resumes only on the opposite wall, so it has to be a flip.
   ringGap(open) {
     const P = this.P, fr = FLIP * P.speed;
-    if (open === undefined) open = this.rnd() < (P.ringOpen == null ? .35 : P.ringOpen);
+    // A gap all the way round is crossed by flipping. (It used to be that some could also be jumped; they looked the same, so a
+    // player who jumped one learned a rule that killed them at the next.) Only the sprint run passes open: there jumping is the point.
+    if (open === undefined) { this.rnd(); open = false; }
     if (open) this.w = 4; else this.narrow(1);
     this.plain(Math.ceil(fr) + 2, { noHoles: true });
     const g = Math.max(1, Math.floor(fr - P.tw * P.speed)), e = this.S.length;
@@ -405,7 +412,7 @@ class Track {
   crawl() {
     this.setMult(.7); let d = this.dir(); const n = this.ri(5, 8);
     this.narrow(0); this.plain(2, { noHoles: true });
-    for (let i = 0; i < n; i++) { this.step(d, 0, .55); if (this.rnd() < .7) d = -d; }
+    for (let i = 0; i < n; i++) { this.step(d, .55); if (this.rnd() < .7) d = -d; }
     this.plain(2, { noHoles: true }); this.spark(this.S.length - 1, this.L); this.setMult(1);
   }
   // a low bar across the corridor: jump it
@@ -453,8 +460,8 @@ class Track {
     const calm = n => this.plain(n, { noHoles: true });
     let n;
     this.w = 3; calm(12); this.w = 0; calm(5);
-    n = this.events.length; this.step(1, 0); tip(n, 'The floor shifts left. Press {K} to follow it.'); calm(6);
-    n = this.events.length; this.step(-1, 0); tip(n, 'Now it shifts right. Press {K}.'); calm(6);
+    n = this.events.length; this.step(1); tip(n, 'The floor shifts left. Press {K} to follow it.'); calm(6);
+    n = this.events.length; this.step(-1); tip(n, 'Now it shifts right. Press {K}.'); calm(6);
     n = this.events.length; this.flipGate(); tip(n, 'The floor ends, but it carries on overhead. Press {K} to flip.'); calm(4);
     this.w = 2; calm(4);
     n = this.events.length; this.dodge(1, 'bumps', 1); tip(n, 'A tall block. Press {K} to go around it.'); calm(6);
@@ -481,7 +488,7 @@ class Runner {
     this.mode = 'ground'; this.t = 0; this.dur = HOP; this.high = .5; this.gap = 0; this.noJump = false;
     this.q = []; this.dead = null;   // q: up to two buffered presses, so a quick double tap is never lost
     this.lastDir = 1; this.cam = 0; this.on = null;
-    this.sparks = 0; this.pts = 0; this.taken = {}; this.shield = false; this.inv = 0;
+    this.sparks = 0; this.pts = 0; this.taken = {}; this.shield = false; this.inv = 0; this.mag = 0; this.dbl = 0;
   }
   press(k) {   // 'L', 'R', 'F' (flip) or 'J' (jump)
     if (this.dead) return;
@@ -497,10 +504,13 @@ class Runner {
   }
   take(r, it) {
     this.taken[r] = 1;
+    const x = this.dbl > 0 ? 2 : 1;
     if (it.t === 'shield') { this.shield = true; this.emit('shield'); }
     else if (it.t === 'slow') this.emit('slow');
-    else if (it.t === 'risk') { this.sparks++; this.risk = (this.risk || 0) + 1; this.pts += 300; this.emit('risk'); }
-    else { this.sparks++; this.pts += it.t === 'high' ? 200 : 100; this.emit('spark'); }
+    else if (it.t === 'magnet') { this.mag = POWER.magnet; this.emit('magnet'); }
+    else if (it.t === 'double') { this.dbl = POWER.double; this.emit('double'); }
+    else if (it.t === 'risk') { this.sparks++; this.risk = (this.risk || 0) + 1; this.pts += 300 * x; this.emit('risk'); }
+    else { this.sparks++; this.pts += (it.t === 'high' ? 200 : 100) * x; this.emit('spark'); }
   }
   air(mode, dur, high) { this.mode = mode; this.dur = dur; this.high = high || .5; this.from = this.lane; this.t = 0; this.gap = 0; }
   step(dt) {
@@ -516,6 +526,8 @@ class Runner {
     if (this.inv > 0) this.inv -= dt;
     const r = Math.floor(this.z), fz = this.z - r, l7 = this.lane & 7, bit = 1 << l7;
     const it = tr.I[r], mine = it && it.lane === l7 && !this.taken[r];
+    if (this.dbl > 0) this.dbl -= dt;
+    if (this.mag > 0) { this.mag -= dt; if (it && !this.taken[r] && (it.t === 'spark' || it.t === 'high')) this.take(r, it); }   // the magnet: every ordinary spark passed, whatever lane it is in
     const bar = r >= 0 && (tr.H[r] & bit) && fz > HZ0 && fz < HZ1;
     if (this.mode === 'ground') {
       const c = tr.cell(r, this.lane);

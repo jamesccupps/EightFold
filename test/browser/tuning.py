@@ -6,6 +6,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 URL = 'file://' + os.path.join(HERE, 'build.html')
 OUT = os.path.join(HERE, 'out'); os.makedirs(OUT, exist_ok=True)
 S = 'window.__eightfold.state()'
+from _check import report, done
+EXPECT = { 'drawer_open': True, 'menu_hidden_behind': True, 'sliders': 13, 'camera_redraws_live': True, 'esc_back_to_menu': True, 'camera_only_still_scored': True,
+  'check_default': lambda v: 'all 8 levels can be finished' in v, 't_pauses_run': lambda v: v[0] == 'pause', 'try_restarts_run': lambda v: v[0] == 'play' and v[1] is True, 'course_relaid': True, 'tuned_tag': 'Tuned',
+  'tuned_level_cleared_by_keyboard': lambda v: v[0] == 'win', 'tuned_run_not_scored': '\u2014', 'reload_keeps_tune': 0.56, 'reset_changed': {}, 'scored_again_after_reset': True, 'default_course_back': True, 'erase': 0, 'toggle_off': 'Start recording' }
 async def wait_state(pg, want, secs):
     for _ in range(int(secs * 10)):
         st = await pg.evaluate(S)
@@ -22,7 +26,7 @@ async def main():
         pg.on('pageerror', lambda e: errs.append(str(e))); pg.on('console', lambda m: errs.append(m.text) if m.type == 'error' else None)
         await pg.goto(URL); await pg.wait_for_timeout(400)
         # --- drawer from the menu: defaults, check line, camera slider changes the picture ---
-        await pg.click('#btnTune'); await pg.wait_for_timeout(300)
+        await pg.click('#btnControls'); await pg.click('#btnTune'); await pg.wait_for_timeout(300)
         r['drawer_open'] = not await pg.evaluate('document.getElementById("tuneSheet").hidden')
         r['menu_hidden_behind'] = await pg.evaluate('document.getElementById("menu").hidden')
         r['check_default'] = await pg.evaluate('document.getElementById("tuneCheck").textContent')
@@ -72,7 +76,7 @@ async def main():
         r['win_press_timing'] = win.get('kk'); r['win_hist'] = win['fh']; r['win_tune'] = win.get('tu'); r['win_fps'] = win['fps']
         fall = [x for x in log if x['res'] == 'fall'][0]; r['fall_missed_move'] = fall.get('nx')
         r['session'] = {k: tel['sessions'][-1][k] for k in ('build', 'host', 'w', 'h', 'tune')}
-        await pg.click('#btnData'); await pg.wait_for_timeout(200)
+        await pg.click('#btnControls'); await pg.click('#btnData'); await pg.wait_for_timeout(200)
         r['data_info'] = await pg.evaluate('document.getElementById("dataInfo").textContent')
         r['data_levels'] = await pg.evaluate('[...document.querySelectorAll("#dataLv tr")].map(t => [...t.children].map(c => c.textContent).join(" | "))')
         r['data_obstacles'] = await pg.evaluate('[...document.querySelectorAll("#dataOb tr")].map(t => [...t.children].map(c => c.textContent).join(" | "))')
@@ -83,7 +87,7 @@ async def main():
         await pg.reload(); await pg.wait_for_timeout(400)
         r['reload_keeps_tune'] = (await pg.evaluate('window.__eightfold.tune()'))['jump']
         r['reload_keeps_records'] = len((await pg.evaluate('window.__eightfold.tel()'))['log'])
-        await pg.click('#btnTune'); await pg.click('#btnTuneReset'); await pg.wait_for_timeout(200)
+        await pg.click('#btnControls'); await pg.click('#btnTune'); await pg.click('#btnTuneReset'); await pg.wait_for_timeout(200)
         r['reset_changed'] = json.loads(await pg.evaluate('document.getElementById("tuneOut").value'))['changed']
         await pg.click('#btnCloseTune'); await pg.click('#lv1'); await pg.click('#btnGo'); await pg.wait_for_timeout(200)
         r['scored_again_after_reset'] = await pg.evaluate('document.getElementById("tgPrac").hidden')
@@ -92,17 +96,17 @@ async def main():
         await pg.keyboard.press('t'); await slide(pg, 'jump', .30); await slide(pg, 'flip', .56); await slide(pg, 'hop', .18); await pg.wait_for_timeout(300)
         r['check_extreme'] = await pg.evaluate('document.getElementById("tuneCheck").textContent')
         await pg.click('#btnTuneReset'); await pg.click('#btnCloseTune'); await pg.wait_for_timeout(200)
-        r['erase'] = None; await pg.keyboard.press('p'); await pg.click('#btnQuit'); await pg.click('#btnData'); await pg.click('#btnDataClear'); await pg.click('#btnDataClear')
+        r['erase'] = None; await pg.keyboard.press('p'); await pg.click('#btnQuit'); await pg.click('#btnControls'); await pg.click('#btnData'); await pg.click('#btnDataClear'); await pg.click('#btnDataClear')
         r['erase'] = len((await pg.evaluate('window.__eightfold.tel()'))['log'])
         await pg.keyboard.press('Escape')
         await b.close()
         # --- phone: the drawer is a bottom sheet and leaves the tunnel in view ---
         b = await p.chromium.launch(); ctx = await b.new_context(viewport={'width': 390, 'height': 780}, has_touch=True, is_mobile=True); pg = await ctx.new_page()
         pg.on('pageerror', lambda e: errs.append(str(e)))
-        await pg.goto(URL); await pg.wait_for_timeout(400); await pg.tap('#btnTune'); await pg.wait_for_timeout(300)
+        await pg.goto(URL); await pg.wait_for_timeout(400); await pg.tap('#btnControls'); await pg.tap('#btnTune'); await pg.wait_for_timeout(300)
         box = await pg.evaluate('(() => { const b = document.getElementById("tuneSheet").getBoundingClientRect(); return [Math.round(b.top), Math.round(b.width), Math.round(b.height)]; })()')
         r['phone_drawer_top_width_height'] = box
         await pg.screenshot(path=os.path.join(OUT, 'tune-phone.png')); await b.close()
     r['errors'] = errs
-    for k, v in r.items(): print('  ', k, '=', v)
+    report('', r, EXPECT); done()
 asyncio.run(main())

@@ -5,6 +5,11 @@ from playwright.async_api import async_playwright
 HERE = os.path.dirname(os.path.abspath(__file__)); PORT = 8791; BASE = 'http://127.0.0.1:%d' % PORT
 S = 'window.__eightfold.state()'
 def stored(): return json.loads(urllib.request.urlopen(BASE + '/files').read())
+from _check import report, done
+EXPECT = { 'notice_hidden_without_relay': True, 'notice_shown_with_relay': True, 'first_run_sent_at_once': lambda v: v[0] == 1 and v[1] is True, 'branch': 'play-data', 'keyboard_run': lambda v: v[0] == 'win',
+  'held_back_inside_30s': (2, 2), 'sent_when_page_put_away': lambda v: v[0] == 3 and v[1] == 3, 'replay': lambda v: '3 replay to the recorded ending, 3 of 3 to the recorded time' in v, 'feedback_done': 'Sent. Thank you.',
+  'same_player_code_after_reload': True, 'player': lambda v: len(v['pid']) == 16, 'unsent_while_offline': 0, 'notice_gone_when_off': True, 'nothing_sent_when_off': True,
+  'errors': lambda v: len(v) == 2 and 'thrown on purpose' in v[0] }   # the two errors are the test's own: one thrown to be recorded, one from going offline
 async def wait_state(pg, want, secs):
     for _ in range(int(secs * 10)):
         st = await pg.evaluate(S)
@@ -83,7 +88,7 @@ async def main():
             # next visit: same player code, visit 2, and the earlier visit's unsent runs go up
             await pg.unroute('**/relay'); await pg.reload(); await pg.wait_for_timeout(400)
             await pg.evaluate('window.__eightfold.relay("%s/relay")' % BASE); await pg.evaluate('window.dispatchEvent(new Event("pagehide"))')
-            pid2 = (await pg.evaluate('window.__eightfold.tel()'))['pid']; r['same_player_code_after_reload'] = pid2 == r['player']['pid']
+            pid2 = (await pg.evaluate('window.__eightfold.tel()'))['pid']; r['same_player_code_after_reload'] = __import__('hashlib').sha256(('eightfold:' + pid2).encode()).hexdigest()[:16] == r['player']['pid']   # what is filed is a hash of the code
             await pg.reload(); await pg.wait_for_timeout(300)   # the catch-up runs at start-up, once the relay address is known
             r['note'] = 'catch-up needs the relay address at start-up; the test hook sets it after, so it is called by hand below'
             await pg.evaluate('window.__eightfold.relay("%s/relay")' % BASE); await pg.evaluate('window.__eightfold.catchUp()'); await pg.wait_for_timeout(5500)
@@ -92,7 +97,7 @@ async def main():
             r['error_stored'] = d1['session'].get('err')
             r['visit_numbers'] = sorted(x['data']['session'].get('vn') for x in f['files'].values() if x['data']['session'].get('pid') == r['player']['pid'])
             # switch recording off: notice goes, nothing more is sent
-            await pg.click('#btnData')
+            await pg.click('#btnControls'); await pg.click('#btnData')
             r['sheet_says'] = (await pg.evaluate('document.getElementById("dataInfo").textContent'))[-230:]
             await pg.click('#btnDataToggle'); await pg.keyboard.press('Escape')
             r['notice_gone_when_off'] = await pg.evaluate('document.getElementById("telNote").hidden')
@@ -102,5 +107,5 @@ async def main():
     finally:
         srv.terminate()
     r['errors'] = errs
-    for k, v in r.items(): print('  ', k, '=', v)
+    report('', r, EXPECT); done()
 asyncio.run(main())

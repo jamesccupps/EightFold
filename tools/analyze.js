@@ -158,7 +158,33 @@ if (xps.length) {
 }
 
 head('Replay check');
-let can = 0, same = 0; for (const a of runs) { const r = replay(a); if (r) { can++; if (r.exact) same++; } }
+let can = 0, same = 0; const played = [];
+for (const a of runs) { const r = replay(a); if (r) { can++; if (r.exact) { same++; played.push([a, r]); } } }
 out(`${can} runs have a full press trace; ${same} play back to the recorded ending`);
 const lost = uniq(runs.map(a => a._core).filter(c => c && !engine(c)));
 if (lost.length) out('engine versions not found in this repository: ' + lost.join(', '));
+
+// What the last press before each fall or crash was, against the move the course was waiting for. A wrong key means the
+// floor did not say which move it wanted (readability); the right key too late means the cue came late or was missed.
+{
+  const KEYNAME = { L: 'turn', R: 'turn', F: 'flip', J: 'jump' }, tally = {}; let n = 0, wrong = 0, late = 0, none = 0, silent = 0;
+  for (const [a, r] of played) {
+    if (a.res !== 'fall' && a.res !== 'crash') continue;
+    n++;
+    const tr = a.tr || [], v = r.track.speedAt(a.z), zEnd = r.z, zp = tr.length ? tr[tr.length - 2] / 100 : -1e9, key = tr.length ? 'LRFJ'[tr[tr.length - 1]] : '';
+    const due = r.track.events.find(e => !e.opt && e.z1 + v * .25 >= Math.min(zp, zEnd) && e.z0 - v * .8 <= zEnd);   // the move the course was waiting for when the run ended
+    if (zEnd - zp > v * .8) { silent++; continue; }   // nothing pressed in the last 0.8 s
+    if (!due) { none++; continue; }
+    if (key === due.key) { late++; continue; }
+    wrong++; const k = (KEYNAME[key] === KEYNAME[due.key] ? 'turn the other way' : KEYNAME[key]) + ' pressed, ' + KEYNAME[due.key] + ' needed'; tally[k] = (tally[k] || 0) + 1;
+  }
+  if (n) {
+    head('Last press before a fall or crash');
+    out(`${n} ended runs with a full trace: ${wrong} on the wrong key, ${late} on the right key at the wrong moment, ${none} on a press with no move due, ${silent} with nothing pressed in the last 0.8 s`);
+    for (const [k, c] of Object.entries(tally).sort((x, y) => y[1] - x[1])) out('   ' + pad(k, 34) + c);
+  }
+  // presses the course did not call for: how many are the second of a quick double tap (the press buffer keeps two)
+  let all = 0, dbl = 0;
+  for (const [a, r] of played) { const tr = a.tr || []; for (let i = 0; i < tr.length; i += 2) { all++; if (i >= 2 && tr[i + 1] === tr[i - 1] && (tr[i] - tr[i - 2]) / 100 < r.track.speedAt(tr[i] / 100) * .15) dbl++; } }
+  if (all) out(`double taps: ${dbl} of ${all} presses repeat the same key within 0.15 s`);
+}

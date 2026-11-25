@@ -4,11 +4,37 @@ jobs:
   levels:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
       - name: index.html matches the source
         run: node build.js && git diff --exit-code index.html
       - name: every level can be finished, and cannot be skipped through
         run: npm test
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: a browser to play in
+        run: pip install playwright && python -m playwright install --with-deps chromium
+      - name: the game with its test hook
+        run: node build.js --test
+      - name: play it in a real browser (each suite fails on any difference from what it expects)
+        run: |
+          fail=0
+          for t in flows mechanics tuning experiments leaderboard posting relay; do
+            echo "::group::$t"
+            python test/browser/$t.py || { fail=1; echo "::error::$t failed"; }
+            echo "::endgroup::"
+          done
+          exit $fail

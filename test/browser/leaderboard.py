@@ -15,6 +15,11 @@ def build_boards():   # what the GitHub Action does: play every posted score bac
     for name in ('all.json', 'checked.json'):
         req = urllib.request.Request(BASE + '/setfile/boards%2F' + name, data=open(os.path.join(TMP, 'boards', name), 'rb').read(), method='POST'); urllib.request.urlopen(req).read()
     return out
+from _check import report, done
+EXPECT = { 'version_on_menu': lambda v: v.startswith('Version 20') and 'engine' in v, 'asks_for_name': True, 'typing_does_not_restart': lambda v: v[0] == 'fail', 'post_message': lambda v: v.startswith('Posted as JMC'),
+  'score_filed': 1, 'checker': lambda v: '1 count' in v and '0 refused' in v, 'board_endless': lambda v: len(v) == 1 and 'JMC (you)' in v[0], 'shorter_run_not_posted': lambda v: v[1] is True,
+  'longer_run_posted': lambda v: v[1].startswith('Posted as JMC'), 'random_course_not_posted': lambda v: v[1] is True, 'level1': lambda v: v[0] == 'win' and v[1].startswith('Posted as JMC'),
+  'checker_2': lambda v: '0 refused' in v and '2 boards' in v, 'board_default_tab': 'Endless', 'board_level1': lambda v: len(v) == 1 and 'JMC (you)' in v[0], 'board_empty': lambda v: v.startswith('Nobody yet') }
 async def play(pg, stop_at=None, frac=.5, opt=False):
     i = 0; ev = []
     for n in range(20000):
@@ -72,5 +77,5 @@ async def main():
     finally:
         srv.terminate()
     r['errors'] = errs
-    for k, v in r.items(): print('  ', k, '=', v)
+    report('', r, EXPECT); done()
 asyncio.run(main())

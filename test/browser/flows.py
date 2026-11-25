@@ -8,6 +8,16 @@ PAGE = 'file://' + os.path.join(HERE, 'build.html')      # made by: node build.j
 OUT = os.path.join(HERE, 'out'); os.makedirs(OUT, exist_ok=True)
 URL = PAGE
 S='window.__eightfold.state()'
+from _check import report, done
+EXPECT = {
+  'tutorial+flows': { 'lv2_locked_at_start': True, 'tutorial_end': 'win', 'tutorial_presses': 11, 'wrong_key_ignored': True, 'win_keeps_from_a_stray_jump': 'win',
+    'next_shows_briefing': ('brief', 0), 'space_starts_run': 'play', 'idle_fail': 'fail', 'space_restarts': lambda v: v[0] == 'play' and v[2] == 2, 'same_course': True,
+    'pause_freezes': lambda v: v[0] == 'pause' and v[2] == 0, 'resumes': 'play', 'blur_pauses': 'pause', 'quit_to_menu': 'menu', 'l1': 'win', 'lv2_unlocked': True,
+    'digit3_blocked_while_locked': True, 'reload_keeps_scores': True, 'menu_feedback_and_version_in_view': lambda v: all(x[0] <= x[2] and x[1] <= x[2] for x in v), 'mouse_click_does_not_turn': True },
+  'rebinding': { 'esc_back_to_menu': 'menu', 'l3_with_rebound_keys_and_resize': 'win', 'brief_keys': 'J J' },
+  'endless': { 'endless_50s': lambda v: v[0] == 'play' and v[1] > 300, 'new_course_btn': True, 'restart_same_course': True, 'new_course_differs': True },
+  'phone': { 'menu_fits_width': True, 'pad_visible': True, 'pad_jump': 'jump', 'sound_button_reachable': 'btnSound' },
+}
 async def page(p, w=1280, h=720, **kw):
     b = await p.chromium.launch(); ctx = await b.new_context(viewport={'width': w, 'height': h}, **kw); pg = await ctx.new_page(); errs=[]
     pg.on('pageerror', lambda e: errs.append(str(e))); pg.on('console', lambda m: errs.append(m.text) if m.type=='error' else None)
@@ -35,7 +45,8 @@ async def tutorial(p):
         else: await pg.wait_for_timeout(60)
     st = await pg.evaluate(S)
     r.update(tutorial_end=st['state'], tutorial_presses=pressed, wrong_key_ignored=wrong_ignored, title=await pg.evaluate('document.getElementById("winTitle").textContent'))
-    await pg.click('#btnNext'); await pg.wait_for_timeout(300); st = await pg.evaluate(S); r['next_shows_briefing'] = (st['state'], st['mode']); await pg.keyboard.press(' '); await pg.wait_for_timeout(200); r['space_starts_run'] = (await pg.evaluate(S))['state']
+    await pg.keyboard.press(' '); await pg.keyboard.press('ArrowUp'); await pg.wait_for_timeout(250); r['win_keeps_from_a_stray_jump'] = (await pg.evaluate(S))['state']   # still pressing as the line is crossed must not skip the result
+    await pg.wait_for_timeout(800); await pg.click('#btnNext'); await pg.wait_for_timeout(300); st = await pg.evaluate(S); r['next_shows_briefing'] = (st['state'], st['mode']); await pg.keyboard.press(' '); await pg.wait_for_timeout(200); r['space_starts_run'] = (await pg.evaluate(S))['state']; l0 = (await pg.evaluate(S))['lane']; await pg.mouse.click(900, 400); await pg.wait_for_timeout(250); r['mouse_click_does_not_turn'] = (await pg.evaluate(S))['lane'] == l0
     # idle -> fail panel -> Space restarts same level -> Esc on fail returns to menu
     st = await wait_state(pg, ['fail'], 15); r['idle_fail'] = st['state']; sig1 = await pg.evaluate('window.__eightfold.sig()')
     await pg.wait_for_timeout(400); await pg.keyboard.press(' '); await pg.wait_for_timeout(200)
@@ -55,6 +66,11 @@ async def tutorial(p):
     await pg.keyboard.press('3'); await pg.wait_for_timeout(200); r['digit3_blocked_while_locked'] = (await pg.evaluate(S))['state'] == 'menu'
     await pg.click('#btnScores'); r['score_row1'] = await pg.evaluate('document.querySelector("#scoreBody tr").textContent'); await pg.keyboard.press('Escape')
     r['reload_keeps_scores'] = None; await pg.reload(); await pg.wait_for_timeout(400); r['reload_keeps_scores'] = not await pg.evaluate('document.getElementById("lv2").disabled')
+    sizes = []
+    for w, h in [(1280, 720), (1366, 768)]:   # the version line and Feedback are on screen without scrolling on common laptop sizes
+        b2, pg2, _ = await page(p, w, h)
+        sizes.append(await pg2.evaluate('[Math.round(document.getElementById("btnNote").getBoundingClientRect().bottom), Math.round(document.getElementById("verNote").getBoundingClientRect().bottom), innerHeight]')); await b2.close()
+    r['menu_feedback_and_version_in_view'] = sizes
     r['errors'] = errs; await b.close(); return ('tutorial+flows', r)
 
 async def rebind(p):
@@ -92,6 +108,7 @@ async def phone(p):
     b, pg, errs = await page(p, 390, 844, has_touch=True, is_mobile=True, device_scale_factor=2); r = {}
     await pg.screenshot(path=os.path.join(OUT, 'm_menu.png'))
     r['menu_fits_width'] = await pg.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    r['sound_button_reachable'] = await pg.evaluate('(() => { const r = document.getElementById("btnSound").getBoundingClientRect(), t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return t && t.id; })()')
     await pg.tap('#btnControls'); await pg.tap('text=All unlocked'); await pg.tap('#btnCloseCtrl'); await pg.tap('#lv6'); await pg.wait_for_timeout(300); await pg.screenshot(path=os.path.join(OUT, 'm_brief.png')); await pg.tap('#btnGo'); await pg.wait_for_timeout(600)
     await pg.touchscreen.tap(300, 500); await pg.wait_for_timeout(150)      # tap right half -> turn; makes the pad appear
     r['pad_visible'] = not await pg.evaluate('document.getElementById("pad").hidden')
@@ -106,5 +123,6 @@ async def phone(p):
 async def main():
     async with async_playwright() as p:
         for name, r in await asyncio.gather(tutorial(p), rebind(p), endless(p), phone(p)):
-            print('==', name); [print('  ', k, '=', v) for k, v in r.items()]
+            report(name, r, EXPECT.get(name, {}))
+    done()
 asyncio.run(main())

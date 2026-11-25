@@ -4,6 +4,9 @@ from playwright.async_api import async_playwright
 # Usage: python3 test/browser/experiments.py      (needs: node build.js --test)
 HERE = os.path.dirname(os.path.abspath(__file__)); URL = 'file://' + os.path.join(HERE, 'build.html'); S = 'window.__eightfold.state()'
 XP = [{'id': 'jump-1', 'variants': [{'name': 'a', 'tune': {'jump': .47}}, {'name': 'b', 'tune': {'jump': .5}}]}]
+from _check import report, done
+EXPECT = { 'no_experiment_no_xp': True, 'value_matches_variant': True, 'same_variant_after_reload': True, 'variant_runs_are_scored': True, 'course_laid_out_for_variant': True,
+  'level3_under_variant': lambda v: v[0] == 'win', 'asked_once': [True, True], 'replay_under_variant': lambda v: '2 replay to the recorded ending' in v }
 async def main():
     r = {}; errs = []
     async with async_playwright() as p:
@@ -21,7 +24,7 @@ async def main():
         await pg.reload(); await pg.wait_for_timeout(300)
         r['same_variant_after_reload'] = (await pg.evaluate('window.__eightfold.tel()'))['sessions'][-1].get('xp') == xp
         # the drawer shows the variant's value as the default, and the run is scored
-        await pg.click('#btnTune'); r['drawer_shows_variant_as_default'] = await pg.evaluate('document.getElementById("tu-jump").nextElementSibling ? document.querySelector("#tuneRows output:nth-of-type(2)").className : ""')
+        await pg.click('#btnControls'); await pg.click('#btnTune'); r['drawer_shows_variant_as_default'] = await pg.evaluate('document.getElementById("tu-jump").nextElementSibling ? document.querySelector("#tuneRows output:nth-of-type(2)").className : ""')
         r['drawer_changed'] = json.loads(await pg.evaluate('document.getElementById("tuneOut").value'))['changed']; await pg.keyboard.press('Escape')
         await pg.keyboard.press('3'); await pg.wait_for_timeout(300); await pg.keyboard.press('Enter'); await pg.wait_for_timeout(300)
         r['variant_runs_are_scored'] = await pg.evaluate('document.getElementById("tgPrac").hidden')
@@ -61,5 +64,5 @@ async def main():
         log = (await pg.evaluate('window.__eightfold.tel()'))['log']; r['phone_presses_by_source'] = log[-1].get('in') if log else None
         await b.close()
     r['errors'] = errs
-    for k, v in r.items(): print('  ', k, '=', v)
+    report('', r, EXPECT); done()
 asyncio.run(main())
