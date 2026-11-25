@@ -7,7 +7,8 @@ KEY = {'L': 'ArrowLeft', 'R': 'ArrowRight', 'F': 'ArrowUp', 'J': ' '}
 from _check import report, done
 EXPECT = { 'brief_mentions': [True, True], 'early_presses': lambda v: v['state'] == 'win' and v['perfects'] == 0, 'late_presses': lambda v: v['state'] == 'win' and v['perfects'] >= 20,
   'reminders_shown': lambda v: len(v) >= 3 and any('Red sparks' in t for t in v), 'no_reminders_second_time': [], 'times_mid_vs_late': lambda v: v[1] < v[0] - 2,
-  'safe_line_only': lambda v: v[0] == 'win', 'fail_names_the_move': lambda v: 'Shifting floor' in v, 'replay': lambda v: '4 replay to the recorded ending, 4 of 4 to the recorded time' in v, 'risk_events_in_level2': lambda v: v >= 6 }
+  'safe_line_only': lambda v: v[0] == 'win', 'fail_names_the_move': lambda v: 'Shifting floor' in v, 'replay': lambda v: '4 replay to the recorded ending, 4 of 4 to the recorded time' in v, 'floor_hints': lambda v: v['wrong'] == 0 and v['turns'] > 200 and v['lanes_tried'] > 500, 'hint_followed_off_the_route': lambda v: v and v['after'] == 'play' and v['past_the_blocks'],
+  'risk_events_in_level2': lambda v: v >= 6 }
 async def play(pg, frac, take_opt=True, stop_at=None):
     info = await pg.evaluate('window.__eightfold.info()'); ev = [e for e in info['events'] if take_opt or not e['opt']]; i = 0; seen = {'tip': [], 'perf': 0, 'maxscale': 0}
     for _ in range(12000):
@@ -59,6 +60,36 @@ async def main():
         await pg.keyboard.press('Escape'); await pg.wait_for_timeout(300); await pg.keyboard.press('2'); await pg.wait_for_timeout(300); await pg.keyboard.press('Enter'); await pg.wait_for_timeout(300)
         info = await pg.evaluate('window.__eightfold.info()'); risk = [e for e in info['events'] if e['opt']]
         r['risk_events_in_level2'] = len(risk)
+        # The move hints on the floor. Every turn in every course, from every lane a player could be standing in as it comes up:
+        # the arrow has to lead to a lane that goes through, and say nothing to a player who is already in one.
+        hints = {}
+        for lid in ['lvTut'] + ['lv%d' % i for i in range(1, 9)] + ['lvEndless', 'lvDaily']:
+            await pg.goto(URL); await pg.wait_for_timeout(300); await pg.click('#' + lid); await pg.wait_for_timeout(250)
+            if await pg.evaluate('!document.getElementById("briefSheet").hidden'): await pg.keyboard.press('Enter'); await pg.wait_for_timeout(200)
+            a = await pg.evaluate('window.__eightfold.cueAudit(%d)' % (4000 if lid == 'lvEndless' else 0))
+            hints[lid] = (a['turns'], a['cases'], len(a['wrong']), a['routeWayWrong'])
+            if a['wrong']: print('   hint wrong in', lid, json.dumps(a['wrong'][:3]))
+        r['floor_hints'] = {'turns': sum(v[0] for v in hints.values()), 'lanes_tried': sum(v[1] for v in hints.values()), 'wrong': sum(v[2] for v in hints.values()), 'the_routes_own_way_would_be_wrong': sum(v[3] for v in hints.values())}
+        # and for real: stand one lane further out than the route before a wall of blocks, follow the hint, and get through
+        await pg.goto(URL); await pg.wait_for_timeout(300); await pg.click('#lv2'); await pg.wait_for_timeout(250)
+        if await pg.evaluate('!document.getElementById("briefSheet").hidden'): await pg.keyboard.press('Enter')
+        off = None
+        for _ in range(4000):
+            st = await pg.evaluate(S); c = await pg.evaluate('window.__eightfold.cue()')
+            if st['state'] != 'play': break
+            if c and c['key'] in 'LR' and c['n'] == 1 and st['air'] == 'ground':
+                d = 1 if c['key'] == 'L' else -1; await pg.evaluate('window.__eightfold.put(%d)' % (st['lane'] - d)); c2 = await pg.evaluate('window.__eightfold.cue()')
+                if c2 and c2['n'] == 2 and c2['key'] == c['key']:
+                    while (await pg.evaluate(S))['z'] < c2['r0'] - 1.5: await pg.wait_for_timeout(4)
+                    await pg.keyboard.press(KEY[c2['key']]); await pg.wait_for_timeout(140); await pg.keyboard.press(KEY[c2['key']])
+                    while True:
+                        st = await pg.evaluate(S)
+                        if st['state'] != 'play' or st['z'] > c2['r1'] + 4: break
+                        await pg.wait_for_timeout(8)
+                    off = {'hint': c2['key'] + ' x%d' % c2['n'], 'after': st['state'], 'past_the_blocks': st['z'] > c2['r1'] + 4}; break
+                await pg.evaluate('window.__eightfold.put(%d)' % st['lane'])
+            await pg.wait_for_timeout(5)
+        r['hint_followed_off_the_route'] = off
         await b.close()
     r['errors'] = errs
     report('', r, EXPECT); done()

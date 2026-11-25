@@ -121,6 +121,7 @@ const IC = {
   double: svg('<circle cx="32" cy="20" r="15" fill="rgba(0,0,0,.35)" stroke="#7dffb0" stroke-width="3"/><path d="M22 15l8 10M30 15l-8 10M34 17l3-2.5 3 2.5-6 8h7" fill="none" stroke="#7dffb0" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>'),
   perfect: svg('<circle cx="32" cy="20" r="6" fill="#fff"/><circle cx="32" cy="20" r="13" fill="none" stroke="#fff" stroke-width="2.4" opacity=".75"/>'),
   strip: svg('<rect x="4" y="24" width="56" height="10" rx="1" ' + FL + '/><rect x="14" y="8" width="20" height="10" fill="var(--tile)"/><rect x="14" y="8" width="20" height="10" fill="#ff3854" opacity=".35"/><rect x="34" y="8" width="14" height="10" fill="#ff3854"/><rect x="46.5" y="6" width="3" height="14" fill="#fff"/><path d="M12 29Q16 13 22 13H40Q44 13 50 29" ' + PATH + '/><circle cx="8" cy="29" ' + BALL + '/>'),
+  cue: svg('<rect x="4" y="6" width="56" height="28" rx="1" ' + FL + '/><path d="M12 12l8 8-8 8M27 26l5-6 5 6M27 18l5-6 5 6M45 20h12" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>'),
   mark: svg('<rect x="4" y="12" width="56" height="16" rx="1" ' + FL + '/><rect x="26" y="12" width="14" height="16" fill="var(--hazard)" opacity=".55"/>'),
   best: svg('<polygon points="44.8,5 55.6,15.8 55.6,31 44.8,37 19.2,37 8.4,31 8.4,15.8 19.2,5" transform="translate(0 -1)" fill="none" stroke="#fff" stroke-width="3"/>'),
   finish: svg('<rect x="4" y="12" width="56" height="16" fill="#fff"/><path d="M4 12h8v8h-8zM20 12h8v8h-8zM36 12h8v8h-8zM52 12h8v8h-8zM12 20h8v8h-8zM28 20h8v8h-8zM44 20h8v8h-8z" fill="rgb(var(--bgc))"/>')
@@ -151,6 +152,7 @@ function buildGuide() {
     info(IC.magnet, 'Magnet (Endless)', 'For ' + POWER.magnet + ' seconds every ordinary and ringed spark you pass comes to you, whatever lane it is in. Red sparks still have to be fetched. One lane off the route.'),
     info(IC.double, 'Double (Endless)', 'For ' + POWER.double + ' seconds sparks are worth twice the points, red ones included. One lane off the route.')]);
   fill('gdFloor', [
+    info(IC.cue, 'White marks on your floor', 'The next move you need, painted on your own lane just before it is due. An arrowhead to the side: turn that way (two: turn twice). Two arrowheads pointing ahead: flip, and the tile you will land on, overhead, is outlined. A bar across: jump. They can be hidden under Controls & options.'),
     info(IC.strip, 'Red strip', 'Where red sparks sit: beside the floor (turn out to it) or overhead (flip to it). It turns full red after the last spark and ends at the white bar. Be back on the main floor by then.'),
     info(IC.mark, 'Marked tile', 'A sliding block or a swinging bar is about to stop here. Be on another tile.'),
     card('pads', false), card('sprint', false), card('slow', false),

@@ -110,6 +110,40 @@ function prepPal() {
 const GAPL = .007, GAPZ = .007 * RL;   // tiles are drawn slightly inset; the gap between them replaces an outline stroke per tile
 
 // lead: simulated time not yet stepped this frame. Drawing that far ahead keeps motion even on 120/144 Hz screens.
+// The move the player needs next, for the hints drawn on the floor: which tiles to press on, and which move. (A quarter of
+// real runs ended on the wrong key, mostly a flip pressed for a turn or a jump for a flip; the shape of the floor did not say.)
+// What kind of move it is comes from the course's route. Which way a turn goes does not: the route is one lane, and on a
+// wide floor the player is often in another, where the route's own direction would point at a wall or off the edge. So a
+// turn is read from the floor itself: the row where the old floor ends or the blocks stand, and the nearest lane that goes
+// through it from the lane the player is in. Nothing is shown to a player who is already in such a lane.
+function cueNow() {
+  if (opts.cues === false || state !== 'play' || bot || !pace) return null;
+  const ev = track.events, z = runner.z, p = runner.lane & 7, v = track.speedAt(z), rows = track.S.length;
+  while (cueI < ev.length && (ev[cueI].opt || ev[cueI].z1 < z - .3)) cueI++;
+  const live = (k, r) => { const b = 1 << (k & 7); return r >= 0 && r < rows && !!(track.S[r] & b) && !(track.B[r] & b); };
+  const floor = (k, r) => r >= 0 && r < rows && !!(track.S[r] & (1 << (k & 7)));
+  for (let i = cueI; i < ev.length && ev[i].z0 - z < v * 2.5; i++) {
+    const e = ev[i]; if (e.opt || e.z1 < z - .3) continue;
+    if (e.key !== 'L' && e.key !== 'R') {
+      if (pace.hit[i]) continue;
+      const r1 = Math.floor(e.z1 - .05);
+      return { r0: Math.max(Math.ceil(e.z0), r1 - 2), r1, key: e.key, lane: p, far: (p + 4) & 7, n: 1 };
+    }
+    let last = i; while (last + 1 < ev.length && !ev[last + 1].opt && ev[last + 1].key === e.key && ev[last + 1].z0 < ev[last].z1) last++;   // a dodge two lanes wide is two presses
+    const rd = Math.floor(ev[last].z1) + 1;   // the first row the old lane does not go through
+    if (rd <= z || live(p, rd)) { i = last; continue; }
+    let dir = e.key === 'L' ? 1 : -1, n = 0;
+    for (let d = 1; d <= 3 && !n; d++) {
+      let a = live(p + d, rd), b = live(p - d, rd);
+      for (let q = 1; q < d; q++) { a = a && floor(p + q, rd - 1); b = b && floor(p - q, rd - 1); }   // the lanes crossed on the way have to be there to land on
+      if (a || b) { if (!(a && b)) dir = a ? 1 : -1; n = d; }
+    }
+    if (!n) { i = last; continue; }   // no turn gets there from here (on a red strip overhead, say, where the way back is a flip): better no arrow than a wrong one
+    const z1 = ev[last].z1 - (n - 1) * (HOP * v + .35), r1 = Math.floor(z1 - .05);   // the last moment for the first of n hops
+    return { r0: Math.max(Math.ceil(ev[i].z0), r1 - 2), r1, key: dir > 0 ? 'L' : 'R', lane: p, far: (p + 4) & 7, n };
+  }
+  return null;
+}
 function render(fdt, lead) {
   const z = runner.z + track.speedAt(runner.z) * lead, v = runner.vis(lead), cam = camNow = runner.cam;
   if (!track.level && Math.abs(z - palZ) > 9) { pal = endlessPal(z); palZ = z; }
@@ -153,14 +187,7 @@ function render(fdt, lead) {
   const j0 = Math.floor(z - CAMBACK + NEAR / RL), j1 = Math.floor(z) + VIEW, zb = Math.floor(z);
   track.cell(j1, 0);   // make sure the endless track is generated this far
   const RKM = riskMap(track).rows;
-  // The next move the course needs, drawn on the floor it is needed on: which tiles to press on, and which move. (A quarter of
-  // real runs ended on the wrong key, mostly a flip pressed for a turn or a jump for a flip; the shape of the floor did not say.)
-  let CUE = null;
-  if (opts.cues !== false && state === 'play' && !bot && pace) {
-    const ev = track.events; while (cueI < ev.length && (ev[cueI].opt || ev[cueI].z1 < runner.z - .3 || pace.hit[cueI])) cueI++;
-    const e = ev[cueI];
-    if (e && e.z0 - runner.z < track.speedAt(runner.z) * 2.5) { const r1 = Math.floor(e.z1 - .05); CUE = { r0: Math.max(Math.ceil(e.z0), r1 - 2), r1, key: e.key, lane: runner.lane & 7, far: (runner.lane + 4) & 7 }; }
-  }
+  const CUE = cueNow();   // the next move needed, drawn on the floor it is needed on
   const rows = Math.min(track.end, track.S.length);
   const speed = track.speedAt(z), settle = Math.max(2.5, speed * .35), travel = speed * 1.1;
   ctx.lineWidth = 1; ctx.lineJoin = 'round';
@@ -210,11 +237,16 @@ function render(fdt, lead) {
         if (CUE && j >= CUE.r0 && j <= CUE.r1 && (k === CUE.lane || (CUE.key === 'F' && k === CUE.far))) {
           // u runs across the tile towards the next lane up, v away from the camera
           const pt = (u, v) => { const x0 = xa + (xb - xa) * u, y0 = ya + (yb - ya) * u, x1 = xd + (xc - xd) * u, y1 = yd + (yc - yd) * u; return [x0 + (x1 - x0) * v, y0 + (y1 - y0) * v]; };
-          const line = pts => { ctx.beginPath(); pts.forEach((q, i) => { const [x, y] = pt(q[0], q[1]); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.stroke(); };
-          ctx.globalAlpha = (1 - fog) * .9; ctx.strokeStyle = '#fff'; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.lineWidth = Math.max(2, Math.hypot(xb - xa, yb - ya) * .065);
+          // white with a dark edge, so it reads on a pale floor as well as a dark one
+          const lw = Math.max(2, Math.hypot(xb - xa, yb - ya) * .06);
+          const line = pts => { ctx.beginPath(); pts.forEach((q, i) => { const [x, y] = pt(q[0], q[1]); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.strokeStyle = 'rgb(10 12 28 / .7)'; ctx.lineWidth = lw * 2; ctx.stroke(); ctx.strokeStyle = '#fff'; ctx.lineWidth = lw; ctx.stroke(); };
+          ctx.globalAlpha = 1 - fog; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
           if (k !== CUE.lane) line([[.08, .08], [.92, .08], [.92, .92], [.08, .92], [.08, .08]]);                 // flip: the floor to land on, overhead, is outlined
-          else if (CUE.key === 'L') line([[.3, .2], [.7, .5], [.3, .8]]);                                        // turn: an arrowhead pointing the way the floor goes
-          else if (CUE.key === 'R') line([[.7, .2], [.3, .5], [.7, .8]]);
+          else if (CUE.key === 'L' || CUE.key === 'R') {                                                         // turn: an arrowhead pointing the way to go, two of them for two hops
+            const m = CUE.key === 'L' ? u => u : u => 1 - u;
+            if (CUE.n > 1) { line([[m(.16), .2], [m(.5), .5], [m(.16), .8]]); line([[m(.5), .2], [m(.84), .5], [m(.5), .8]]); }
+            else line([[m(.3), .2], [m(.7), .5], [m(.3), .8]]);
+          }
           else if (CUE.key === 'F') { line([[.22, .12], [.5, .42], [.78, .12]]); line([[.22, .5], [.5, .8], [.78, .5]]); }   // flip: two arrowheads, up and away
           else line([[.15, .5], [.85, .5]]);                                                                     // jump: a bar across, like the thing to clear
           ctx.globalAlpha = 1; ctx.lineWidth = 1; ctx.lineJoin = 'miter'; ctx.lineCap = 'butt';

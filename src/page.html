@@ -481,6 +481,41 @@ window.__eightfold = {
   sig() { let h = 0; track.cell(300, 0); for (let r = 0; r < 300; r++) h = (h * 31 + track.S[r] + 7 * track.B[r]) | 0; return h; },
   pilot() { bot = new Bot(track, .5, false); },
   kill() { runner.die('fall'); },
+  cue() { return cueNow(); },
+  put(lane) { runner.lane = lane; runner.from = lane; },   // stand the ball in another lane
+  // Every turn the course needs, tried from every lane a player could be standing in as it comes up: does the hint on the floor
+  // lead to a lane that goes through? "old" counts what pointing the route's own way would have done, for comparison.
+  cueAudit(more) {
+    if (more) track.cell(more, 0);
+    const ev = track.events, rows = track.S.length, out = { turns: 0, cases: 0, wrong: [], routeWayWrong: 0, alreadySafe: 0, noTurnGetsThere: 0, twoHops: 0 };
+    const live = (k, r) => { const b = 1 << (k & 7); return r < rows && !!(track.S[r] & b) && !(track.B[r] & b); };
+    const fl = (k, r) => r < rows && !!(track.S[r] & (1 << (k & 7)));
+    const keep = [runner.lane, runner.z, cueI];
+    for (let i = 0; i < ev.length; i++) {
+      const e = ev[i]; if (e.opt || (e.key !== 'L' && e.key !== 'R')) continue;
+      let last = i; while (last + 1 < ev.length && !ev[last + 1].opt && ev[last + 1].key === e.key && ev[last + 1].z0 < ev[last].z1) last++;
+      const rd = Math.floor(ev[last].z1) + 1, r0 = Math.floor(e.z0); if (rd >= rows) break;
+      out.turns++;
+      const rdir = e.key === 'L' ? 1 : -1, hops = last - i + 1;
+      for (let p = 0; p < 8; p++) {
+        let stand = true; for (let r = r0; r < rd; r++) if (!live(p, r)) stand = false; if (!stand) continue;
+        out.cases++;
+        runner.lane = p; runner.z = e.z0 + .2; cueI = 0; const c = cueNow(), safe = live(p, rd);
+        const turn = c && (c.key === 'L' || c.key === 'R') && c.r1 < rd;
+        if (safe) { out.alreadySafe++; if (turn) out.wrong.push({ i, p, rd, why: 'a turn shown to a player already in a lane that goes through', c }); continue; }
+        let q = p, routeOk = true; for (let h = 0; h < hops; h++) { q += rdir; if (h < hops - 1 && !fl(q, rd - 1)) routeOk = false; } if (!routeOk || !live(q, rd)) out.routeWayWrong++;
+        let way = false; for (let d = 1; d <= 3 && !way; d++) for (const sg of [1, -1]) { let ok = live(p + sg * d, rd); for (let h = 1; h < d; h++) ok = ok && fl(p + sg * h, rd - 1); way = way || ok; }
+        if (!way) { out.noTurnGetsThere++; if (turn) out.wrong.push({ i, p, rd, why: 'a turn shown where no turn gets through', c }); continue; }
+        if (!turn) { out.wrong.push({ i, p, rd, why: 'no turn shown', c }); continue; }
+        const d = c.key === 'L' ? 1 : -1; let t = p, good = true; for (let h = 0; h < c.n; h++) { t += d; if (h < c.n - 1 && !fl(t, rd - 1)) good = false; }
+        if (!good || !live(t, rd)) out.wrong.push({ i, p, rd, why: 'the turn shown leads to a lane that does not go through', c });
+        if (c.n > 1) out.twoHops++;
+      }
+      i = last;
+    }
+    runner.lane = keep[0]; runner.z = keep[1]; cueI = keep[2];
+    return out;
+  },
   slow() { pace.slow(); },
   power(k) { runner.take(-999, { t: k, lane: 0 }); },
   risk() { return riskMap(track).list.map(x => ({ z0: x.z0, z1: x.z1, back: x.back, b: x.b, first: x.first, lane: x.lane, far: x.far, n: x.n })); },
