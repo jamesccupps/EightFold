@@ -80,9 +80,9 @@ function postRow(el) {
     const mine = lastRun && lastRun.s === q.run.s && lastRun.i === q.run.i;
     const l = document.createElement('label'); l.htmlFor = 'postName';
     l.textContent = mine ? showV(id, q.v) + '. Put it on the leaderboard as ' : 'Your best ' + boardWhen(id) + ', ' + showV(id, q.v) + ', is not on the leaderboard yet. Put it there as ';
-    const inp = document.createElement('input'); inp.id = 'postName'; inp.className = 'nm3'; inp.maxLength = 3; inp.autocomplete = 'off'; inp.spellcheck = false; inp.setAttribute('aria-label', 'Three letters or digits');
+    const inp = document.createElement('input'); inp.id = 'postName'; inp.className = 'nm3'; inp.maxLength = 8; inp.autocomplete = 'off'; inp.spellcheck = false; inp.setAttribute('aria-label', 'Up to eight letters or digits');
     const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'btn sm'; btn.id = 'btnPost'; btn.textContent = 'Post';
-    btn.addEventListener('click', () => { const n = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3); if (!n) { inp.focus(); return; } stats.name = n; saveStats(); inp.blur(); postAll(); postUi(); });
+    btn.addEventListener('click', () => { const n = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8); if (!n) { inp.focus(); return; } stats.name = n; saveStats(); inp.blur(); postAll(); postUi(); });
     el.appendChild(l); el.appendChild(inp); el.appendChild(btn);
     return;
   }

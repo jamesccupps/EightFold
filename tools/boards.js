@@ -14,7 +14,12 @@ const E = engine(NOW), TOP = 50, DAYS = 7;
 const ENDLESS = 'E' + ((fs.readdirSync(path.join(__dirname, '..', 'src')).filter(f => /\.(js|html)$/.test(f)).map(f => fs.readFileSync(path.join(__dirname, '..', 'src', f), 'utf8')).join('\n').match(/const ENDLESS_COURSE = '(\d{4}-\d\d-\d\d)'/) || [])[1] || '');
 if (ENDLESS.length !== 11) { console.error('cannot tell which Endless course is ranked'); process.exit(2); }
 const plain = n => String(n).replace(/[4@]/g, 'A').replace(/1/g, 'I').replace(/0/g, 'O').replace(/3/g, 'E').replace(/5/g, 'S').replace(/7/g, 'T').replace(/8/g, 'B');   // digits standing in for letters
-const BAD = new Set(['ASS', 'FAG', 'FUK', 'FUC', 'FCK', 'KKK', 'NIG', 'NGR', 'CUM', 'JEW', 'JIZ', 'SEX', 'TIT', 'COK', 'CNT', 'DIK', 'DIC', 'GAY', 'HOE', 'PIS', 'POO', 'VAG', 'WOP', 'KYS', 'SUK', 'FAP', 'NAZ', 'SS']);
+// Names that are not listed (the row shows ??? instead). EXACT: short ones, matched whole, so that ASS does not catch CASSIE.
+// INSIDE: longer words with no innocent neighbours, matched anywhere in the name. Words that are also what people call
+// themselves (GAY, JEW) are not here: an identity is not an insult.
+const EXACT = new Set(['ASS', 'FAG', 'FUK', 'FUC', 'FCK', 'KKK', 'NIG', 'NGR', 'CUM', 'JIZ', 'SEX', 'TIT', 'COK', 'COCK', 'CNT', 'DIK', 'DIC', 'DICK', 'HOE', 'PIS', 'POO', 'VAG', 'WOP', 'KYS', 'SUK', 'FAP', 'NAZ', 'SS', 'SPIC', 'RAPE', 'ANAL', 'ANUS', 'HELL', 'DAMN', 'CRAP', 'PISS', 'KIKE', 'COON', 'GOOK', 'DYKE', 'TWAT', 'WANK', 'PORN', 'TITS', 'SLUT']);
+const INSIDE = ['FUCK', 'FUK', 'SHIT', 'CUNT', 'NIGG', 'NIGA', 'FAGG', 'FAGOT', 'BITCH', 'PENIS', 'VAGINA', 'WHORE', 'PUSSY', 'NAZI', 'HITLER', 'CHINK', 'RETARD', 'BASTARD', 'ASSHOLE', 'DILDO', 'JIZZ', 'RAPIST', 'PEDO', 'KKK', 'WANKER', 'TRANNY', 'BLOWJOB', 'HANDJOB', 'BONER', 'CUMSHOT', 'KYS'];
+const bad = name => { const n = plain(name); return EXACT.has(n) || INSIDE.some(w => n.includes(w)); };
 const files = d => fs.existsSync(d) ? [].concat(...fs.readdirSync(d).map(f => { const p = path.join(d, f); return fs.statSync(p).isDirectory() ? files(p) : f.endsWith('.json') ? [p] : []; })) : [];
 const dayNum = date => +date.replace(/-/g, '');
 // the course a board is for, as the engine lays it out today, and its checksum
@@ -43,11 +48,11 @@ function check(s) {
   if (r.track.checksum() !== c.cs) return { no: 'course changed' };
   if (board[0] === 'E') { if (r.res !== 'fall' && r.res !== 'crash') return { no: 'playback does not end' }; }
   else if (r.res !== 'win') return { no: 'playback does not finish the course' };
-  const name = String(s.name || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3) || '???';
+  const name = String(s.name || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || '???';
   if (s.test) return { no: 'a test: checked and found good, not listed (' + (board[0] === 'E' ? r.z + ' m' : r.time.toFixed(2) + ' s') + ')', test: true };
   // every press at the last possible moment, over a long run, is a script's signature and not a person's: checked and found good, but held back
   if ((s.run.pr | 0) >= 30 && (r.perfects | 0) >= .9 * (s.run.pr | 0)) return { no: 'held: nearly every press at the last moment (' + (r.perfects | 0) + ' of ' + (s.run.pr | 0) + ')', held: true };
-  return { board, n: BAD.has(plain(name)) ? '???' : name, p: String(s.pid || '').slice(0, 6), at: s.at || 0, cs: c.cs,
+  return { board, n: bad(name) ? '???' : name, p: String(s.pid || '').slice(0, 6), at: s.at || 0, cs: c.cs,
     t: +r.time.toFixed(2), m: r.z, pts: r.pts | 0, pf: r.perfects | 0, sp: r.sparks | 0 };
 }
 const cachePath = path.join(dir, 'boards', 'checked.json');

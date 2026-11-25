@@ -104,7 +104,7 @@ on('btnTuneCopy', e => { tuneText(); copyText($('tuneOut').value, $('tuneOut'), 
 on('btnData', () => { $('ctrlSheet').hidden = true; overlay = null; buildData(); openSheet('dataSheet'); });
 on('btnCloseData', closeSheet);
 on('btnBoard', () => openBoard()); on('btnCloseBoard', closeSheet);
-$('boardName').addEventListener('input', e => { const n = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3); stats.name = n; saveStats(); drawPending(); });
+$('boardName').addEventListener('input', e => { const n = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8); stats.name = n; saveStats(); drawPending(); });
 $('boardName').addEventListener('keydown', e => { if (e.key === 'Enter' && stats.name) { e.target.blur(); postAll(); drawPending(); } });
 for (const id of ['btnNote', 'btnNote2', 'btnNote3', 'btnNote4']) on(id, openNote);
 on('btnCloseNote', closeSheet); on('btnNoteSend', sendNote);

@@ -138,7 +138,8 @@ ok('play data gets the same retries, and the key-press delays are stored', r.sta
 { const day = Object.keys(files).find(p => p.startsWith('scores/')).split('/')[1], h = HID('abcdef0123cc'); for (let i = 0; i < 60; i++) files['scores/' + day + '/' + h + '-L1-x' + i + '.json'] = { sha: 'x', content: '' }; }
 r = await score({ pid: 'abcdef0123cc' });
 ok('one player cannot post more than sixty scores in a day', r.status === 429, r.status);
-r = await score({ name: 'toolong' }); ok('a name longer than three characters is refused', r.status === 400);
+r = await score({ name: 'toolonger' }); ok('a name longer than eight characters is refused', r.status === 400);
+r = await score({ name: 'eightchr', pid: 'abcdef0123nn' }); ok('a name of eight is taken', r.status === 200, r.status);
 r = await score({ name: '<b>' }); ok('a name with anything but letters and digits is refused', r.status === 400);
 r = await score({ board: '../../main' }); ok('an unknown board is refused', r.status === 400);
 r = await score({ run: { m: 'L1', res: 'win' } }); ok('a score without its presses is refused', r.status === 400);
@@ -147,6 +148,12 @@ files['boards/all.json'] = { sha: 'b1', content: btoa(JSON.stringify({ updated: 
 r = await worker.fetch(new Request('https://relay.example/boards', { method: 'GET', headers: { Origin: ORIGIN } }), env);
 const bj = await r.json();
 ok('the boards come back to the game', r.status === 200 && bj.boards.L1[0].n === 'JMC' && r.headers.get('Access-Control-Allow-Origin') === ORIGIN, bj);
+// moving the play data to its own repository: one new secret switches everything
+calls.length = 0; r = await post({ v: 1, session, attempts: [attempt({ i: 40 })] }, { ip: '198.51.100.40' });
+ok('without DATA_TOKEN the old token writes to the game repository, branch play-data', r.status === 200 && calls.every(c => c.repo === 'jamesccupps/EightFold' && c.auth === 'Bearer test-token') && calls.some(c => c.ref === 'play-data'), JSON.stringify(calls.slice(0, 2)));
+calls.length = 0; r = await post({ v: 1, session, attempts: [attempt({ i: 41 })] }, { ip: '198.51.100.41', env: { GITHUB_TOKEN: 'old', DATA_TOKEN: 'new' } });
+ok('with DATA_TOKEN set, only that token is used, on the data repository, branch main', r.status === 200 && calls.length > 0 && calls.every(c => c.repo === 'jamesccupps/EightFold-data' && c.auth === 'Bearer new') && calls.some(c => c.ref === 'main'), JSON.stringify(calls.slice(0, 2)));
+{ const st = await (await worker.fetch(new Request('https://relay.example/', { method: 'GET' }), { DATA_TOKEN: 'new' })).json(); ok('the status line says where it files', st.store === 'jamesccupps/EightFold-data@main' && st.ready === true, JSON.stringify(st)); }
 ok('the status line still answers', (await (await worker.fetch(new Request('https://relay.example/', { method: 'GET' }), env)).json()).ready === true);
 
 console.log(fails ? fails + ' FAILED' : 'relay: all checks passed');

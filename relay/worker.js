@@ -16,14 +16,23 @@
 // that file to the game.
 //
 // Settings (Worker > Settings > Variables and Secrets):
-//   GITHUB_TOKEN  secret, required. A fine-grained token: this repository only, Contents: Read and write.
+//   DATA_TOKEN    secret, required. A fine-grained token for the play-data repository only, Contents: Read and write.
+//   GITHUB_TOKEN  the secret used before play data had its own repository; only read while DATA_TOKEN is not set.
 //   REPO          optional, default "jamesccupps/EightFold"
 //   BRANCH        optional, default "play-data"
 //   ORIGINS       optional, comma-separated pages allowed to post, default "https://jamesccupps.github.io"
 //   OFF           optional. Set to "1" to refuse everything without deleting the Worker.
 
-const VERSION = '2026-11-25.1';   // shown on the status line, so a deploy can be told from the one before
-const DEFAULTS = { REPO: 'jamesccupps/EightFold', BRANCH: 'play-data', ORIGINS: 'https://jamesccupps.github.io' };
+const VERSION = '2026-11-25.2';   // shown on the status line, so a deploy can be told from the one before
+const DEFAULTS = { REPO: 'jamesccupps/EightFold-data', BRANCH: 'main', ORIGINS: 'https://jamesccupps.github.io' };
+// Play data lives in a repository of its own, and DATA_TOKEN is a token that can write there and nowhere else: if it
+// ever leaked it could not touch the game's code, which GitHub Pages serves. Until DATA_TOKEN is set the Worker carries
+// on as it did before the move, with GITHUB_TOKEN and the play-data branch of the game's repository, so setting the one
+// new secret is the whole switch.
+const OLD = { REPO: 'jamesccupps/EightFold', BRANCH: 'play-data' };
+const tokenOf = env => env.DATA_TOKEN || env.GITHUB_TOKEN;
+const repoOf = env => env.REPO || (env.DATA_TOKEN ? DEFAULTS.REPO : OLD.REPO);
+const branchOf = env => env.BRANCH || (env.DATA_TOKEN ? DEFAULTS.BRANCH : OLD.BRANCH);
 const MAX_BODY = 64 * 1024;        // bytes per post
 const MAX_ATTEMPTS = 400;          // attempts per session file
 const MAX_FILE = 900 * 1024;       // bytes per session file (GitHub hands back file contents up to 1 MB)
@@ -168,8 +177,8 @@ const RUN_NUMS = { d: [0, 1e5], z: [-10, 1e7], pc: [0, 1e6], pts: [0, 1e8], sp: 
 // returns { path, body } or a string saying what is wrong. Nothing is judged here beyond shape: the checker plays the run back.
 function checkScore(data, now) {
   if (!data || typeof data !== 'object' || data.v !== 1 || !data.run || typeof data.run !== 'object') return 'not a score';
-  const board = str(data.board, BOARD), name = str(String(data.name || '').toUpperCase(), /^[A-Z0-9]{1,3}$/), pid = str(data.pid, /^[a-z0-9]{12}$/), core = str(data.core, /^[a-f0-9]{10}$/);
-  if (!board) return 'no such board'; if (!name) return 'a name is one to three letters or digits'; if (!pid || !core) return 'not a score';
+  const board = str(data.board, BOARD), name = str(String(data.name || '').toUpperCase(), /^[A-Z0-9]{1,8}$/), pid = str(data.pid, /^[a-z0-9]{12}$/), core = str(data.core, /^[a-f0-9]{10}$/);
+  if (!board) return 'no such board'; if (!name) return 'a name is one to eight letters or digits'; if (!pid || !core) return 'not a score';
   const a = data.run, run = {};
   put(run, 'm', str(a.m, MODE)); put(run, 'res', str(a.res, /^(win|fall|crash)$/));
   for (const k in RUN_NUMS) put(run, k, num(a[k], RUN_NUMS[k][0], RUN_NUMS[k][1]));
@@ -186,7 +195,7 @@ function checkScore(data, now) {
 const pause = n => new Promise(r => setTimeout(r, 120 + 180 * n + Math.floor(Math.random() * 200)));
 const busy = status => status === 409 || status === 422 || status === 500 || status === 502 || status === 503;
 async function saveScore(env, ok) {
-  const branch = env.BRANCH || DEFAULTS.BRANCH;
+  const branch = branchOf(env);
   const list = await gh(env, ok.dir + '?ref=' + encodeURIComponent(branch), { method: 'GET' });
   if (list.status === 200) {
     const files = await list.json();
@@ -210,7 +219,7 @@ async function saveScore(env, ok) {
 let boardsAt = 0, boardsText = '';
 async function boards(env, now) {
   if (boardsText && now - boardsAt < 15000) return boardsText;
-  const res = await gh(env, 'boards/all.json?ref=' + encodeURIComponent(env.BRANCH || DEFAULTS.BRANCH), { method: 'GET' });
+  const res = await gh(env, 'boards/all.json?ref=' + encodeURIComponent(branchOf(env)), { method: 'GET' });
   let text = '{"boards":{}}';
   if (res.status === 200) { try { text = atob(String((await res.json()).content || '').replace(/\s/g, '')) || text; JSON.parse(text); } catch (e) { text = '{"boards":{}}'; } }
   else if (res.status !== 404) return boardsText || text;
@@ -219,9 +228,9 @@ async function boards(env, now) {
 
 // ---------- GitHub ----------
 function gh(env, path, init) {
-  const repo = env.REPO || DEFAULTS.REPO;
+  const repo = repoOf(env);
   return fetch('https://api.github.com/repos/' + repo + '/contents/' + path, Object.assign({}, init, {
-    headers: { 'Authorization': 'Bearer ' + env.GITHUB_TOKEN, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'eightfold-relay', 'Content-Type': 'application/json' }
+    headers: { 'Authorization': 'Bearer ' + tokenOf(env), 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'eightfold-relay', 'Content-Type': 'application/json' }
   }));
 }
 // what is already filed for this session, plus what just arrived (an attempt sent twice replaces itself)
@@ -239,7 +248,7 @@ function merge(old, neu) {
   return body;
 }
 async function save(env, ok) {
-  const branch = env.BRANCH || DEFAULTS.BRANCH, dir = 'sessions/' + ok.date, path = dir + '/' + ok.sid + '.json';
+  const branch = branchOf(env), dir = 'sessions/' + ok.date, path = dir + '/' + ok.sid + '.json';
   for (let attempt = 0; attempt < TRIES; attempt++) {
     if (attempt) await pause(attempt);
     let sha, old = null;
@@ -286,15 +295,15 @@ export default {
     }
     const route = new URL(request.url).pathname.replace(/\/+$/, '').split('/').pop();   // '', 'score' or 'boards'
     if (request.method === 'GET' && route === 'boards') {
-      if (!env.GITHUB_TOKEN) return reply(500, { error: 'no token set' }, okOrigin);
+      if (!tokenOf(env)) return reply(500, { error: 'no token set' }, okOrigin);
       let text; try { text = await boards(env, Date.now()); } catch (e) { text = boardsText || '{"boards":{}}'; }
       return new Response(text, { status: 200, headers: Object.assign({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Vary': 'Origin' }, okOrigin ? { 'Access-Control-Allow-Origin': okOrigin } : {}) });
     }
-    if (request.method === 'GET') return reply(200, { ok: true, what: 'Eightfold play-data relay', version: VERSION, ready: !!env.GITHUB_TOKEN && env.OFF !== '1' }, okOrigin);
+    if (request.method === 'GET') return reply(200, { ok: true, what: 'Eightfold play-data relay', version: VERSION, ready: !!tokenOf(env) && env.OFF !== '1', store: repoOf(env) + '@' + branchOf(env) }, okOrigin);
     if (request.method !== 'POST') return reply(405, { error: 'POST only' }, okOrigin);
     if (env.OFF === '1') return reply(503, { error: 'switched off' }, okOrigin);
     if (!okOrigin) return reply(403, { error: 'not from the game' }, '');
-    if (!env.GITHUB_TOKEN) return reply(500, { error: 'no token set' }, okOrigin);
+    if (!tokenOf(env)) return reply(500, { error: 'no token set' }, okOrigin);
     const now = Date.now();
     if (tooFast(request.headers.get('CF-Connecting-IP') || 'unknown', now)) return reply(429, { error: 'slow down' }, okOrigin);
     if (+(request.headers.get('Content-Length') || 0) > MAX_BODY) return reply(413, { error: 'too large' }, okOrigin);

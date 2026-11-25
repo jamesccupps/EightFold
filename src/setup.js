@@ -44,7 +44,7 @@ if (!stats.daily || typeof stats.daily !== 'object') stats.daily = {};
 if (!stats.know || typeof stats.know !== 'object') stats.know = {};   // how many times the player has made each kind of move: reminders stop after two
 if (!stats.posted || typeof stats.posted !== 'object') stats.posted = {};   // per board: the best run already posted, and the course it was on
 if (!stats.pending || typeof stats.pending !== 'object') stats.pending = {};   // per board: this player's best run that is not on the board yet, kept whole until it is
-if (typeof stats.name !== 'string' || !/^[A-Z0-9]{1,3}$/.test(stats.name)) stats.name = '';   // the three letters or digits this player posts scores under
+if (typeof stats.name !== 'string' || !/^[A-Z0-9]{1,8}$/.test(stats.name)) stats.name = '';   // the name this player posts scores under: up to eight letters or digits
 const lvS = i => stats.lv[i] || (stats.lv[i] = { best: 0, clears: 0, tries: 0, sparks: 0, perfect: false, pclear: false });
 { const old = store.get('best', null); if (Array.isArray(old)) old.forEach((b, i) => { if (b && i < LEVELS.length) { const s = lvS(i); s.best = Math.max(s.best, b); if (b >= 100) s.clears = Math.max(1, s.clears); } }); }
 const saveStats = () => store.set('stats', stats);
