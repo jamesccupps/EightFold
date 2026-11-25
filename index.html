@@ -1152,8 +1152,11 @@ window.addEventListener('unhandledrejection', e => noteErr('rejected: ' + (e && 
 const ACTIONS = [['left', 'Turn left'], ['right', 'Turn right'], ['flip', 'Flip to the far wall'], ['jump', 'Jump'], ['pause', 'Pause'], ['restart', 'Restart'], ['sound', 'Sound on / off']];
 const DEF_BINDS = { left: ['ArrowLeft', 'a'], right: ['ArrowRight', 'd'], flip: ['ArrowUp', 'w'], jump: [' ', 'ArrowDown'], pause: ['p', 'Escape'], restart: ['r', null], sound: ['m', null] };
 const cloneBinds = b => { const o = {}; for (const [a] of ACTIONS) o[a] = [b[a] ? b[a][0] : null, b[a] ? b[a][1] : null]; return o; };
-let opts = Object.assign({ cues: true, brief: true, invert: false, speed: 1, unlockAll: false, auto: false, cp: false, calm: false, quality: 'auto', music: 80, sfx: 90 }, store.get('opts', {}) || {});
+let opts = Object.assign({ hints: 'first', brief: true, invert: false, speed: 1, unlockAll: false, auto: false, cp: false, calm: false, quality: 'auto', music: 80, sfx: 90 }, store.get('opts', {}) || {});
 opts.binds = cloneBinds(Object.assign({}, DEF_BINDS, opts.binds || {}));
+if (opts.cues === false) opts.hints = 'off';   // hidden under the option's first form (show or hide): stay hidden
+delete opts.cues;
+if (opts.hints !== 'all' && opts.hints !== 'off') opts.hints = 'first';
 const saveOpts = () => store.set('opts', opts);
 const keyNorm = e => e.key.length === 1 ? e.key.toLowerCase() : e.key;
 const KEYNAMES = { ' ': 'Space', ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', Escape: 'Esc' };
@@ -1227,7 +1230,7 @@ function applyTune() {
 // ---------- play recording (temporary: so the game can be tuned from how it is really played) ----------
 // One small record per attempt: where it ended and on what, the time, sparks, how early or late each press came inside
 // the window the course allows for it, and the frame rate. Kept in this browser; see the Play data sheet.
-const BUILD = '2026-11-25' + '.' + 'ff00', CORE_ID = 'ffa37e04d8';   // BUILD: the day, and a short id of exactly these sources that build.js stamps, so two different builds never carry one label. CORE_ID: which engine (generator + physics) this page was built from
+const BUILD = '2026-11-25' + '.' + 'd5d5', CORE_ID = 'ffa37e04d8';   // BUILD: the day, and a short id of exactly these sources that build.js stamps, so two different builds never carry one label. CORE_ID: which engine (generator + physics) this page was built from
 // Where play records are sent from the public copy of the game: a small relay that files them in a repository of
 // their own, jamesccupps/EightFold-data (see relay/ in this repository). Empty = nothing is sent.
 let RELAY = 'https://eightfold-relay.jamesccupps.workers.dev/', relayAnywhere = false;
@@ -1294,7 +1297,7 @@ function telSession() {
   if (!telSess) { telSess = { id: SID, t: Math.round(Date.now() / 1000), build: BUILD, core: CORE_ID, host: String(location.hostname || 'file').slice(0, 60), fun: {}, pid: tel.pid, vn: tel.visits, first: tel.first, ev: [], fb: {} }; if (refHost) telSess.ref = refHost; tel.sessions.push(telSess); if (tel.sessions.length > 30) tel.sessions.shift(); }
   const st = []; LEVELS.forEach((lv, i) => { const x = stats.lv[i] || {}; st.push(x.best || 0, x.clears || 0, x.tries || 0); });
   Object.assign(telSess, browserName(), { w: W, h: H, dpr: +(window.devicePixelRatio || 1).toFixed(2), touch: touchSeen, cores: navigator.hardwareConcurrency | 0, mem: +navigator.deviceMemory || 0,
-    quality: opts.quality, qscale: +qScale.toFixed(2), speed: opts.speed, cp: !!opts.cp, auto: !!opts.auto, invert: !!opts.invert, calm: !!opts.calm, brief: opts.brief !== false, unlockAll: !!opts.unlockAll,
+    quality: opts.quality, qscale: +qScale.toFixed(2), speed: opts.speed, cp: !!opts.cp, auto: !!opts.auto, invert: !!opts.invert, calm: !!opts.calm, brief: opts.brief !== false, hints: opts.hints, unlockAll: !!opts.unlockAll,
     err: errLog.slice(), kb: keysChanged(), hz: dispHz(), px: [cv.width | 0, cv.height | 0], gpu: gpuName(),
     music: opts.music | 0, sfx: opts.sfx | 0, muted: !!Snd.muted, skin: skin(), binds: JSON.stringify(opts.binds) !== JSON.stringify(cloneBinds(DEF_BINDS)), full: fullUsed,
     tut: !!stats.tut, tot: stats.total || 0, st, dur: Math.round((performance.now() - T0) / 1000), tune: tuneFromBase(),
@@ -1753,7 +1756,7 @@ function buildGuide() {
     info(IC.magnet, 'Magnet (Endless)', 'For ' + POWER.magnet + ' seconds every ordinary and ringed spark you pass comes to you, whatever lane it is in. Red sparks still have to be fetched. One lane off the route.'),
     info(IC.double, 'Double (Endless)', 'For ' + POWER.double + ' seconds sparks are worth twice the points, red ones included. One lane off the route.')]);
   fill('gdFloor', [
-    info(IC.cue, 'White marks on your floor', 'The next move you need, painted on your own lane just before it is due. An arrowhead to the side: turn that way (two: turn twice). Two arrowheads pointing ahead: flip, and the tile you will land on, overhead, is outlined. A bar across: jump. They can be hidden under Controls & options.'),
+    info(IC.cue, 'White marks on your floor', 'The next move you need, painted on your own lane just before it is due. An arrowhead to the side: turn that way (two: turn twice). Two arrowheads pointing ahead: flip, and the tile you will land on, overhead, is outlined. A bar across: jump. Shown in How to play and on the first level; Controls & options can show them on every level, or never.'),
     info(IC.strip, 'Red strip', 'Where red sparks sit: beside the floor (turn out to it) or overhead (flip to it). It turns full red after the last spark and ends at the white bar. Be back on the main floor by then.'),
     info(IC.mark, 'Marked tile', 'A sliding block or a swinging bar is about to stop here. Be on another tile.'),
     card('pads', false), card('sprint', false), card('slow', false),
@@ -2130,7 +2133,8 @@ const GAPL = .007, GAPZ = .007 * RL;   // tiles are drawn slightly inset; the ga
 // turn is read from the floor itself: the row where the old floor ends or the blocks stand, and the nearest lane that goes
 // through it from the lane the player is in. Nothing is shown to a player who is already in such a lane.
 function cueNow() {
-  if (opts.cues === false || state !== 'play' || bot || !pace) return null;
+  // by default only where the moves are being learned (How to play and the first level): past that, reading the floor is the game
+  if (opts.hints === 'off' || (opts.hints !== 'all' && mode !== 'tutorial' && mode !== 0) || state !== 'play' || bot || !pace) return null;
   const ev = track.events, z = runner.z, p = runner.lane & 7, v = track.speedAt(z), rows = track.S.length;
   while (cueI < ev.length && (ev[cueI].opt || ev[cueI].z1 < z - .3)) cueI++;
   const live = (k, r) => { const b = 1 << (k & 7); return r >= 0 && r < rows && !!(track.S[r] & b) && !(track.B[r] & b); };
@@ -2462,7 +2466,7 @@ function buildControls() {
   seg('After a fall', 'auto', [[false, 'Show result'], [true, 'Restart at once']]);
   seg('Levels', 'unlockAll', [[false, 'Unlock by clearing'], [true, 'All unlocked']]);
   seg('Level briefing', 'brief', [[true, 'Show'], [false, 'Skip']]);
-  seg('Move hints on the floor', 'cues', [[true, 'Show'], [false, 'Hide']]);
+  seg('Move hints on the floor', 'hints', [['first', 'First level'], ['all', 'Every level'], ['off', 'Off']]);
   seg('Effects', 'calm', [[false, 'Full'], [true, 'Calm']]);
   seg('Graphics', 'quality', [['auto', 'Auto'], ['high', 'High'], ['low', 'Low']]);
   slider('Music volume', 'music'); slider('Effects volume', 'sfx');

@@ -7,7 +7,7 @@ KEY = {'L': 'ArrowLeft', 'R': 'ArrowRight', 'F': 'ArrowUp', 'J': ' '}
 from _check import report, done
 EXPECT = { 'brief_mentions': [True, True], 'early_presses': lambda v: v['state'] == 'win' and v['perfects'] == 0, 'late_presses': lambda v: v['state'] == 'win' and v['perfects'] >= 20,
   'reminders_shown': lambda v: len(v) >= 3 and any('Red sparks' in t for t in v), 'no_reminders_second_time': [], 'times_mid_vs_late': lambda v: v[1] < v[0] - 2,
-  'safe_line_only': lambda v: v[0] == 'win', 'fail_names_the_move': lambda v: 'Shifting floor' in v, 'replay': lambda v: '4 replay to the recorded ending, 4 of 4 to the recorded time' in v, 'floor_hints': lambda v: v['wrong'] == 0 and v['turns'] > 200 and v['lanes_tried'] > 500, 'hint_followed_off_the_route': lambda v: v and v['after'] == 'play' and v['past_the_blocks'],
+  'safe_line_only': lambda v: v[0] == 'win', 'fail_names_the_move': lambda v: 'Shifting floor' in v, 'replay': lambda v: '4 replay to the recorded ending, 4 of 4 to the recorded time' in v, 'floor_hints': lambda v: v['wrong'] == 0 and v['turns'] > 200 and v['lanes_tried'] > 500, 'hints_by_default': {'setting': 'first', 'level_1': True, 'level_2': False}, 'hint_followed_off_the_route': lambda v: v and v['after'] == 'play' and v['past_the_blocks'],
   'risk_events_in_level2': lambda v: v >= 6 }
 async def play(pg, frac, take_opt=True, stop_at=None):
     info = await pg.evaluate('window.__eightfold.info()'); ev = [e for e in info['events'] if take_opt or not e['opt']]; i = 0; seen = {'tip': [], 'perf': 0, 'maxscale': 0}
@@ -73,6 +73,20 @@ async def main():
         # and for real: stand one lane further out than the route before a wall of blocks, follow the hint, and get through
         await pg.goto(URL); await pg.wait_for_timeout(300); await pg.click('#lv2'); await pg.wait_for_timeout(250)
         if await pg.evaluate('!document.getElementById("briefSheet").hidden'): await pg.keyboard.press('Enter')
+        # by default the hints are for learning: on in the first level, off from the second
+        async def first_hint():
+            for _ in range(1500):
+                c = await pg.evaluate('window.__eightfold.cue()'); st = await pg.evaluate(S)
+                if c or st['state'] != 'play' or st['z'] > 40: return bool(c)
+                await pg.wait_for_timeout(5)
+        seen2 = await first_hint()
+        await pg.goto(URL); await pg.wait_for_timeout(300); await pg.click('#lv1'); await pg.wait_for_timeout(250)
+        if await pg.evaluate('!document.getElementById("briefSheet").hidden'): await pg.keyboard.press('Enter')
+        seen1 = await first_hint()
+        r['hints_by_default'] = {'setting': await pg.evaluate('window.__eightfold.hints()'), 'level_1': seen1, 'level_2': seen2}
+        await pg.goto(URL); await pg.wait_for_timeout(300); await pg.click('#lv2'); await pg.wait_for_timeout(250)
+        if await pg.evaluate('!document.getElementById("briefSheet").hidden'): await pg.keyboard.press('Enter')
+        await pg.evaluate('window.__eightfold.hints("all")')
         off = None
         for _ in range(4000):
             st = await pg.evaluate(S); c = await pg.evaluate('window.__eightfold.cue()')

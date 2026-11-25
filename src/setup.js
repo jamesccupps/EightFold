@@ -24,8 +24,11 @@ window.addEventListener('unhandledrejection', e => noteErr('rejected: ' + (e && 
 const ACTIONS = [['left', 'Turn left'], ['right', 'Turn right'], ['flip', 'Flip to the far wall'], ['jump', 'Jump'], ['pause', 'Pause'], ['restart', 'Restart'], ['sound', 'Sound on / off']];
 const DEF_BINDS = { left: ['ArrowLeft', 'a'], right: ['ArrowRight', 'd'], flip: ['ArrowUp', 'w'], jump: [' ', 'ArrowDown'], pause: ['p', 'Escape'], restart: ['r', null], sound: ['m', null] };
 const cloneBinds = b => { const o = {}; for (const [a] of ACTIONS) o[a] = [b[a] ? b[a][0] : null, b[a] ? b[a][1] : null]; return o; };
-let opts = Object.assign({ cues: true, brief: true, invert: false, speed: 1, unlockAll: false, auto: false, cp: false, calm: false, quality: 'auto', music: 80, sfx: 90 }, store.get('opts', {}) || {});
+let opts = Object.assign({ hints: 'first', brief: true, invert: false, speed: 1, unlockAll: false, auto: false, cp: false, calm: false, quality: 'auto', music: 80, sfx: 90 }, store.get('opts', {}) || {});
 opts.binds = cloneBinds(Object.assign({}, DEF_BINDS, opts.binds || {}));
+if (opts.cues === false) opts.hints = 'off';   // hidden under the option's first form (show or hide): stay hidden
+delete opts.cues;
+if (opts.hints !== 'all' && opts.hints !== 'off') opts.hints = 'first';
 const saveOpts = () => store.set('opts', opts);
 const keyNorm = e => e.key.length === 1 ? e.key.toLowerCase() : e.key;
 const KEYNAMES = { ' ': 'Space', ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', Escape: 'Esc' };

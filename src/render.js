@@ -117,7 +117,8 @@ const GAPL = .007, GAPZ = .007 * RL;   // tiles are drawn slightly inset; the ga
 // turn is read from the floor itself: the row where the old floor ends or the blocks stand, and the nearest lane that goes
 // through it from the lane the player is in. Nothing is shown to a player who is already in such a lane.
 function cueNow() {
-  if (opts.cues === false || state !== 'play' || bot || !pace) return null;
+  // by default only where the moves are being learned (How to play and the first level): past that, reading the floor is the game
+  if (opts.hints === 'off' || (opts.hints !== 'all' && mode !== 'tutorial' && mode !== 0) || state !== 'play' || bot || !pace) return null;
   const ev = track.events, z = runner.z, p = runner.lane & 7, v = track.speedAt(z), rows = track.S.length;
   while (cueI < ev.length && (ev[cueI].opt || ev[cueI].z1 < z - .3)) cueI++;
   const live = (k, r) => { const b = 1 << (k & 7); return r >= 0 && r < rows && !!(track.S[r] & b) && !(track.B[r] & b); };

@@ -482,6 +482,7 @@ window.__eightfold = {
   pilot() { bot = new Bot(track, .5, false); },
   kill() { runner.die('fall'); },
   cue() { return cueNow(); },
+  hints(v) { if (v) opts.hints = v; return opts.hints; },
   put(lane) { runner.lane = lane; runner.from = lane; },   // stand the ball in another lane
   // Every turn the course needs, tried from every lane a player could be standing in as it comes up: does the hint on the floor
   // lead to a lane that goes through? "old" counts what pointing the route's own way would have done, for comparison.
@@ -490,7 +491,7 @@ window.__eightfold = {
     const ev = track.events, rows = track.S.length, out = { turns: 0, cases: 0, wrong: [], routeWayWrong: 0, alreadySafe: 0, noTurnGetsThere: 0, twoHops: 0 };
     const live = (k, r) => { const b = 1 << (k & 7); return r < rows && !!(track.S[r] & b) && !(track.B[r] & b); };
     const fl = (k, r) => r < rows && !!(track.S[r] & (1 << (k & 7)));
-    const keep = [runner.lane, runner.z, cueI];
+    const keep = [runner.lane, runner.z, cueI, opts.hints]; opts.hints = 'all';
     for (let i = 0; i < ev.length; i++) {
       const e = ev[i]; if (e.opt || (e.key !== 'L' && e.key !== 'R')) continue;
       let last = i; while (last + 1 < ev.length && !ev[last + 1].opt && ev[last + 1].key === e.key && ev[last + 1].z0 < ev[last].z1) last++;
@@ -513,7 +514,7 @@ window.__eightfold = {
       }
       i = last;
     }
-    runner.lane = keep[0]; runner.z = keep[1]; cueI = keep[2];
+    runner.lane = keep[0]; runner.z = keep[1]; cueI = keep[2]; opts.hints = keep[3];
     return out;
   },
   slow() { pace.slow(); },

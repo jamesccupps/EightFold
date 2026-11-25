@@ -27,7 +27,7 @@ const env = { GITHUB_TOKEN: 'test-token' }, ORIGIN = 'https://jamesccupps.github
 const now = Math.round(Date.now() / 1000), today = new Date().toISOString().slice(0, 10);
 const attempt = (o) => Object.assign({ s: 'abc123xyz', i: 0, t: now, m: 'L3', a: 2, res: 'fall', pc: 41, z: 166, k: 'hurdle', d: 19.2, sp: 12, ns: 40, pr: 9, px: 1, fps: 60, fj: 0,
   fh: [0, 1, 2, 3, 2, 1, 0, 0, 0, 0, 0, 0], kk: { hurdle: [4, 52, 0, 0, 180] }, nx: ['hurdle', 'J', 96] }, o);
-const session = { id: 'abc123xyz', t: now, build: '2026-11-23', host: 'jamesccupps.github.io', br: 'Chrome 158', os: 'Windows', w: 1920, h: 900, dpr: 1, touch: false, quality: 'auto', tune: { jump: .5 } };
+const session = { id: 'abc123xyz', t: now, build: '2026-11-23', host: 'jamesccupps.github.io', br: 'Chrome 158', os: 'Windows', w: 1920, h: 900, dpr: 1, touch: false, quality: 'auto', hints: 'first', tune: { jump: .5 } };
 const post = (body, o = {}) => worker.fetch(Object.assign(new Request('https://relay.example/', { method: o.method || 'POST', headers: Object.assign({ Origin: ORIGIN, 'CF-Connecting-IP': o.ip || '203.0.113.' + (shaN + calls.length) }, o.headers || {}),
   body: o.method === 'GET' || o.method === 'OPTIONS' ? undefined : typeof body === 'string' ? body : JSON.stringify(body) }), o.cf ? { cf: o.cf } : {}), o.env || env);
 

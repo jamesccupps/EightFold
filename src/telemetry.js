@@ -68,7 +68,7 @@ function telSession() {
   if (!telSess) { telSess = { id: SID, t: Math.round(Date.now() / 1000), build: BUILD, core: CORE_ID, host: String(location.hostname || 'file').slice(0, 60), fun: {}, pid: tel.pid, vn: tel.visits, first: tel.first, ev: [], fb: {} }; if (refHost) telSess.ref = refHost; tel.sessions.push(telSess); if (tel.sessions.length > 30) tel.sessions.shift(); }
   const st = []; LEVELS.forEach((lv, i) => { const x = stats.lv[i] || {}; st.push(x.best || 0, x.clears || 0, x.tries || 0); });
   Object.assign(telSess, browserName(), { w: W, h: H, dpr: +(window.devicePixelRatio || 1).toFixed(2), touch: touchSeen, cores: navigator.hardwareConcurrency | 0, mem: +navigator.deviceMemory || 0,
-    quality: opts.quality, qscale: +qScale.toFixed(2), speed: opts.speed, cp: !!opts.cp, auto: !!opts.auto, invert: !!opts.invert, calm: !!opts.calm, brief: opts.brief !== false, unlockAll: !!opts.unlockAll,
+    quality: opts.quality, qscale: +qScale.toFixed(2), speed: opts.speed, cp: !!opts.cp, auto: !!opts.auto, invert: !!opts.invert, calm: !!opts.calm, brief: opts.brief !== false, hints: opts.hints, unlockAll: !!opts.unlockAll,
     err: errLog.slice(), kb: keysChanged(), hz: dispHz(), px: [cv.width | 0, cv.height | 0], gpu: gpuName(),
     music: opts.music | 0, sfx: opts.sfx | 0, muted: !!Snd.muted, skin: skin(), binds: JSON.stringify(opts.binds) !== JSON.stringify(cloneBinds(DEF_BINDS)), full: fullUsed,
     tut: !!stats.tut, tot: stats.total || 0, st, dur: Math.round((performance.now() - T0) / 1000), tune: tuneFromBase(),

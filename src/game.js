@@ -152,7 +152,7 @@ function buildGuide() {
     info(IC.magnet, 'Magnet (Endless)', 'For ' + POWER.magnet + ' seconds every ordinary and ringed spark you pass comes to you, whatever lane it is in. Red sparks still have to be fetched. One lane off the route.'),
     info(IC.double, 'Double (Endless)', 'For ' + POWER.double + ' seconds sparks are worth twice the points, red ones included. One lane off the route.')]);
   fill('gdFloor', [
-    info(IC.cue, 'White marks on your floor', 'The next move you need, painted on your own lane just before it is due. An arrowhead to the side: turn that way (two: turn twice). Two arrowheads pointing ahead: flip, and the tile you will land on, overhead, is outlined. A bar across: jump. They can be hidden under Controls & options.'),
+    info(IC.cue, 'White marks on your floor', 'The next move you need, painted on your own lane just before it is due. An arrowhead to the side: turn that way (two: turn twice). Two arrowheads pointing ahead: flip, and the tile you will land on, overhead, is outlined. A bar across: jump. Shown in How to play and on the first level; Controls & options can show them on every level, or never.'),
     info(IC.strip, 'Red strip', 'Where red sparks sit: beside the floor (turn out to it) or overhead (flip to it). It turns full red after the last spark and ends at the white bar. Be back on the main floor by then.'),
     info(IC.mark, 'Marked tile', 'A sliding block or a swinging bar is about to stop here. Be on another tile.'),
     card('pads', false), card('sprint', false), card('slow', false),

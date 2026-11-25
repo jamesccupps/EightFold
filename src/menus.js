@@ -119,7 +119,7 @@ function buildControls() {
   seg('After a fall', 'auto', [[false, 'Show result'], [true, 'Restart at once']]);
   seg('Levels', 'unlockAll', [[false, 'Unlock by clearing'], [true, 'All unlocked']]);
   seg('Level briefing', 'brief', [[true, 'Show'], [false, 'Skip']]);
-  seg('Move hints on the floor', 'cues', [[true, 'Show'], [false, 'Hide']]);
+  seg('Move hints on the floor', 'hints', [['first', 'First level'], ['all', 'Every level'], ['off', 'Off']]);
   seg('Effects', 'calm', [[false, 'Full'], [true, 'Calm']]);
   seg('Graphics', 'quality', [['auto', 'Auto'], ['high', 'High'], ['low', 'Low']]);
   slider('Music volume', 'music'); slider('Effects volume', 'sfx');
