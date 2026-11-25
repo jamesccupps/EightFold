@@ -1,5 +1,5 @@
 // Plays recorded runs back against the course they were played on, from the press trace in the play data.
-//   node tools/replay.js <file-or-folder> [...]     session files from the play-data branch, or a Play data download
+//   node tools/replay.js <file-or-folder> [...]     session files from the play-data repository, or a Play data download
 // For each attempt it rebuilds the course (level, daily or endless seed, and any tuning in force), presses the same
 // moves at the same places, and reports whether the run ends the way it was recorded. Each visit names the engine it
 // was played on, so runs made on an earlier version of the generator are played back on that version, taken from git.

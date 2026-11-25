@@ -1,5 +1,6 @@
-// Builds the leaderboards from the scores players posted. Run by a GitHub Action on the play-data branch:
-//   node tools/boards.js <folder with the play-data branch checked out>
+// Builds the leaderboards from the scores players posted. Run by a GitHub Action in the play-data repository
+// (jamesccupps/EightFold-data), which checks out this one for the code:
+//   node tools/boards.js <folder with the play-data repository checked out>
 // Every posted run carries its presses. Each one is played back here on the real engine: only a run that really ends
 // the way it claims gets on a board, and the time, distance and points listed are the ones the playback gives, not the
 // ones claimed. A board only lists runs made on the course as it is now; when a level changes, its board starts again.

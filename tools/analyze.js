@@ -1,7 +1,7 @@
-// A report on how the game is being played, from the session files on the play-data branch.
-//   git fetch origin play-data && git archive origin/play-data sessions | tar -x -C /tmp/pd
+// A report on how the game is being played, from the session files in the play-data repository (jamesccupps/EightFold-data).
+//   git clone https://github.com/jamesccupps/EightFold-data /tmp/pd
 //   node tools/analyze.js /tmp/pd/sessions [--skip id,id,...] [--since 2026-11-24]
-// Visits listed in sessions/exclude.txt on the branch, or opened with #test on the address, are left out.
+// Visits listed in sessions/exclude.txt in that repository, or opened with #test on the address, are left out.
 // Sections: who played, how far they got, each course, where runs end, press timing per obstacle, the tutorial,
 // how the game ran on each machine, what players said, errors. Feedback text is whatever a stranger typed.
 const fs = require('fs'), path = require('path');
