@@ -33,13 +33,13 @@ No name and no address. Runs that could not be sent when a tab was closed are se
 
 `node tools/analyze.js <folder>` turns the session files into a report: who played and who came back, how far they got, attempts and clear times per course, sparks collected and replays after a clear, where runs end and on what, every obstacle of each level in order with how many reached it and how many ended there, press timing per obstacle, the tutorial step by step, how the game ran on each machine, experiments by variant, feedback, ratings, errors, and menu use.
 
-Visits made to check the game are left out of the report: open the page with `#test` on the address, or list a visit's id in `sessions/exclude.txt` on the `play-data` branch.
+Visits made to check the game are left out of the report: open the page with `#test` on the address, or list a visit's id in `sessions/exclude.txt` in the data repository.
 
 **Experiments.** `EXPERIMENTS` in `src/telemetry.js` is a list, empty unless one is running. An entry names two or more variants, each with tuning values; every player is put in one variant for good (from their player code), plays it as the normal, scored game, and has the variant recorded with each visit, so the report can compare them. A list in the same shape under `eightfold.xp` in a browser's local storage tries one out on that browser only.
 
 **Keeping old data usable.** The generator will change as levels are tuned. Each visit records an id for the engine it ran on and each run a checksum of its course; `tools/replay.js` fetches the matching engine from this repository's history, so old runs still play back on the courses they were made on. The sheet has Copy, Download, a switch to stop recording, and Erase. (The copy published as a Claude artifact also saves the same records to that artifact's own storage.)
 
-The public copy also sends each session's records to a small Cloudflare Worker, which files them on this repository's [`play-data`](https://github.com/jamesccupps/EightFold/tree/play-data) branch. The menu says so while it is on, and stopping the recording stops the sending. Setting `RELAY` in `src/page.html` to `''` turns the sending off for everyone; a copy opened from a file or run anywhere but the game's own page sends nothing. See [`relay/`](../relay/README.md).
+The public copy also sends each session's records to a small Cloudflare Worker, which files them in a repository of their own, [jamesccupps/EightFold-data](https://github.com/jamesccupps/EightFold-data). The menu says so while it is on, and stopping the recording stops the sending. Setting `RELAY` in `src/telemetry.js` to `''` turns the sending off for everyone; a copy opened from a file or run anywhere but the game's own page sends nothing. See [`relay/`](../relay/README.md).
 
 ## What identifies a player
 

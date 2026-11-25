@@ -36,7 +36,7 @@ test/shortcuts.js     no course can be finished while skipping its intended move
 test/curve.js         prints speed, input rate, obstacle variety and difficulty per level
 test/browser/         play-throughs in a real browser (Python + Playwright)
 tools/                seed search used to pick each level's course; analyze.js reports on play data; replay.js plays recorded runs back; boards.js checks posted scores and builds the leaderboards; feedback.js lists player feedback
-relay/                the Cloudflare Worker that files play data on the play-data branch, and its test
+relay/                the Cloudflare Worker that files play data and scores in jamesccupps/EightFold-data, and its test
 ```
 
 ## Build
