@@ -336,7 +336,8 @@ class Track {
   // floor ends; it carries on along the opposite wall. Both sides are narrow, so no lane is shared and turning cannot reach it
   flipGate() {
     const P = this.P; this.narrow(1); this.plain(2, { noHoles: true });
-    const wNew = Math.min(this.pickW(), 1), U = Math.ceil(P.speed * P.react) + 1;
+    // the floor overhead is never narrower than the floor it is flipped from: a flip from any lane of this floor has somewhere to land
+    const wNew = Math.max(this.w, Math.min(this.pickW(), 1)), U = Math.ceil(P.speed * P.react) + 1;
     const s = this.S.length, m = this.band(this.L, this.w) | this.band(this.L + 4, wNew);
     for (let i = 0; i < U; i++) this.push(m);
     this.events.push({ z0: s + .1, z1: s + U - .6, key: 'F' });
@@ -356,7 +357,7 @@ class Track {
     const g = Math.max(1, Math.floor(fr - P.tw * P.speed)), e = this.S.length;
     for (let i = 0; i < g; i++) this.push(0, 0, true);
     this.events.push({ z0: e + g - fr + .2, z1: e - .15, key: 'F' });
-    this.L += 4; this.w = open ? 4 : Math.min(this.pickW(), 1);
+    this.L += 4; this.w = open ? 4 : Math.max(this.w, Math.min(this.pickW(), 1));   // as wide as the side left behind, so every lane's flip lands
     this.plain(Math.ceil(fr) + 2, { noHoles: true });
     this.spark(this.S.length - 1, this.L);
   }
@@ -392,7 +393,7 @@ class Track {
   // blocks across your whole side; the opposite wall is clear
   blockFlip() {
     const P = this.P; this.narrow(1); this.plain(2, { noHoles: true });
-    const w2 = Math.min(this.pickW(), 1), A = Math.ceil(P.speed * P.react) + 1;
+    const w2 = Math.max(this.w, Math.min(this.pickW(), 1)), A = Math.ceil(P.speed * P.react) + 1;   // the clear side is as wide as the blocked one
     const s = this.S.length, old = this.band(this.L, this.w), m = old | this.band(this.L + 4, w2);
     for (let i = 0; i < A; i++) this.push(m);
     const b0 = this.S.length, n = this.ri(1, 2);

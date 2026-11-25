@@ -29,7 +29,8 @@ function keepBest() {
   const far = id[0] === 'E';
   if (far ? !(run.res === 'fall' || run.res === 'crash') || run.z < 30 : run.res !== 'win') return;
   const v = far ? run.z : run.d, pts = run.pts | 0, was = stats.posted[id], pen = stats.pending[id];
-  if ((was && was.cs === run.cs && !beats(far, v, pts, was)) || (pen && pen.cs === run.cs && !beats(far, v, pts, pen))) return;
+  // (a best posted on an earlier version of the game may have dropped off its board when the game changed: the first run that counts on this version is sent whatever it was)
+  if ((was && was.cs === run.cs && was.core === CORE_ID && !beats(far, v, pts, was)) || (pen && pen.cs === run.cs && !beats(far, v, pts, pen))) return;
   stats.pending[id] = { v, pts, cs: run.cs, run }; postWhy[id] = ''; saveStats();
   if (stats.name) postBest(id);
 }
@@ -41,7 +42,7 @@ function postBest(id) {
   const end = (ok, why, final) => {
     postBusy[id] = false;
     if (ok) {
-      stats.posted[id] = { cs: q.cs, v: q.v, pts: q.pts }; if (stats.pending[id] === q) delete stats.pending[id];
+      stats.posted[id] = { cs: q.cs, v: q.v, pts: q.pts, core: CORE_ID }; if (stats.pending[id] === q) delete stats.pending[id];
       postMsg[id] = 'Posted as ' + name + ': ' + showV(id, q.v) + '. It shows once it has been checked, in about a minute. ';
       postWhy[id] = ''; postFails = 0; saveStats(); telEv('post:' + id); boardsAt = 0;
       if (stats.pending[id]) postBest(id);   // a better run finished while this one was on its way

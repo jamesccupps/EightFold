@@ -3,7 +3,12 @@
 //   node tools/boards.js <folder with the play-data repository checked out>
 // Every posted run carries its presses. Each one is played back here on the real engine: only a run that really ends
 // the way it claims gets on a board, and the time, distance and points listed are the ones the playback gives, not the
-// ones claimed. A board only lists runs made on the course as it is now; when a level changes, its board starts again.
+// ones claimed.
+// A fix to the game does not empty the boards. A run made on an earlier version stays for as long as the same presses,
+// on the game as it is now, still come to the same run: the same ending at the same place, in the same time, with the
+// same sparks and points. Only the runs a change really touches drop off: the ones that went through the part of a
+// course that moved, or that a change to the rules would now score differently. Everything is checked again whenever
+// the engine changes.
 //   scores/<date>/<file>.json   what the relay filed, one per posted run
 //   boards/checked.json         what each score file came to, so each is only played back once
 //   boards/all.json             the boards the game shows
@@ -43,10 +48,12 @@ function check(s) {
     const day = Date.parse(board.slice(1) + 'T00:00:00Z'), at = s.at || 0;
     if (!(at > day - 14 * 3600e3 && at < day + 50 * 3600e3)) return { no: 'posted on another day' };
   }
-  if (s.core !== NOW) return { no: 'played on another version of the game', retry: true };
-  let r = null; try { r = replay(Object.assign({}, run, { _core: s.core, _speed: 1 })); } catch (e) { r = null; }
-  if (!r) return { no: 'could not be played back' };
+  const old = s.core !== NOW;   // made on another version of the game: played back on this one all the same
+  let r = null; try { r = replay(Object.assign({}, run, { _core: NOW, _speed: 1 })); } catch (e) { r = null; }
+  if (!r) return { no: old ? 'made on an earlier version of the game, on a course that has changed since' : 'could not be played back' };
   if (r.track.checksum() !== c.cs) return { no: 'course changed' };
+  if (old && !(r.exact && Math.abs(r.z - (run.z | 0)) <= 1 && r.sparks === (run.sp | 0) && (run.pts == null || (r.pts | 0) === (run.pts | 0)) && (board[0] === 'E' ? r.timeOk !== false : r.timeOk === true)))
+    return { no: 'made on an earlier version of the game: the same presses no longer come to the same run' };
   if (board[0] === 'E') { if (r.res !== 'fall' && r.res !== 'crash') return { no: 'playback does not end' }; }
   else if (r.res !== 'win') return { no: 'playback does not finish the course' };
   const name = String(s.name || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || '???';
@@ -58,7 +65,7 @@ function check(s) {
 }
 const cachePath = path.join(dir, 'boards', 'checked.json');
 let cache = {}; try { cache = JSON.parse(fs.readFileSync(cachePath, 'utf8')); } catch (e) { cache = {}; }
-if (cache._core !== NOW) { for (const k in cache) if (cache[k] && cache[k].retry) delete cache[k]; cache._core = NOW; }   // a new version of the game: scores that were waiting for it get another look
+if (cache._core !== NOW) cache = { _core: NOW };   // a new version of the game: every score is played back on it again
 let fresh = 0, counted = 0;
 for (const f of files(path.join(dir, 'scores')).sort()) {
   const key = path.relative(dir, f).replace(/\\/g, '/');

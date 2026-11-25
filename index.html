@@ -798,7 +798,8 @@ class Track {
   // floor ends; it carries on along the opposite wall. Both sides are narrow, so no lane is shared and turning cannot reach it
   flipGate() {
     const P = this.P; this.narrow(1); this.plain(2, { noHoles: true });
-    const wNew = Math.min(this.pickW(), 1), U = Math.ceil(P.speed * P.react) + 1;
+    // the floor overhead is never narrower than the floor it is flipped from: a flip from any lane of this floor has somewhere to land
+    const wNew = Math.max(this.w, Math.min(this.pickW(), 1)), U = Math.ceil(P.speed * P.react) + 1;
     const s = this.S.length, m = this.band(this.L, this.w) | this.band(this.L + 4, wNew);
     for (let i = 0; i < U; i++) this.push(m);
     this.events.push({ z0: s + .1, z1: s + U - .6, key: 'F' });
@@ -818,7 +819,7 @@ class Track {
     const g = Math.max(1, Math.floor(fr - P.tw * P.speed)), e = this.S.length;
     for (let i = 0; i < g; i++) this.push(0, 0, true);
     this.events.push({ z0: e + g - fr + .2, z1: e - .15, key: 'F' });
-    this.L += 4; this.w = open ? 4 : Math.min(this.pickW(), 1);
+    this.L += 4; this.w = open ? 4 : Math.max(this.w, Math.min(this.pickW(), 1));   // as wide as the side left behind, so every lane's flip lands
     this.plain(Math.ceil(fr) + 2, { noHoles: true });
     this.spark(this.S.length - 1, this.L);
   }
@@ -854,7 +855,7 @@ class Track {
   // blocks across your whole side; the opposite wall is clear
   blockFlip() {
     const P = this.P; this.narrow(1); this.plain(2, { noHoles: true });
-    const w2 = Math.min(this.pickW(), 1), A = Math.ceil(P.speed * P.react) + 1;
+    const w2 = Math.max(this.w, Math.min(this.pickW(), 1)), A = Math.ceil(P.speed * P.react) + 1;   // the clear side is as wide as the blocked one
     const s = this.S.length, old = this.band(this.L, this.w), m = old | this.band(this.L + 4, w2);
     for (let i = 0; i < A; i++) this.push(m);
     const b0 = this.S.length, n = this.ri(1, 2);
@@ -1230,7 +1231,7 @@ function applyTune() {
 // ---------- play recording (temporary: so the game can be tuned from how it is really played) ----------
 // One small record per attempt: where it ended and on what, the time, sparks, how early or late each press came inside
 // the window the course allows for it, and the frame rate. Kept in this browser; see the Play data sheet.
-const BUILD = '2026-11-25' + '.' + 'd5d5', CORE_ID = 'ffa37e04d8';   // BUILD: the day, and a short id of exactly these sources that build.js stamps, so two different builds never carry one label. CORE_ID: which engine (generator + physics) this page was built from
+const BUILD = '2026-11-25' + '.' + '4e2e', CORE_ID = 'ff648b3358';   // BUILD: the day, and a short id of exactly these sources that build.js stamps, so two different builds never carry one label. CORE_ID: which engine (generator + physics) this page was built from
 // Where play records are sent from the public copy of the game: a small relay that files them in a repository of
 // their own, jamesccupps/EightFold-data (see relay/ in this repository). Empty = nothing is sent.
 let RELAY = 'https://eightfold-relay.jamesccupps.workers.dev/', relayAnywhere = false;
@@ -1284,7 +1285,7 @@ function keysChanged() {   // which actions have keys other than the defaults, a
   return out.join(',').slice(0, 240);
 }
 const SID = Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36);
-let telCur = null, telSess = null, telDb = null, telBusy = false, telAgain = false, relayDead = false, relayAt = 0, relayTimer = 0;
+let telCur = null, telSess = null, telDb = null, telBusy = false, telAgain = false, relayDead = false, relayAt = 0, relaySends = 0, relayTimer = 0;
 const saveTel = () => store.set('tel', tel);
 const T0 = performance.now();
 let telSeq = 0, telLast = null, relayAck = 0, relayEv = 0, pauseAt = 0, fullUsed = false;
@@ -1386,7 +1387,11 @@ function telEnd(res) {
   telSession(); saveTel(); telSync(); keepBest(); telSoon();
 }
 // Send what is new to the relay: at most every 30 seconds, and once more when the page is put away.
-// Sends what is new to the relay. last: true when the page is being hidden (do not wait for the half-minute spacing),
+// Sends what is new to the relay. Every send is one write at the far end, and those are rationed by the hour for all
+// players together, so a visit's sends are spaced out: the first two at least half a minute apart (a short visit still
+// shows up promptly), the rest at least three minutes apart. Nothing is lost by waiting: what has not gone yet is kept
+// in this browser, and goes when the tab is hidden or closed, or at the start of the next visit.
+// last: true when the page is being hidden or a note was written (do not wait for the spacing),
 // 'bye' when it is being closed (send the trail even if switching tabs is all that happened since), 'again' for a
 // send that failed and is being repeated.
 // A send that fails is tried again later, and the same news is never sent twice at once.
@@ -1396,11 +1401,11 @@ function telSend(last) {
   const bye = last === 'bye' && s.ev.length !== relayLen;
   if (!fresh.length && marks === relayEv && !bye) return;
   if (!fresh.length && !(s.notes && s.notes.length) && !Object.keys(s.fb).length && performance.now() - T0 < 5000) return;   // opened and gone at once: not a visit
-  const now = Date.now(), wait = 30000 - (now - relayAt);
+  const now = Date.now(), wait = (relaySends < 2 ? 30000 : 180000) - (now - relayAt);
   if (!last && wait > 0) { if (!relayTimer) relayTimer = setTimeout(() => { relayTimer = 0; telSend(false); }, wait + 100); return; }
   const key = (fresh.length ? fresh[fresh.length - 1].i : -1) + ':' + marks + ':' + (bye ? s.ev.length : 0);
   if (relayBusy) { if (key === relayKey) return; if (!last) { relayAgain = true; return; } }
-  relayAt = now; telSession();
+  relayAt = now; relaySends++; telSession();
   let take = fresh.slice(0, 60), body;
   for (;;) { body = JSON.stringify({ v: 1, session: s, attempts: take }); if (body.length <= 60000 || take.length <= 1) break; take = take.slice(0, take.length >> 1); }
   const ack = take.length ? take[take.length - 1].i + 1 : relayAck, len = s.ev.length;
@@ -2595,7 +2600,8 @@ function keepBest() {
   const far = id[0] === 'E';
   if (far ? !(run.res === 'fall' || run.res === 'crash') || run.z < 30 : run.res !== 'win') return;
   const v = far ? run.z : run.d, pts = run.pts | 0, was = stats.posted[id], pen = stats.pending[id];
-  if ((was && was.cs === run.cs && !beats(far, v, pts, was)) || (pen && pen.cs === run.cs && !beats(far, v, pts, pen))) return;
+  // (a best posted on an earlier version of the game may have dropped off its board when the game changed: the first run that counts on this version is sent whatever it was)
+  if ((was && was.cs === run.cs && was.core === CORE_ID && !beats(far, v, pts, was)) || (pen && pen.cs === run.cs && !beats(far, v, pts, pen))) return;
   stats.pending[id] = { v, pts, cs: run.cs, run }; postWhy[id] = ''; saveStats();
   if (stats.name) postBest(id);
 }
@@ -2607,7 +2613,7 @@ function postBest(id) {
   const end = (ok, why, final) => {
     postBusy[id] = false;
     if (ok) {
-      stats.posted[id] = { cs: q.cs, v: q.v, pts: q.pts }; if (stats.pending[id] === q) delete stats.pending[id];
+      stats.posted[id] = { cs: q.cs, v: q.v, pts: q.pts, core: CORE_ID }; if (stats.pending[id] === q) delete stats.pending[id];
       postMsg[id] = 'Posted as ' + name + ': ' + showV(id, q.v) + '. It shows once it has been checked, in about a minute. ';
       postWhy[id] = ''; postFails = 0; saveStats(); telEv('post:' + id); boardsAt = 0;
       if (stats.pending[id]) postBest(id);   // a better run finished while this one was on its way

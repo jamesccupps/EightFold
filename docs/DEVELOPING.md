@@ -33,6 +33,7 @@ src/fonts/            the two typefaces, inlined by the build
 build.js              puts all of the above into one file
 test/levels.js        every course can be finished; every spark can be collected
 test/shortcuts.js     no course can be finished while skipping its intended moves
+test/fair.js          every required flip and jump lands, from every lane a player could be standing in
 test/curve.js         prints speed, input rate, obstacle variety and difficulty per level
 test/browser/         play-throughs in a real browser (Python + Playwright)
 tools/                seed search used to pick each level's course; analyze.js reports on play data; replay.js plays recorded runs back; boards.js checks posted scores and builds the leaderboards; feedback.js lists player feedback
@@ -69,7 +70,7 @@ python3 test/browser/play.py 1,2,3      # play levels with human-like timing err
 python3 test/browser/flows.py           # tutorial, restart, pause, unlock, rebinding, endless, phone layout
 python3 test/browser/tuning.py          # the tuning drawer and the play recording
 python3 test/browser/relay.py           # play data from the page, through the relay, to a stand-in for GitHub
-python3 test/browser/mechanics.py       # perfect timing, risk routes, reminders, the missed-move line
+python3 test/browser/mechanics.py       # perfect timing, risk routes, reminders, the missed-move line, the hints on the floor
 python3 test/browser/leaderboard.py     # play, post, check and read a board, end to end
 python3 test/browser/posting.py         # a post with no name yet, a silent relay, colliding writes, a closed tab; play-data resends
 python3 test/browser/experiments.py     # experiments, ratings, engine id, tap and swipe
@@ -83,7 +84,7 @@ They show that every course is finishable, fair and progressively denser. They d
 
 ## Notes on the build and the tests
 
-- **Version label.** `BUILD` is the day (edited by hand when the game changes) plus four characters that `build.js` derives from the page and engine sources, so two different builds never carry the same label. `CORE_ID` is derived from `src/core.js` alone and names the engine: recorded runs and leaderboard entries belong to one engine, and **any change to `src/core.js`, even a comment, starts the leaderboards again**.
+- **Version label.** `BUILD` is the day (edited by hand when the game changes) plus four characters that `build.js` derives from the page and engine sources, so two different builds never carry the same label. `CORE_ID` is derived from `src/core.js` alone and names the engine: every recorded run and posted score says which engine it was made on. **A change to the engine does not empty the leaderboards.** When the engine changes, `tools/boards.js` plays every posted run back on the new one, and a run stays on its board for as long as the same presses still come to the same run: the same ending at the same place, in the same time, with the same sparks and points. Only the runs a change really touches drop off (the ones that passed through the part of a course that moved, or that a change to the rules scores differently). A change that alters the movement or the pace for everyone still empties every board, because no run then plays back the same.
 - **Fonts.** The two typefaces (Chivo Mono and Unbounded, both under the SIL Open Font License) are in `src/fonts/` and inlined by `build.js`, so the page asks no other site for anything and a saved copy looks the same.
 - **Other files Pages serves:** `og.png` (link previews), `icon-180.png`, `icon-192.png`, `icon-512.png` and `site.webmanifest` (home-screen icon and install).
 - **Browser suites fail.** Each suite in `test/browser/` compares what it sees with a table of expectations (`_check.py`) and exits non-zero on any difference, including page errors. CI runs all of them except `play.py` (which plays every level in real time) on every push, next to `npm test`.

@@ -55,7 +55,7 @@ function keysChanged() {   // which actions have keys other than the defaults, a
   return out.join(',').slice(0, 240);
 }
 const SID = Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36);
-let telCur = null, telSess = null, telDb = null, telBusy = false, telAgain = false, relayDead = false, relayAt = 0, relayTimer = 0;
+let telCur = null, telSess = null, telDb = null, telBusy = false, telAgain = false, relayDead = false, relayAt = 0, relaySends = 0, relayTimer = 0;
 const saveTel = () => store.set('tel', tel);
 const T0 = performance.now();
 let telSeq = 0, telLast = null, relayAck = 0, relayEv = 0, pauseAt = 0, fullUsed = false;
@@ -157,7 +157,11 @@ function telEnd(res) {
   telSession(); saveTel(); telSync(); keepBest(); telSoon();
 }
 // Send what is new to the relay: at most every 30 seconds, and once more when the page is put away.
-// Sends what is new to the relay. last: true when the page is being hidden (do not wait for the half-minute spacing),
+// Sends what is new to the relay. Every send is one write at the far end, and those are rationed by the hour for all
+// players together, so a visit's sends are spaced out: the first two at least half a minute apart (a short visit still
+// shows up promptly), the rest at least three minutes apart. Nothing is lost by waiting: what has not gone yet is kept
+// in this browser, and goes when the tab is hidden or closed, or at the start of the next visit.
+// last: true when the page is being hidden or a note was written (do not wait for the spacing),
 // 'bye' when it is being closed (send the trail even if switching tabs is all that happened since), 'again' for a
 // send that failed and is being repeated.
 // A send that fails is tried again later, and the same news is never sent twice at once.
@@ -167,11 +171,11 @@ function telSend(last) {
   const bye = last === 'bye' && s.ev.length !== relayLen;
   if (!fresh.length && marks === relayEv && !bye) return;
   if (!fresh.length && !(s.notes && s.notes.length) && !Object.keys(s.fb).length && performance.now() - T0 < 5000) return;   // opened and gone at once: not a visit
-  const now = Date.now(), wait = 30000 - (now - relayAt);
+  const now = Date.now(), wait = (relaySends < 2 ? 30000 : 180000) - (now - relayAt);
   if (!last && wait > 0) { if (!relayTimer) relayTimer = setTimeout(() => { relayTimer = 0; telSend(false); }, wait + 100); return; }
   const key = (fresh.length ? fresh[fresh.length - 1].i : -1) + ':' + marks + ':' + (bye ? s.ev.length : 0);
   if (relayBusy) { if (key === relayKey) return; if (!last) { relayAgain = true; return; } }
-  relayAt = now; telSession();
+  relayAt = now; relaySends++; telSession();
   let take = fresh.slice(0, 60), body;
   for (;;) { body = JSON.stringify({ v: 1, session: s, attempts: take }); if (body.length <= 60000 || take.length <= 1) break; take = take.slice(0, take.length >> 1); }
   const ack = take.length ? take[take.length - 1].i + 1 : relayAck, len = s.ev.length;

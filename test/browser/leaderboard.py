@@ -19,7 +19,8 @@ from _check import report, done
 EXPECT = { 'version_on_menu': lambda v: v.startswith('Version 20') and 'engine' in v, 'asks_for_name': True, 'typing_does_not_restart': lambda v: v[0] == 'fail', 'post_message': lambda v: v.startswith('Posted as JMC'),
   'score_filed': 1, 'checker': lambda v: '1 count' in v and '0 refused' in v, 'board_endless': lambda v: len(v) == 1 and 'JMC (you)' in v[0], 'shorter_run_not_posted': lambda v: v[1] is True,
   'longer_run_posted': lambda v: v[1].startswith('Posted as JMC'), 'random_course_not_posted': lambda v: v[1] is True, 'level1': lambda v: v[0] == 'win' and v[1].startswith('Posted as JMC'),
-  'checker_2': lambda v: '0 refused' in v and '2 boards' in v, 'board_default_tab': 'Endless', 'board_level1': lambda v: len(v) == 1 and 'JMC (you)' in v[0], 'board_empty': lambda v: v.startswith('Nobody yet') }
+  'checker_2': lambda v: '0 refused' in v and '2 boards' in v, 'board_default_tab': 'Endless', 'earlier_version_runs': lambda v: v['posted'] >= 3 and v['kept'] == ['SAME'] and v['dropped'] == ['place', 'time'] and v['second_pass_checks'].startswith('0 new') and v['after_an_engine_change_checks'].startswith('%d new' % (v['posted'] * 3)),
+  'board_level1': lambda v: len(v) == 1 and 'JMC (you)' in v[0], 'board_empty': lambda v: v.startswith('Nobody yet') }
 async def play(pg, stop_at=None, frac=.5, opt=False):
     i = 0; ev = []
     for n in range(20000):
@@ -74,6 +75,24 @@ async def main():
             await pg.click('#boardTabs button:nth-of-type(3)'); await pg.wait_for_timeout(200)
             r['board_empty'] = await pg.evaluate('document.querySelector("#boardBody tr").textContent'); r['board_note'] = (await pg.evaluate('document.getElementById("boardNote").textContent'))[:70]
             await b.close()
+            # A fix to the game must not empty the boards. The same posted runs, marked as made on an earlier version: they stay
+            # while the same presses still come to the same run on this one, and drop when they do not.
+            V = os.path.join(HERE, 'out', 'lbv'); shutil.rmtree(V, ignore_errors=True); n = 0
+            for root, _, fs_ in os.walk(os.path.join(TMP, 'scores')):
+                for f in sorted(fs_):
+                    sc = json.load(open(os.path.join(root, f))); n += 1
+                    for tag, change in (('same', None), ('time', ('d', 1.0)), ('place', ('z', 7))):
+                        c = json.loads(json.dumps(sc)); c['core'] = 'aaaaaaaaaa'; c['pid'] = ('%s%d' % (tag, n)).ljust(16, '0')[:16]; c['name'] = tag.upper()
+                        if change: c['run'][change[0]] = c['run'].get(change[0], 0) + change[1]
+                        d = os.path.join(V, 'scores', '2026-11-25'); os.makedirs(d, exist_ok=True); json.dump(c, open(os.path.join(d, '%s-%d.json' % (tag, n)), 'w'))
+            out = subprocess.run(['node', os.path.join(ROOT, 'tools', 'boards.js'), V], capture_output=True, text=True).stdout
+            allb = json.load(open(os.path.join(V, 'boards', 'all.json')))['boards']; chk = json.load(open(os.path.join(V, 'boards', 'checked.json')))
+            again = subprocess.run(['node', os.path.join(ROOT, 'tools', 'boards.js'), V], capture_output=True, text=True).stdout.strip().split('\n')[0]
+            chk['_core'] = 'bbbbbbbbbb'; json.dump(chk, open(os.path.join(V, 'boards', 'checked.json'), 'w'))
+            renew = subprocess.run(['node', os.path.join(ROOT, 'tools', 'boards.js'), V], capture_output=True, text=True).stdout.strip().split('\n')[0]
+            r['earlier_version_runs'] = {'posted': n, 'kept': sorted(set(e['n'] for rows in allb.values() for e in rows)),
+              'dropped': sorted(set(k.split('/')[-1].split('-')[0] for k, v in chk.items() if isinstance(v, dict) and 'no longer come to the same run' in v.get('no', ''))),
+              'second_pass_checks': again.split(';')[0], 'after_an_engine_change_checks': renew.split(';')[0]}
     finally:
         srv.terminate()
     r['errors'] = errs
