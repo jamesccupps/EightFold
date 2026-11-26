@@ -14,8 +14,10 @@ Seeds were chosen with `tools/tune.js`, which searches for the course whose meas
 
 ```
 index.html            the built game (what you play, and what Pages serves)
-og.png                the picture shown when a link to the game is shared (1280x720, a level mid-run)
-.github/social-preview.png   the same view at 1280x640, for this repository's own social preview (Settings, General)
+og.png                the card shown when a link to the game is shared (1280x640): title, one tunnel per level, a line about the game, level 1 mid-run
+.github/social-preview.png   the same card, for this repository's own social preview (uploaded by hand under Settings, General)
+docs/play.png         a level mid-run, for the top of the README
+tools/social.py       draws that card from the game itself (python3 tools/social.py)
 src/core.js           level configurations, course generator, physics
 src/page.html         the page's markup and styles, and where each part of its script goes
 src/setup.js          options, key bindings, saved scores, tuning values

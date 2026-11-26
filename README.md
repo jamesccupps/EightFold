@@ -4,7 +4,7 @@ A tunnel runner for the browser. Eight walls, one way through: turn the tunnel u
 
 **Play it: https://jamesccupps.github.io/EightFold/**
 
-[![Eightfold mid-run: a white ball rolling along a pale green floor inside an eight-sided tunnel, towards a wall of orange blocks with one way through](og.png)](https://jamesccupps.github.io/EightFold/)
+[![Eightfold mid-run: a white ball rolling along a pale green floor inside an eight-sided tunnel, towards a wall of orange blocks with one way through](docs/play.png)](https://jamesccupps.github.io/EightFold/)
 
 The whole game is one self-contained file, `index.html`. No dependencies and no build step needed to play.
 
