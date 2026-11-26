@@ -15,7 +15,7 @@
 const fs = require('fs'), path = require('path');
 const { replay, courseFor, engine, NOW } = require('./replay.js');
 const dir = process.argv[2]; if (!dir) { console.error('usage: node tools/boards.js <folder>'); process.exit(2); }
-const E = engine(NOW), TOP = 50, DAYS = 7;
+const E = engine(NOW), TOP = 50, DAYS = 30;   // DAYS: how many daily boards are kept in what the game fetches (the game steps back as far: BOARD_DAYS in src/board.js)
 // Endless is one fixed course, named by the date it was laid out for. The game says which; read it from there.
 const ENDLESS = 'E' + ((fs.readdirSync(path.join(__dirname, '..', 'src')).filter(f => /\.(js|html)$/.test(f)).map(f => fs.readFileSync(path.join(__dirname, '..', 'src', f), 'utf8')).join('\n').match(/const ENDLESS_COURSE = '(\d{4}-\d\d-\d\d)'/) || [])[1] || '');
 if (ENDLESS.length !== 11) { console.error('cannot tell which Endless course is ranked'); process.exit(2); }

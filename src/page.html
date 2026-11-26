@@ -263,6 +263,9 @@ ul.plain b { color: var(--ink); font-weight: 600; }
 .bind { min-width: 74px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 3px; font: 600 13px/1 var(--body); background: rgb(247 244 255 / .06); }
 .bind:hover { border-color: var(--ink); }
 .bind.listen { background: var(--tile); color: rgb(var(--bgc)); border-color: var(--tile); }
+.dayrow { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; }
+.dayrow b { min-width: 7.5em; text-align: center; font-weight: 600; }
+.dayrow .btn[disabled] { opacity: .4; cursor: default; }
 .optrow { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; align-items: center; text-align: left; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
 .seg button { padding: 8px 11px; font: 600 12px/1 var(--body); }
@@ -428,6 +431,7 @@ textarea.out {
 <div class="sheet" id="boardSheet" hidden><div class="sheet-in">
   <header><h2>Leaderboard</h2><button class="btn" id="btnCloseBoard" type="button">Close</button></header>
   <div><span class="seg" role="group" aria-label="Which board" id="boardTabs"></span></div>
+  <div class="dayrow" id="boardDayRow" hidden></div>
   <p id="boardInfo"></p>
   <div class="tablewrap"><table><thead><tr id="boardHead"></tr></thead><tbody id="boardBody"></tbody></table></div>
   <div class="optrow"><label for="boardName">Your name on the boards: up to eight letters or digits</label><input class="nm3" id="boardName" maxlength="8" autocomplete="off" spellcheck="false"></div>
@@ -477,7 +481,7 @@ textarea.out {
 // Test hook (left out of the public build): lets the automated tests read the course and fly it with the built-in pilot.
 window.__eightfold = {
   demo(i) { opts.unlockAll = true; if (i === 'daily') startDaily(true); else startLevel(i, true); bot = new Bot(track, .5, false); },
-  state() { return { state, mode, z: runner.z, sparks: runner.sparks, tries, air: runner.mode, lane: runner.lane, frozen, shield: runner.shield }; },
+  state() { return { state, mode, day: track && track.day ? track.day.key : null, past: !!(track && track.past), cs: track ? track.checksum() : 0, dailyTries: stats.daily.tries | 0, z: runner.z, sparks: runner.sparks, tries, air: runner.mode, lane: runner.lane, frozen, shield: runner.shield }; },
   sig() { let h = 0; track.cell(300, 0); for (let r = 0; r < 300; r++) h = (h * 31 + track.S[r] + 7 * track.B[r]) | 0; return h; },
   pilot() { bot = new Bot(track, .5, false); },
   kill() { runner.die('fall'); },

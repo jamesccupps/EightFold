@@ -19,7 +19,9 @@ from _check import report, done
 EXPECT = { 'version_on_menu': lambda v: v.startswith('Version 20') and 'engine' in v, 'asks_for_name': True, 'typing_does_not_restart': lambda v: v[0] == 'fail', 'post_message': lambda v: v.startswith('Posted as JMC'),
   'score_filed': 1, 'checker': lambda v: '1 count' in v and '0 refused' in v, 'board_endless': lambda v: len(v) == 1 and 'JMC (you)' in v[0], 'shorter_run_not_posted': lambda v: v[1] is True,
   'longer_run_posted': lambda v: v[1].startswith('Posted as JMC'), 'random_course_not_posted': lambda v: v[1] is True, 'level1': lambda v: v[0] == 'win' and v[1].startswith('Posted as JMC'),
-  'checker_2': lambda v: '0 refused' in v and '2 boards' in v, 'board_default_tab': 'Endless', 'earlier_version_runs': lambda v: v['posted'] >= 3 and v['kept'] == ['SAME'] and v['dropped'] == ['place', 'time'] and v['second_pass_checks'].startswith('0 new') and v['after_an_engine_change_checks'].startswith('%d new' % (v['posted'] * 3)),
+  'checker_2': lambda v: '0 refused' in v and '2 boards' in v, 'board_default_tab': 'Endless', 'earlier_daily': lambda v: v['today_label'] == 'Today,' and v['later_off_today'] and not v['play_offered_today'] and v['earlier_info'] and v['earlier_rows'] == 'Nobody posted a clear that day.' and v['later_on'] and v['stops_going_back']
+   and v['brief'] and v['plays_that_day'] == ('play', 'daily', True, True) and v['result_says'] and v['no_post_offered'] and v['again_is_the_same_day'] == (True, True) and v['todays_attempts_untouched'] and v['nothing_new_filed'] and v['todays_course_is_another'] == (False, True),
+  'earlier_version_runs': lambda v: v['posted'] >= 3 and v['kept'] == ['SAME'] and v['dropped'] == ['place', 'time'] and v['second_pass_checks'].startswith('0 new') and v['after_an_engine_change_checks'].startswith('%d new' % (v['posted'] * 3)),
   'board_level1': lambda v: len(v) == 1 and 'JMC (you)' in v[0], 'board_empty': lambda v: v.startswith('Nobody yet') }
 async def play(pg, stop_at=None, frac=.5, opt=False):
     i = 0; ev = []
@@ -74,6 +76,32 @@ async def main():
             r['board_endless_2'] = await pg.evaluate('[...document.querySelectorAll("#boardBody tr")].map(t => [...t.children].map(c => c.textContent).join(" | "))')
             await pg.click('#boardTabs button:nth-of-type(3)'); await pg.wait_for_timeout(200)
             r['board_empty'] = await pg.evaluate('document.querySelector("#boardBody tr").textContent'); r['board_note'] = (await pg.evaluate('document.getElementById("boardNote").textContent'))[:70]
+            # Earlier daily courses: their boards can be stepped back through, and the course played again, unranked.
+            await pg.goto(BASE + '/'); await pg.wait_for_timeout(400); await pg.evaluate('window.__eightfold.relay("%s/relay")' % BASE)
+            yest = await pg.evaluate('(() => { const d = new Date(); d.setDate(d.getDate() - 1); const z = n => String(n).padStart(2, "0"); return d.getFullYear() + "-" + z(d.getMonth() + 1) + "-" + z(d.getDate()); })()')
+            tries0 = (await pg.evaluate(S))['dailyTries']
+            filed0 = len([k for k in stored()['files'] if k.startswith('scores/')])
+            await pg.click('#btnBoard'); await pg.click('#boardTabs button:nth-of-type(9)'); await pg.wait_for_timeout(600)
+            dv = {'today_label': (await pg.evaluate('document.getElementById("boardDayLabel").textContent'))[:6], 'later_off_today': await pg.evaluate('document.getElementById("btnDayOn").disabled'), 'play_offered_today': await pg.evaluate('!!document.getElementById("btnDayPlay")')}
+            await pg.click('#btnDayBack'); await pg.wait_for_timeout(200)
+            dv['earlier_info'] = 'not ranked' in await pg.evaluate('document.getElementById("boardInfo").textContent'); dv['earlier_rows'] = await pg.evaluate('document.querySelector("#boardBody tr").textContent')
+            dv['later_on'] = not await pg.evaluate('document.getElementById("btnDayOn").disabled')
+            for _ in range(40): await pg.click('#btnDayBack', force=True)
+            dv['stops_going_back'] = await pg.evaluate('document.getElementById("btnDayBack").disabled')
+            await pg.click('#boardTabs button:nth-of-type(9)'); await pg.click('#btnDayBack'); await pg.click('#btnDayPlay'); await pg.wait_for_timeout(300)
+            dv['brief'] = 'not ranked' in await pg.evaluate('document.getElementById("brNo").textContent')
+            if await pg.evaluate('!document.getElementById("briefSheet").hidden'): await pg.click('#btnGo')
+            await pg.wait_for_timeout(300); st = await pg.evaluate(S); dv['plays_that_day'] = (st['state'], st['mode'], st['past'], st['day'] == yest); cs1 = st['cs']
+            await pg.evaluate('window.__eightfold.kill()'); await pg.wait_for_timeout(1500)
+            dv['result_says'] = 'counted on its day only' in await pg.evaluate('document.getElementById("failHint").textContent'); dv['no_post_offered'] = await pg.evaluate('document.getElementById("failPost").hidden')
+            await pg.click('#btnRetry'); await pg.wait_for_timeout(300); st = await pg.evaluate(S); dv['again_is_the_same_day'] = (st['past'], st['cs'] == cs1)
+            await pg.evaluate('window.__eightfold.kill()'); await pg.wait_for_timeout(1500)
+            dv['todays_attempts_untouched'] = (await pg.evaluate(S))['dailyTries'] == tries0
+            dv['nothing_new_filed'] = len([k for k in stored()['files'] if k.startswith('scores/')]) == filed0
+            await pg.goto(BASE + '/'); await pg.wait_for_timeout(400); await pg.click('#lvDaily'); await pg.wait_for_timeout(300)
+            if await pg.evaluate('!document.getElementById("briefSheet").hidden'): await pg.click('#btnGo')
+            await pg.wait_for_timeout(300); st = await pg.evaluate(S); dv['todays_course_is_another'] = (st['past'], st['cs'] != cs1)
+            r['earlier_daily'] = dv
             await b.close()
             # A fix to the game must not empty the boards. The same posted runs, marked as made on an earlier version: they stay
             # while the same presses still come to the same run on this one, and drop when they do not.

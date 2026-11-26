@@ -85,7 +85,7 @@ on('btnFromStart', () => retry(true));
 on('btnQuit', toMenu); on('btnQuit2', toMenu); on('btnQuit3', toMenu);
 on('btnRetry', () => { if (failT > .15) retry(); });
 on('btnNew', () => startEndless(true, !!track.rankDay));
-on('btnAgain', () => { if (mode === 'daily') startDaily(true); else if (mode === 'endless') startEndless(true); else startLevel(mode, true); });
+on('btnAgain', () => { if (mode === 'daily') startDaily(true, track.past ? track.day : null); else if (mode === 'endless') startEndless(true); else startLevel(mode, true); });
 on('btnGo', go); on('btnBack', toMenu);
 on('btnNext', () => { if (winT < .5) return; if (mode === 'tutorial') startLevel(0); else startLevel(Math.min(LEVELS.length - 1, mode + 1)); });
 on('btnScores', () => { buildScores(); openSheet('scoreSheet'); });

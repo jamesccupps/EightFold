@@ -101,7 +101,7 @@ function telEv(code) {
   if (s.ev.length < 1600) s.ev.push(Math.round((performance.now() - T0) / 1000), String(code).slice(0, 32));
   if (code !== 'hide' && code !== 'show' && code !== 'leave') evNews++;   // switching tabs is noted, but is not worth a send on its own
 }
-const telMode = () => typeof mode === 'number' ? 'L' + (mode + 1) : mode === 'daily' ? 'D' + today().key : mode === 'endless' ? 'E' : 'T';
+const telMode = () => typeof mode === 'number' ? 'L' + (mode + 1) : mode === 'daily' ? 'D' + (track && track.day ? track.day : today()).key : mode === 'endless' ? 'E' : 'T';   // the day of the course, not of the clock: an earlier day's course can be played, and a run can cross midnight
 function telStart(cp) {
   const now = performance.now();
   telCur = !bot ? { cp: cp ? Math.floor(cp.z) : 0, pr: 0, px: 0, fh: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], kk: {}, sh: 0, sl: 0, sg: 0, mg: 0, x2: 0, fn: 0, ft: 0, fj: 0, fx: 0, fb: [0, 0, 0, 0, 0, 0, 0], rs: 0, rn: 0,
@@ -253,6 +253,9 @@ function today() {
   const d = new Date(), y = d.getFullYear(), m = d.getMonth() + 1, dd = d.getDate();
   return { key: y + '-' + pad2(m) + '-' + pad2(dd), seed: y * 10000 + m * 100 + dd, label: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) };
 }
+// a day by its key ('2026-11-26'), and the key so many days from it
+function dayOf(key) { const p = key.split('-').map(Number), d = new Date(p[0], p[1] - 1, p[2]); return { key, seed: p[0] * 10000 + p[1] * 100 + p[2], label: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) }; }
+function dayShift(key, n) { const p = key.split('-').map(Number), d = new Date(p[0], p[1] - 1, p[2] + n); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
 function dayBefore(key) { const p = key.split('-').map(Number), d = new Date(p[0], p[1] - 1, p[2] - 1); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
 function dailyS() { const t = today(); if (stats.daily.date !== t.key) { stats.daily.date = t.key; stats.daily.best = 0; stats.daily.cleared = false; stats.daily.tries = 0; stats.daily.score = 0; stats.daily.time = 0; } return stats.daily; }
 

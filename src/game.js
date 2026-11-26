@@ -19,7 +19,10 @@ const practice = () => opts.speed < 1 || opts.cp || tunedPlay();
 // how much faster or slower than real time the run is going right now
 const timeScale = () => state === 'menu' || !pace ? 1 : pace.scale();
 let resumeCp = null, touchSeen = false;
-const scored = () => mode !== 'tutorial' && !practice();
+// An earlier day's daily course can be played from its leaderboard, but a daily counts only on its own day: such a run is
+// not ranked, not posted, and leaves today's best, attempts and streak alone.
+const pastDaily = () => mode === 'daily' && !!track && !!track.past;
+const scored = () => mode !== 'tutorial' && !practice() && !pastDaily();
 
 function toast(t) { const el = $('toast'); el.className = 'toast'; el.textContent = t; void el.offsetWidth; el.className = 'toast show'; }
 function showBig(html) { const el = $('big'); el.className = 'big'; el.innerHTML = html; void el.offsetWidth; el.className = 'big show'; }
@@ -59,7 +62,7 @@ function begin(first, cp) {
   hidePanels(); $('tip').hidden = true;
   $('hud').hidden = false; $('bar').hidden = false; $('btnPause').hidden = false;
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
-  $('hudNo').textContent = typeof mode === 'number' ? pad2(mode + 1) : mode === 'endless' ? '∞' : mode === 'daily' ? today().label : '?';
+  $('hudNo').textContent = typeof mode === 'number' ? pad2(mode + 1) : mode === 'endless' ? '∞' : mode === 'daily' ? (track.day || today()).label : '?';
   $('hudNm').textContent = modeName();
   $('tgPrac').hidden = !practice() || mode === 'tutorial'; $('tgPrac').textContent = tunedPlay() ? 'Tuned' : 'Practice';
   if (scored()) { if (typeof mode === 'number') lvS(mode).tries++; else if (mode === 'daily') dailyS().tries++; saveStats(); }
@@ -72,7 +75,7 @@ function begin(first, cp) {
     h.innerHTML = '<kbd>' + esc(labelFor('left')) + '</kbd><kbd style="margin-left:3px">' + esc(labelFor('right')) + '</kbd>turn<kbd>' + esc(labelFor('jump')) + '</kbd>jump<kbd>' + esc(labelFor('flip')) + '</kbd>flip';
     void h.offsetWidth; if (mode !== 'tutorial' && !touchSeen) h.className = 'hint show';
   }
-  const bm = $('bestMark'), bst = typeof mode === 'number' && stats.lv[mode] ? stats.lv[mode].best : mode === 'daily' ? (dailyS().best || 0) : 0;
+  const bm = $('bestMark'), bst = typeof mode === 'number' && stats.lv[mode] ? stats.lv[mode].best : mode === 'daily' && !track.past ? (dailyS().best || 0) : 0;
   bm.hidden = !(bst > 0 && bst < 100); bm.style.left = bst + '%'; bestRow = bm.hidden ? -1 : Math.floor(bst / 100 * track.end);
   syncCss(true);
 }
@@ -90,7 +93,11 @@ function startEndless(skip, random) {
   const d = ENDLESS, tr = new Track(random ? (Math.random() * 1e9) | 0 : endlessSeed(d.seed), null); if (!random) tr.rankDay = d.key;
   hue0 = random ? Math.random() * 360 : d.seed * 47 % 360; palZ = -99; enter('endless', tr, random ? 3 + ((Math.random() * 5) | 0) : 3 + d.seed % 5, skip);
 }
-function startDaily(skip) { const d = today(); pal = PALS[d.seed % 8]; enter('daily', new Track(d.seed, Object.assign({}, DAILY, { pat: d.seed % 5 })), d.seed % 8, skip); }
+// day: an earlier day's course (from dayOf); none for today's
+function startDaily(skip, day) {
+  const d = day || today(), tr = new Track(d.seed, Object.assign({}, DAILY, { pat: d.seed % 5 })); tr.day = d; tr.past = d.key !== today().key;
+  pal = PALS[d.seed % 8]; enter('daily', tr, d.seed % 8, skip);
+}
 // ---------- level briefing: what the level is, what is new in it, and how to deal with each thing ----------
 const GROUP = KGROUP;   // which kind of obstacle each section of a course is (the engine's own table)
 const ORDER = ['turns', 'overhead', 'blocks', 'bars', 'gaps', 'ringgap', 'blockflip', 'sweepers', 'pads', 'beams', 'sprint', 'slow'];
@@ -174,7 +181,7 @@ function buildGuide() {
     ['A perfect is a press at the last moment', ' before it would be too late. It gives a burst of speed that fades over ' + PACE.surgeSecs + ' seconds and is stronger with each perfect in a row, plus 50 points.'],
     ['Red sparks go past the limit.', ' Each adds ' + pct(PACE.risk) + ' speed on top of the usual top speed, for the rest of the run.'],
     ['Points.', ' Sparks 100, ringed 200, red 300. Perfects 50. In Endless, 10 a metre. In a level: 10 a percent, 1,000 for clearing it, 100 for every second under par, 1,000 for taking every spark.'],
-    ['Leaderboard.', ' Levels and the daily course rank the fastest clear. Endless ranks how far you got; it is one course, the same for everyone and the same every day, so its board keeps. Points settle a tie. Runs are played back and checked before they are listed.']];
+    ['Leaderboard.', ' Levels and the daily course rank the fastest clear. A daily course counts on its own day only; earlier days are under Leaderboard, Daily, with their boards, and can be played again unranked. Endless ranks how far you got; it is one course, the same for everyone and the same every day, so its board keeps. Points settle a tie. Runs are played back and checked before they are listed.']];
   const ul = $('gdScore'); ul.textContent = ''; for (const [a, b] of pts) { const li = document.createElement('li'), st = document.createElement('b'); st.textContent = a; li.appendChild(st); li.appendChild(document.createTextNode(b)); ul.appendChild(li); }
 }
 function openGuide() { if (state === 'play') setPause(true); buildGuide(); openSheet('guideSheet'); }
@@ -194,7 +201,7 @@ function showBrief(m, tr, song) {
   const lv = typeof m === 'number', types = lv || m === 'daily' ? typesOf(tr.kinds || tr.level.mix) : ORDER;
   let seen = {}; if (lv) for (let i = 0; i < m; i++) for (const t of typesOf(LEVELS[i].mix)) seen[t] = 1;
   const fresh = lv ? types.filter(t => !seen[t]) : [], old = types.filter(t => fresh.indexOf(t) < 0);
-  $('brNo').textContent = lv ? 'Level ' + pad2(m + 1) + ' of ' + pad2(LEVELS.length) : m === 'daily' ? 'Daily course · ' + today().label : 'Endless';
+  $('brNo').textContent = lv ? 'Level ' + pad2(m + 1) + ' of ' + pad2(LEVELS.length) : m === 'daily' ? 'Daily course · ' + (tr.day || today()).label + (tr.past ? ' · an earlier day, not ranked' : '') : 'Endless';
   $('brName').textContent = modeName();
   $('brHint').textContent = m === 'endless' ? (tr.rankDay ? 'No finish line. The course is the same for everyone and does not change from day to day, so distances can be compared and the leaderboard keeps. ' : 'No finish line. A random course, for practice: it is not ranked. ') + 'It starts with turns, flips and blocks, then adds everything else as it speeds up.' : tr.level.hint;
   const st = $('brStats'); st.textContent = '';
@@ -203,7 +210,7 @@ function showBrief(m, tr, song) {
   if (tr.end !== Infinity) {
     let secs = 0; for (let r = 0; r < tr.end; r++) secs += 1 / tr.V[r];
     stat('Par time', Math.round(secs) + ' s'); stat('Moves needed', String(tr.events.filter(e => !e.opt).length)); stat('Sparks', String(tr.nSparks));
-    const b = lv ? (stats.lv[m] || {}) : dailyS(); stat('Your best', ((lv ? b.clears : b.cleared) ? (b.time ? fmtT(b.time) : 'cleared') : b.best ? b.best + '%' : 'not yet') + (b.score ? '  ·  ' + fmtN(b.score) + ' pts' : ''));
+    if (tr.past) stat('Ranked', 'no: only on its day'); else { const b = lv ? (stats.lv[m] || {}) : dailyS(); stat('Your best', ((lv ? b.clears : b.cleared) ? (b.time ? fmtT(b.time) : 'cleared') : b.best ? b.best + '%' : 'not yet') + (b.score ? '  ·  ' + fmtN(b.score) + ' pts' : '')); }
   } else stat('Your best', stats.endless[0] ? stats.endless[0].m + ' m' : 'not yet');
   $('brNewH').hidden = !fresh.length; $('brNew').hidden = !fresh.length; $('brNew').textContent = ''; for (const t of fresh) $('brNew').appendChild(card(t, true));
   $('brAlsoH').textContent = !lv ? 'What is in it' : fresh.length ? 'Also in it, from earlier levels' : 'Nothing new. Everything from the earlier levels:';
@@ -289,7 +296,7 @@ function showFail() {
   }
   $('failStat').textContent = bits.join('  ·  ');
   $('btnNew').hidden = mode !== 'endless'; $('btnNew').textContent = track.rankDay ? 'Random course' : 'Ranked course';
-  $('failHint').textContent = (practice() && mode !== 'tutorial' ? 'Practice run: not recorded. ' : '') + (touchSeen ? 'Restart replays' : 'Press ' + labelFor('restart') + ' or ' + labelFor('jump') + ' to restart') + (resumeCp ? ' from the checkpoint.' : ' the same course.');
+  $('failHint').textContent = (pastDaily() ? 'The daily course of ' + track.day.label + ': it counted on its day only. ' : practice() && mode !== 'tutorial' ? 'Practice run: not recorded. ' : '') + (touchSeen ? 'Restart replays' : 'Press ' + labelFor('restart') + ' or ' + labelFor('jump') + ' to restart') + (resumeCp ? ' from the checkpoint.' : ' the same course.');
   postRow($('failPost'));
   rateRow($('failRate'), tries >= 4, 'fb', feelQ(), FEEL);
   $('failPanel').hidden = false; $('btnRetry').focus();
@@ -303,6 +310,7 @@ function onWin() {
   $('winStat').textContent = tut ? '' : [fmtN(res.total) + ' points' + (res.newScore ? ' (new best)' : ''), fmtT(runT) + (res.newTime ? ' (new best)' : '') + ', par ' + fmtT(parOf(track)), sparkText() + (perfect ? ', all of them' : ''), (pace.perfects ? pace.perfects + ' perfect' + (pace.best > 1 ? ' (best run of ' + pace.best + ')' : '') : 'no perfects'), 'attempt ' + tries].join('  ·  ');
   $('winParts').textContent = tut ? '' : res.parts.filter(p => p[1] > 0).map(p => p[0] + ' ' + fmtN(p[1])).join('  +  ');
   $('winText').textContent = tut ? 'That is every move. Legend, on the menu and when paused, shows every item and marking. Key bindings and a practice speed are under Controls & options.'
+    : pastDaily() ? 'The daily course of ' + track.day.label + ', cleared. It counted on its day only, so this run is not ranked.'
     : practice() ? 'Cleared in practice: the next level unlocks, but the score is not recorded.'
     : lv && mode < LEVELS.length - 1 ? LEVELS[mode + 1].name + ' is unlocked.' : mode === 'daily' ? 'Daily cleared. Streak: ' + (stats.daily.streak || 1) + '.' : '';
   $('btnNext').hidden = !(tut || (lv && mode < LEVELS.length - 1));

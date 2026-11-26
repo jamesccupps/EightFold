@@ -7,7 +7,7 @@ let lastRun = null, boardsData = null, boardsAt = 0, boardSel = 'E';
 const fmtTime = t => t.toFixed(2) + ' s';
 const LEVEL_CS = [], levelCs = i => LEVEL_CS[i] || (LEVEL_CS[i] = new Track(LEVELS[i].seed, LEVELS[i]).checksum());
 // the board a run on the current course goes on, or null (a random Endless course and the tutorial have none)
-const modeBoard = () => typeof mode === 'number' ? 'L' + (mode + 1) : mode === 'daily' ? 'D' + today().key : mode === 'endless' && track && track.rankDay ? 'E' + track.rankDay : null;
+const modeBoard = () => typeof mode === 'number' ? 'L' + (mode + 1) : mode === 'daily' ? (track && track.past ? null : 'D' + (track && track.day ? track.day : today()).key) : mode === 'endless' && track && track.rankDay ? 'E' + track.rankDay : null;
 const boardLabel = id => id[0] === 'L' ? 'Level ' + (+id.slice(1)) : id[0] === 'D' ? 'Daily' : 'Endless';
 const boardWhen = id => id[0] === 'L' ? 'clear' : id[0] === 'E' ? 'run' : 'today';
 const showV = (id, v) => id[0] === 'E' ? fmtN(v) + ' m' : fmtTime(v);
@@ -101,26 +101,38 @@ function drawPending() {
   const b = document.createElement('button'); b.type = 'button'; b.className = 'btn sm'; b.id = 'btnPostAll'; b.textContent = 'Post'; el.appendChild(b);
   b.addEventListener('click', () => { if (!stats.name) { $('boardName').focus(); return; } postAll(); drawPending(); });
 }
+let boardDay = null;   // the day whose daily board is showing: none for today
+const BOARD_DAYS = 30;   // how far back the daily boards go (tools/boards.js keeps as many)
 const BOARD_TABS = () => LEVELS.map((lv, i) => ['L' + (i + 1), pad2(i + 1)]).concat([['D', 'Daily'], ['E', 'Endless']]);
 function drawBoard() {
   const tabs = $('boardTabs'); tabs.textContent = '';
   for (const [id, text] of BOARD_TABS()) {
     const b = document.createElement('button'); b.type = 'button'; b.textContent = text; b.setAttribute('aria-pressed', String(boardSel === id));
     if (id[0] === 'L') b.setAttribute('aria-label', 'Level ' + (+id.slice(1)) + ': ' + LEVELS[+id.slice(1) - 1].name);
-    b.addEventListener('click', () => { boardSel = id; drawBoard(); });
+    b.addEventListener('click', () => { boardSel = id; boardDay = null; drawBoard(); });
     tabs.appendChild(b);
   }
-  const far = boardSel === 'E', key = far ? 'E' + ENDLESS.key : boardSel.length === 1 ? boardSel + today().key : boardSel, rows = boardsData && boardsData.boards ? boardsData.boards[key] || [] : null;
+  const now = today(), day = boardSel === 'D' && boardDay && boardDay !== now.key ? dayOf(boardDay) : now, past = day.key !== now.key;
+  // the daily board: step back through earlier days; an earlier day's course can be played again, unranked
+  const dr = $('boardDayRow'); dr.hidden = boardSel !== 'D'; dr.textContent = '';
+  if (!dr.hidden) {
+    const btn = (id, text, off, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn sm'; b.id = id; b.textContent = text; b.disabled = !!off; b.addEventListener('click', fn); dr.appendChild(b); return b; };
+    btn('btnDayBack', '\u2190 Earlier', day.key <= dayShift(now.key, -BOARD_DAYS + 1), () => { boardDay = dayShift(day.key, -1); drawBoard(); });
+    const lab = document.createElement('b'); lab.id = 'boardDayLabel'; lab.textContent = past ? day.label : 'Today, ' + day.label; dr.appendChild(lab);
+    btn('btnDayOn', 'Later \u2192', !past, () => { boardDay = dayShift(day.key, 1); drawBoard(); });
+    if (past && state !== 'play' && state !== 'pause') btn('btnDayPlay', 'Play this course', false, () => { closeSheet(); startDaily(false, day); });   // not in the middle of a run
+  }
+  const far = boardSel === 'E', key = far ? 'E' + ENDLESS.key : boardSel.length === 1 ? boardSel + day.key : boardSel, rows = boardsData && boardsData.boards ? boardsData.boards[key] || [] : null;
   $('boardInfo').textContent = !relayUp() ? 'The leaderboard is on the public game, at jamesccupps.github.io/EightFold.'
     : far ? 'Endless: how far you got. One course, the same every day, so this board does not start again each morning. Ties go to points.'
-    : boardSel === 'D' ? 'Daily course, ' + today().label + ': fastest clear.'
+    : boardSel === 'D' ? 'Daily course, ' + day.label + ': fastest clear.' + (past ? ' That day is over and its board is closed: the course can still be played, but a run made now is not ranked.' : ' Only runs made today count; earlier days and their boards are a step back.')
     : 'Level ' + (+boardSel.slice(1)) + ', ' + LEVELS[+boardSel.slice(1) - 1].name + ': fastest clear.';
   const head = $('boardHead'); head.textContent = ''; for (const h of ['#', 'Name', far ? 'Distance' : 'Time', 'Perfects', 'Points']) { const th = document.createElement('th'); th.textContent = h; head.appendChild(th); }
   const body = $('boardBody'); body.textContent = '';
   const line = t => { const tr = document.createElement('tr'); cell(tr, ''); cell(tr, t); cell(tr, ''); cell(tr, ''); cell(tr, ''); body.appendChild(tr); };
   if (!relayUp()) line('—');
   else if (!rows) line(boardsData === false ? 'The boards could not be reached. Try again in a moment.' : 'Fetching…');
-  else if (!rows.length) line('Nobody yet. ' + (far ? 'Play Endless to be first.' : 'Clear it to be first.'));
+  else if (!rows.length) line(past ? 'Nobody posted a clear that day.' : 'Nobody yet. ' + (far ? 'Play Endless to be first.' : 'Clear it to be first.'));
   else {
     const same = {}; for (const e of rows) same[e.n] = (same[e.n] || 0) + 1;   // names are not reserved: two players with the same one each get a short tag
     rows.forEach((e, i) => {
@@ -131,7 +143,7 @@ function drawBoard() {
   const mine = stats.posted[key];
   $('boardNote').textContent = (mine ? 'Your best posted here: ' + showV(key, mine.v) + '. ' : '')
     + 'Only a run that beats your own best is posted. Each one is played back from its presses before it is listed, which takes about a minute: that checks the run, not who pressed the keys. '
-    + 'Each browser gets one row per board: changing your name relabels your later runs, it does not add a row. Names are not reserved, so two players can pick the same letters; when they do, a short code after the name tells them apart. A board starts again when its course changes.'
+    + 'Each browser gets one row per board: changing your name relabels your later runs, it does not add a row. Names are not reserved, so two players can pick the same letters; when they do, a short code after the name tells them apart. When the game is updated, a posted run stays for as long as the same presses still play back to the same run.'
     + (tel.on ? '' : ' Recording is off, so runs are not posted: switch it on under Play data.');
   const nm = $('boardName'); if (document.activeElement !== nm) nm.value = stats.name;
   drawPending();
@@ -144,7 +156,7 @@ function loadBoards() {
 }
 function openBoard(id) {
   if (state === 'play') setPause(true);
-  if (id) boardSel = id[0] === 'L' ? id : id[0]; else if (typeof mode === 'number') boardSel = 'L' + (mode + 1); else if (mode === 'daily') boardSel = 'D'; else if (mode === 'endless') boardSel = 'E';
+  boardDay = null; if (id) boardSel = id[0] === 'L' ? id : id[0]; else if (typeof mode === 'number') boardSel = 'L' + (mode + 1); else if (mode === 'daily') boardSel = 'D'; else if (mode === 'endless') boardSel = 'E';
   if (boardsData === false) boardsData = null;
   drawBoard(); openSheet('boardSheet'); loadBoards();
 }
