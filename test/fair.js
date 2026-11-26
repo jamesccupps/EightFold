@@ -5,7 +5,7 @@
 //   node test/fair.js
 const fs = require('fs'), path = require('path');
 const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'core.js'), 'utf8');
-const { LEVELS, DAILY, Track, Runner, endlessSeed } = new Function(src + '; return { LEVELS, DAILY, Track, Runner, endlessSeed };')();
+const { LEVELS, Track, Runner, endlessSeed, dailyTrack } = new Function(src + '; return { LEVELS, Track, Runner, endlessSeed, dailyTrack };')();
 const DT = 1 / 240;
 function audit(name, tr, rows) {
   if (tr.end === Infinity) tr.cell(rows, 0);
@@ -34,7 +34,7 @@ function audit(name, tr, rows) {
 let bad = [];
 LEVELS.forEach((lv, i) => { bad = bad.concat(audit('L' + (i + 1), new Track(lv.seed, lv))); });
 const day = new Date(), dayNum = d => d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
-for (let k = 0; k < 14; k++) { const s = dayNum(new Date(day.getTime() + k * 864e5)); bad = bad.concat(audit('daily ' + s, new Track(s, Object.assign({}, DAILY, { pat: s % 5 })))); }
+for (let k = 0; k < 28; k++) { const s = dayNum(new Date(day.getTime() + k * 864e5)); bad = bad.concat(audit('daily ' + s, dailyTrack(s))); }   // four weeks: every theme, at every pace
 for (const s of [endlessSeed(20261125), 11, 222, 3333, 44444]) bad = bad.concat(audit('endless ' + s, new Track(s, null), 6000));
 for (const b of bad.slice(0, 30)) console.log('   ' + b);
 if (bad.length) { console.log(`fair: ${bad.length} failed`); process.exit(1); }

@@ -1,6 +1,6 @@
 const fs = require('fs');
 const src = fs.readFileSync(require('path').join(__dirname, '..', 'src', 'core.js'), 'utf8');
-const { LEVELS, DAILY, TUTORIAL, Track, Runner, Bot, rng } = new Function(src + '; return {LEVELS,DAILY,TUTORIAL,Track,Runner,Bot,rng};')();
+const { LEVELS, DAILY, TUTORIAL, Track, Runner, Bot, rng, dailyTrack, dailySpec } = new Function(src + '; return {LEVELS,DAILY,TUTORIAL,Track,Runner,Bot,rng,dailyTrack,dailySpec};')();
 
 function run(track, f, dt, zEnd, skipOpt) {
   const r = new Runner(track), b = new Bot(track, f, skipOpt);
@@ -55,9 +55,11 @@ for (const [label, seed, lv] of all) {
   if (badCp) { fails++; console.log(label + ': ' + badCp + ' checkpoint restarts FAIL'); }
 }
 console.log('checkpoint restarts ok unless listed above');
+// 300 days in a row from 22 November 2026: the first five on the old recipe, the rest themed
+const dayNo = k => { const d = new Date(Date.UTC(2026, 10, 22 + k)); return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate(); };
 let bad = 0, n = 0;
 for (let k = 0; k < 300; k++) for (const f of [0.03, 0.5, 0.97]) for (const skip of [true, false]) {
-  const t = new Track(20261122 + k, DAILY), r = run(t, f, 1 / 240, t.end + 2, skip); n++;
+  const t = dailyTrack(dayNo(k)), r = run(t, f, 1 / 240, t.end + 2, skip); n++;
   if (r.dead || (!skip && r.sparks !== t.nSparks)) { bad++; if (bad < 5) console.log(`daily FAIL seed+${k} f=${f} skip=${skip} z=${r.z.toFixed(1)} ${r.dead ? r.dead.kind : 'sparks'}`); }
 }
 console.log(`daily: ${n - bad}/${n} ok`); fails += bad; bad = 0; n = 0;

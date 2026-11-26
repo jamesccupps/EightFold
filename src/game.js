@@ -52,7 +52,7 @@ function startAttract() {
   hue0 = Math.random() * 360; palZ = -99;
   track = new Track((Math.random() * 1e9) | 0, null); attach(); bot = new Bot(track, .5, false);
 }
-function modeName() { return mode === 'endless' ? 'Endless' : mode === 'daily' ? 'Daily' : mode === 'tutorial' ? 'How to play' : LEVELS[mode].name; }
+function modeName() { return mode === 'endless' ? 'Endless' : mode === 'daily' ? (track && track.level.theme) || 'Daily' : mode === 'tutorial' ? 'How to play' : LEVELS[mode].name; }
 function hidePanels() { for (const id of ['menu', 'pausePanel', 'failPanel', 'winPanel', 'scoreSheet', 'ctrlSheet', 'briefSheet', 'tuneSheet', 'dataSheet', 'noteSheet', 'boardSheet', 'guideSheet']) $(id).hidden = true; overlay = null; }
 function begin(first, cp) {
   telEnd('restart'); attach(); bot = null; state = 'play'; telStart(cp); for (const k in postMsg) delete postMsg[k];
@@ -93,9 +93,12 @@ function startEndless(skip, random) {
   const d = ENDLESS, tr = new Track(random ? (Math.random() * 1e9) | 0 : endlessSeed(d.seed), null); if (!random) tr.rankDay = d.key;
   hue0 = random ? Math.random() * 360 : d.seed * 47 % 360; palZ = -99; enter('endless', tr, random ? 3 + ((Math.random() * 5) | 0) : 3 + d.seed % 5, skip);
 }
+// what a day's course is like, in a sentence or two
+const PACE_WORDS = { hard: 'Hard: nearly as fast as the last level, with one shield on the way.', harder: 'Harder: as fast as the last level, and no shield.', hardest: 'Hardest: faster than any level, and no shield.' };
+const dailyWords = sp => sp.about + ' ' + PACE_WORDS[sp.pace] + ' ' + DAILY.hint;
 // day: an earlier day's course (from dayOf); none for today's
 function startDaily(skip, day) {
-  const d = day || today(), tr = new Track(d.seed, Object.assign({}, DAILY, { pat: d.seed % 5 })); tr.day = d; tr.past = d.key !== today().key;
+  const d = day || today(), tr = dailyTrack(d.seed); tr.day = d; tr.past = d.key !== today().key;
   pal = PALS[d.seed % 8]; enter('daily', tr, d.seed % 8, skip);
 }
 // ---------- level briefing: what the level is, what is new in it, and how to deal with each thing ----------
@@ -201,9 +204,9 @@ function showBrief(m, tr, song) {
   const lv = typeof m === 'number', types = lv || m === 'daily' ? typesOf(tr.kinds || tr.level.mix) : ORDER;
   let seen = {}; if (lv) for (let i = 0; i < m; i++) for (const t of typesOf(LEVELS[i].mix)) seen[t] = 1;
   const fresh = lv ? types.filter(t => !seen[t]) : [], old = types.filter(t => fresh.indexOf(t) < 0);
-  $('brNo').textContent = lv ? 'Level ' + pad2(m + 1) + ' of ' + pad2(LEVELS.length) : m === 'daily' ? 'Daily course · ' + (tr.day || today()).label + (tr.past ? ' · an earlier day, not ranked' : '') : 'Endless';
+  $('brNo').textContent = lv ? 'Level ' + pad2(m + 1) + ' of ' + pad2(LEVELS.length) : m === 'daily' ? 'Daily course · ' + (tr.day || today()).label + (tr.level.pace ? ' · ' + tr.level.pace : '') + (tr.past ? ' · an earlier day, not ranked' : '') : 'Endless';
   $('brName').textContent = modeName();
-  $('brHint').textContent = m === 'endless' ? (tr.rankDay ? 'No finish line. The course is the same for everyone and does not change from day to day, so distances can be compared and the leaderboard keeps. ' : 'No finish line. A random course, for practice: it is not ranked. ') + 'It starts with turns, flips and blocks, then adds everything else as it speeds up.' : tr.level.hint;
+  $('brHint').textContent = m === 'endless' ? (tr.rankDay ? 'No finish line. The course is the same for everyone and does not change from day to day, so distances can be compared and the leaderboard keeps. ' : 'No finish line. A random course, for practice: it is not ranked. ') + 'It starts with turns, flips and blocks, then adds everything else as it speeds up.' : m === 'daily' && tr.level.theme ? dailyWords(tr.level) : tr.level.hint;
   const st = $('brStats'); st.textContent = '';
   const stat = (k, v, html) => { const d = document.createElement('div'), a = document.createElement('dt'), b = document.createElement('dd'); a.textContent = k; if (html) b.innerHTML = v; else b.textContent = v; d.appendChild(a); d.appendChild(b); st.appendChild(d); };
   const sp = tr.speedAt(0), on = clamp(Math.round((sp - 6.8) / .75), 1, 8); let pips = '<span class="pips" role="img" aria-label="' + on + ' of 8">'; for (let i = 0; i < 8; i++) pips += '<i' + (i < on ? ' class="on"' : '') + '></i>'; stat('Speed', pips + '</span>', true);

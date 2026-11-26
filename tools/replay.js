@@ -6,7 +6,7 @@
 const fs = require('fs'), path = require('path'), crypto = require('crypto'), { execFileSync } = require('child_process');
 const ROOT = path.join(__dirname, '..');
 const NAMES = 'LEVELS,DAILY,TUTORIAL,Track,Runner';
-const compile = src => new Function(src + `; return {${NAMES}, setFeel: typeof setFeel === 'function' ? setFeel : null, Pace: typeof Pace === 'function' ? Pace : null, setPace: typeof setPace === 'function' ? setPace : null, scoreParts: typeof scoreParts === 'function' ? scoreParts : null, endlessSeed: typeof endlessSeed === 'function' ? endlessSeed : null};`)();
+const compile = src => new Function(src + `; return {${NAMES}, setFeel: typeof setFeel === 'function' ? setFeel : null, dailyTrack: typeof dailyTrack === 'function' ? dailyTrack : null, Pace: typeof Pace === 'function' ? Pace : null, setPace: typeof setPace === 'function' ? setPace : null, scoreParts: typeof scoreParts === 'function' ? scoreParts : null, endlessSeed: typeof endlessSeed === 'function' ? endlessSeed : null};`)();
 const idOf = src => crypto.createHash('sha1').update(src).digest('hex').slice(0, 10);
 const nowSrc = fs.readFileSync(path.join(ROOT, 'src', 'core.js'), 'utf8'), NOW = idOf(nowSrc);
 const engines = { [NOW]: compile(nowSrc) };
@@ -36,7 +36,7 @@ function engine(id) {   // the engine with this id: today's, or an earlier one f
 function courseFor(rec, E) {
   E = E || engines[NOW]; const m = rec.m;
   if (m[0] === 'L') { const lv = E.LEVELS[+m.slice(1) - 1]; return lv ? new E.Track(lv.seed, lv) : null; }
-  if (m[0] === 'D') { const p = m.slice(1).split('-').map(Number), seed = p[0] * 10000 + p[1] * 100 + p[2]; return new E.Track(seed, Object.assign({}, E.DAILY, { pat: seed % 5 })); }
+  if (m[0] === 'D') { const p = m.slice(1).split('-').map(Number), seed = p[0] * 10000 + p[1] * 100 + p[2]; return E.dailyTrack ? E.dailyTrack(seed) : new E.Track(seed, Object.assign({}, E.DAILY, { pat: seed % 5 })); }   // engines from before the daily had themes built it straight from the one recipe
   if (m === 'E') return rec.seed != null ? new E.Track(rec.seed, null) : null;
   return new E.Track(1, E.TUTORIAL);
 }

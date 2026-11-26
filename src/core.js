@@ -60,6 +60,60 @@ const LEVELS = [
 const DAILY = { name: 'Daily', fresh: [], shields: 2, slows: 1, speed: 9.5, secs: 60, react: .50, tw: .30, widths: [2, 1, 3, 1], rest: [3, 7], holes: .25, decor: .60, blockP: .55, sparks: .35, detour: .15, high: .2, pickups: .16, pat: 0,
   hint: 'One course a day, the same for everyone.',
   mix: { step: 2, stairs: 1, zigzag: 1, flipGate: 3, pingpong: 1, ringGap: 2, dodge1: 2, slalom: 1, blockFlip: 1, sweep: 2, beam: 2, fan: 1, hurdle: 2, hurdles: 1, laneGap: 1, stones: 1, launch: 2, sprint: 1, crawl: 1 } };
+// The daily course. Until 27 November 2026 every day drew from the one recipe above: about as hard as level 4, with a
+// bit of everything, so one day felt much like the next. From then on each day has a character of its own and is hard
+// on purpose: about as hard as level 8, the last one, and some days harder.
+//   theme   what the day is about. About half its obstacles are of that kind; the rest, for contrast, are the
+//           kinds that take more than one press: rows of bars, stepping stones, slaloms, flips back and forth.
+//           The nine themes come round in a different order every nine days, and never the same one two days running.
+//   pace    how fast, by the day of the week: hard, harder, and hardest at the weekend. All of them leave no more
+//           time to react than level 8 does or close to it; a shield is laid out only on the hard days.
+// Seventy seconds of course (a little more with the red-spark stretches), where the levels run forty to sixty.
+// Earlier days keep the course they had, so their boards and anyone replaying them see the same thing.
+const DAILY_FROM = 20261127;
+const DAILY_BASE = { stairs: 1, pingpong: 1, slalom: 1, hurdles: 1, stones: 1, fan: 1, ringGap: 1, sweep: 1, sprint: 1 };
+const DAILY_THEMES = [
+  { theme: 'Twister', about: 'Turn after turn: stairs, zigzags and spirals.', lead: { stairs: 4, zigzag: 4, spiral: 3 } },
+  { theme: 'Overhead', about: 'The way on is above you, again and again.', lead: { flipGate: 3, pingpong: 3, ringGap: 2, blockFlip: 3 } },
+  { theme: 'Slalom', about: 'Blocks in the way, and some of them move.', lead: { dodge2: 3, slalom: 4, sweep: 3, dodge1: 1 } },
+  { theme: 'Crossfire', about: 'Bars that spin across the tunnel.', lead: { beam: 4, fan: 4, fans: 3 } },
+  { theme: 'Leapfrog', about: 'Bars to clear and gaps to cross, in rows.', lead: { hurdles: 3, stones: 3, hurdle: 2, laneGap: 2 }, set: { high: .4 } },
+  { theme: 'Overdrive', about: 'The pace keeps changing under you.', lead: { sprint: 4, launch: 4, crawl: 2 }, faster: .5 },
+  { theme: 'Tightrope', about: 'One lane wide, most of the way.', lead: {}, set: { widths: [0, 0, 1, 0], holes: .35 }, all: 1 },
+  { theme: 'Gold rush', about: 'Sparks everywhere, and more chances to risk for them.', lead: {}, set: { sparks: .6, detour: .4, high: .4, pickups: .25, risk: 5 }, all: 1 },
+  { theme: 'Medley', about: 'A bit of everything, close together.', lead: {}, all: 1 }
+];
+const DAILY_HARD = { pace: 'hard', speed: 11.6, react: .38, tw: .26, shields: 1 }, DAILY_HARDER = { pace: 'harder', speed: 12.2, react: .36, tw: .25, shields: 0 }, DAILY_HARDEST = { pace: 'hardest', speed: 12.8, react: .36, tw: .25, shields: 0 };
+const DAILY_PACE = [DAILY_HARDEST, DAILY_HARD, DAILY_HARDER, DAILY_HARD, DAILY_HARDER, DAILY_HARDER, DAILY_HARDEST];   // Sunday first
+function dailyTheme(n) {   // n: days since the first themed day
+  const order = b => { const r = rng(7001 + b * 131), o = DAILY_THEMES.map((_, i) => i); for (let i = o.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)), t = o[i]; o[i] = o[j]; o[j] = t; } return o; };
+  const b = Math.floor(n / DAILY_THEMES.length), o = order(b);
+  if (b > 0) { const before = order(b - 1); if (before[before.length - 1] === o[0]) { const t = o[0]; o[0] = o[1]; o[1] = t; } }   // (the block before was never altered at its end, so this is all it takes)
+  return DAILY_THEMES[o[n % DAILY_THEMES.length]];
+}
+// the recipe for a day (seed: the date as a number, 20261127)
+function dailySpec(seed) {
+  if (seed < DAILY_FROM) return Object.assign({}, DAILY, { pat: seed % 5 });
+  const utc = k => Date.UTC(Math.floor(k / 10000), Math.floor(k / 100) % 100 - 1, k % 100), n = Math.round((utc(seed) - utc(DAILY_FROM)) / 864e5);
+  const th = dailyTheme(n), pc = DAILY_PACE[new Date(utc(seed)).getUTCDay()];
+  const mix = Object.assign({}, th.all ? LEVELS[LEVELS.length - 1].mix : DAILY_BASE);   // the days that are not about one kind of obstacle take the last level's mix
+  for (const k in th.lead) mix[k] = (mix[k] || 0) + th.lead[k];
+  return Object.assign({}, DAILY, { secs: 70, widths: [1, 1, 0, 0], rest: [2, 3], taper: .18, holes: .3, decor: .75, blockP: .65, slows: 1, ringOpen: .2 }, pc, th.set || {},
+    { speed: pc.speed + (th.faster || 0), mix, pat: seed % 5, theme: th.theme, about: th.about, pace: pc.pace, lead: Object.keys(th.lead) });
+}
+// The day's course. A recipe can still deal a dull hand (the theme hardly showing, or too few moves), so a few layouts
+// are tried in a fixed order and the first that plays to its theme is the day's: the same one for everybody.
+function dailyTrack(seed) {
+  const spec = dailySpec(seed); if (!spec.theme) return new Track(seed, spec);
+  let first = null;
+  for (let k = 0; k < 8; k++) {
+    const t = new Track(seed + k * 7919, spec); if (!first) first = t;
+    let pieces = 0, led = 0; const fams = {}; for (const kind in t.kinds) { pieces += t.kinds[kind]; fams[KGROUP[kind]] = 1; if (spec.lead.indexOf(kind) >= 0) led += t.kinds[kind]; }
+    const perMin = t.events.filter(e => !e.opt).length / parTime(t) * 60;
+    if ((!spec.lead.length || led / pieces >= .4) && Object.keys(fams).length >= 4 && perMin >= 34) return t;
+  }
+  return first;
+}
 // obstacle families, for spacing things out and deciding which helper suits what comes next
 const KGROUP = { step: 'turns', stairs: 'turns', zigzag: 'turns', spiral: 'turns', flipGate: 'overhead', pingpong: 'overhead', dodge1: 'blocks', dodge2: 'blocks', slalom: 'blocks',
   blockFlip: 'blockflip', hurdle: 'bars', hurdles: 'bars', laneGap: 'gaps', stones: 'gaps', ringGap: 'ringgap', sweep: 'sweepers', beam: 'beams', fan: 'beams', fans: 'beams', launch: 'pads', sprint: 'sprint', crawl: 'slow', field: 'holes' };

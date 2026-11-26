@@ -125,7 +125,7 @@ function drawBoard() {
   const far = boardSel === 'E', key = far ? 'E' + ENDLESS.key : boardSel.length === 1 ? boardSel + day.key : boardSel, rows = boardsData && boardsData.boards ? boardsData.boards[key] || [] : null;
   $('boardInfo').textContent = !relayUp() ? 'The leaderboard is on the public game, at jamesccupps.github.io/EightFold.'
     : far ? 'Endless: how far you got. One course, the same every day, so this board does not start again each morning. Ties go to points.'
-    : boardSel === 'D' ? 'Daily course, ' + day.label + ': fastest clear.' + (past ? ' That day is over and its board is closed: the course can still be played, but a run made now is not ranked.' : ' Only runs made today count; earlier days and their boards are a step back.')
+    : boardSel === 'D' ? 'Daily course, ' + day.label + (sp => sp.theme ? ' (' + sp.theme + ', ' + sp.pace + ')' : '')(dailySpec(day.seed)) + ': fastest clear.' + (past ? ' That day is over and its board is closed: the course can still be played, but a run made now is not ranked.' : ' Only runs made today count; earlier days and their boards are a step back.')
     : 'Level ' + (+boardSel.slice(1)) + ', ' + LEVELS[+boardSel.slice(1) - 1].name + ': fastest clear.';
   const head = $('boardHead'); head.textContent = ''; for (const h of ['#', 'Name', far ? 'Distance' : 'Time', 'Perfects', 'Points']) { const th = document.createElement('th'); th.textContent = h; head.appendChild(th); }
   const body = $('boardBody'); body.textContent = '';

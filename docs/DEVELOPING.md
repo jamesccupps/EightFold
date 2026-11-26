@@ -36,6 +36,7 @@ build.js              puts all of the above into one file
 test/levels.js        every course can be finished; every spark can be collected
 test/shortcuts.js     no course can be finished while skipping its intended moves
 test/fair.js          every required flip and jump lands, from every lane a player could be standing in
+test/daily.js         the daily courses differ from day to day and are as hard as the last level
 test/curve.js         prints speed, input rate, obstacle variety and difficulty per level
 test/browser/         play-throughs in a real browser (Python + Playwright)
 tools/                seed search used to pick each level's course; analyze.js reports on play data; replay.js plays recorded runs back; boards.js checks posted scores and builds the leaderboards; feedback.js lists player feedback

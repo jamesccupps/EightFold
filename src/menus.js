@@ -52,7 +52,7 @@ function buildMenu() {
   const top = stats.endless[0];
   menuRow('lvEndless', '∞', 'Endless', top ? top.m + ' m' : '—', false, () => startEndless(), 'alt', false, 'No finish line. One course, the same for everyone: how far can you get?');
   const d = dailyS();
-  menuRow('lvDaily', '☀', 'Daily · ' + today().label, d.cleared ? 'cleared' : d.best ? d.best + '%' : '—', !!d.cleared, () => startDaily(), 'alt', false, DAILY.hint + ' Sixty seconds, a bit of everything.');
+  menuRow('lvDaily', '☀', 'Daily · ' + today().label, d.cleared ? 'cleared' : d.best ? d.best + '%' : '—', !!d.cleared, () => startDaily(), 'alt', false, (sp => sp.theme ? 'Today: ' + sp.theme + ', ' + sp.pace + '. ' + sp.about + ' A new one every day, the same for everyone, and hard on purpose.' : DAILY.hint + ' Sixty seconds, a bit of everything.')(dailySpec(today().seed)));
 }
 function soundLabel() { $('btnSound').textContent = Snd.muted ? 'Sound off' : 'Sound on'; $('btnSound').setAttribute('aria-pressed', String(!Snd.muted)); }
 function toggleSound() { Snd.setMuted(!Snd.muted); soundLabel(); telEv(Snd.muted ? 'mute' : 'unmute'); }
