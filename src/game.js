@@ -94,7 +94,7 @@ function startEndless(skip, random) {
   hue0 = random ? Math.random() * 360 : d.seed * 47 % 360; palZ = -99; enter('endless', tr, random ? 3 + ((Math.random() * 5) | 0) : 3 + d.seed % 5, skip);
 }
 // what a day's course is like, in a sentence or two
-const PACE_WORDS = { hard: 'Hard: nearly as fast as the last level, with one shield on the way.', harder: 'Harder: as fast as the last level, and no shield.', hardest: 'Hardest: faster than any level, and no shield.' };
+const PACE_WORDS = { hard: 'Hard: as fast as the last level and busier, with one shield on the way.', harder: 'Harder: faster than any level, and no shield.', hardest: 'Hardest: as fast as the daily gets, with no shield and no slow-mo.' };
 const dailyWords = sp => sp.about + ' ' + PACE_WORDS[sp.pace] + ' ' + DAILY.hint;
 // day: an earlier day's course (from dayOf); none for today's
 function startDaily(skip, day) {

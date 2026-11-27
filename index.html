@@ -528,28 +528,32 @@ const DAILY = { name: 'Daily', fresh: [], shields: 2, slows: 1, speed: 9.5, secs
   mix: { step: 2, stairs: 1, zigzag: 1, flipGate: 3, pingpong: 1, ringGap: 2, dodge1: 2, slalom: 1, blockFlip: 1, sweep: 2, beam: 2, fan: 1, hurdle: 2, hurdles: 1, laneGap: 1, stones: 1, launch: 2, sprint: 1, crawl: 1 } };
 // The daily course. Until 27 November 2026 every day drew from the one recipe above: about as hard as level 4, with a
 // bit of everything, so one day felt much like the next. From then on each day has a character of its own and is hard
-// on purpose: about as hard as level 8, the last one, and some days harder.
-//   theme   what the day is about. About half its obstacles are of that kind; the rest, for contrast, are the
-//           kinds that take more than one press: rows of bars, stepping stones, slaloms, flips back and forth.
-//           The nine themes come round in a different order every nine days, and never the same one two days running.
-//   pace    how fast, by the day of the week: hard, harder, and hardest at the weekend. All of them leave no more
-//           time to react than level 8 does or close to it; a shield is laid out only on the hard days.
-// Seventy seconds of course (a little more with the red-spark stretches), where the levels run forty to sixty.
-// Earlier days keep the course they had, so their boards and anyone replaying them see the same thing.
+// on purpose: harder than level 8, the last one.
+//   theme   what the day is about. Two in five or more of its obstacles are of that kind (a third on the jumping day). The rest are mostly the kinds
+//           that keep the ball moving sideways: weaves and slaloms of blocks, zigzags, stairs, sliding blocks, bars
+//           that spin. A day is not allowed to be mostly jumping, or nothing but turning: on most days half to four
+//           fifths of the presses are turns, and the rest are flips and jumps.
+//   pace    how fast, by the day of the week: hard (level 8's speed, 12), harder (12.6), and hardest at the weekend
+//           (13.2). None leaves more time to react than level 8 does or close to it. A shield is laid out only on the
+//           hard days, and there is no slow-mo on the hardest.
+//   busy    obstacles come about one a second, where a level leaves two or three seconds between presses: the rest
+//           between them is as short as the builder allows, runs of turns and blocks are a step or two longer, there
+//           is no half-way breather, and one red-spark stretch where the levels have three.
+// Seventy seconds of course. Earlier days keep the course they had.
 const DAILY_FROM = 20261127;
-const DAILY_BASE = { stairs: 1, pingpong: 1, slalom: 1, hurdles: 1, stones: 1, fan: 1, ringGap: 1, sweep: 1, sprint: 1 };
+const DAILY_BASE = { weave: 2, slalom: 1, zigzag: 2, stairs: 1, dodge2: 1, sweep: 1, fan: 1, pingpong: 1, blockFlip: 1, hurdles: 1, stones: 1, ringGap: 1 };
 const DAILY_THEMES = [
-  { theme: 'Twister', about: 'Turn after turn: stairs, zigzags and spirals.', lead: { stairs: 4, zigzag: 4, spiral: 3 } },
-  { theme: 'Overhead', about: 'The way on is above you, again and again.', lead: { flipGate: 3, pingpong: 3, ringGap: 2, blockFlip: 3 } },
-  { theme: 'Slalom', about: 'Blocks in the way, and some of them move.', lead: { dodge2: 3, slalom: 4, sweep: 3, dodge1: 1 } },
-  { theme: 'Crossfire', about: 'Bars that spin across the tunnel.', lead: { beam: 4, fan: 4, fans: 3 } },
-  { theme: 'Leapfrog', about: 'Bars to clear and gaps to cross, in rows.', lead: { hurdles: 3, stones: 3, hurdle: 2, laneGap: 2 }, set: { high: .4 } },
-  { theme: 'Overdrive', about: 'The pace keeps changing under you.', lead: { sprint: 4, launch: 4, crawl: 2 }, faster: .5 },
+  { theme: 'Twister', about: 'Turn after turn: stairs, zigzags and spirals.', lead: { stairs: 4, zigzag: 4, spiral: 3 }, sideMax: .92 },
+  { theme: 'Overhead', about: 'The way on is above you, again and again.', lead: { flipGate: 3, pingpong: 3, ringGap: 2, blockFlip: 3 }, side: .3 },
+  { theme: 'Slalom', about: 'Walls of blocks, each with its one way through.', lead: { weave: 4, slalom: 3, dodge2: 2, sweep: 3 }, sideMax: .92 },
+  { theme: 'Crossfire', about: 'Bars that spin across the tunnel.', lead: { beam: 4, fan: 4, fans: 3 }, sideMax: .92 },
+  { theme: 'Leapfrog', about: 'Bars to clear and gaps to cross, with blocks to weave through in between.', lead: { hurdles: 2, stones: 2, hurdle: 1, laneGap: 1 }, set: { high: .4 }, side: .4, jump: .45, share: .3 },
+  { theme: 'Overdrive', about: 'The pace keeps changing under you.', lead: { sprint: 4, launch: 4, crawl: 2 }, faster: .5, side: .4 },
   { theme: 'Tightrope', about: 'One lane wide, most of the way.', lead: {}, set: { widths: [0, 0, 1, 0], holes: .35 }, all: 1 },
-  { theme: 'Gold rush', about: 'Sparks everywhere, and more chances to risk for them.', lead: {}, set: { sparks: .6, detour: .4, high: .4, pickups: .25, risk: 5 }, all: 1 },
+  { theme: 'Gold rush', about: 'Sparks everywhere, and more chances to risk for them.', lead: {}, set: { sparks: .6, detour: .3, high: .3, pickups: .25, risk: 3 }, all: 1 },
   { theme: 'Medley', about: 'A bit of everything, close together.', lead: {}, all: 1 }
 ];
-const DAILY_HARD = { pace: 'hard', speed: 11.6, react: .38, tw: .26, shields: 1 }, DAILY_HARDER = { pace: 'harder', speed: 12.2, react: .36, tw: .25, shields: 0 }, DAILY_HARDEST = { pace: 'hardest', speed: 12.8, react: .36, tw: .25, shields: 0 };
+const DAILY_HARD = { pace: 'hard', speed: 12, react: .37, tw: .25, shields: 1, slows: 1, more: 1 }, DAILY_HARDER = { pace: 'harder', speed: 12.6, react: .36, tw: .25, shields: 0, slows: 1, more: 2 }, DAILY_HARDEST = { pace: 'hardest', speed: 13.2, react: .36, tw: .25, shields: 0, slows: 0, more: 2 };
 const DAILY_PACE = [DAILY_HARDEST, DAILY_HARD, DAILY_HARDER, DAILY_HARD, DAILY_HARDER, DAILY_HARDER, DAILY_HARDEST];   // Sunday first
 function dailyTheme(n) {   // n: days since the first themed day
   const order = b => { const r = rng(7001 + b * 131), o = DAILY_THEMES.map((_, i) => i); for (let i = o.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)), t = o[i]; o[i] = o[j]; o[j] = t; } return o; };
@@ -562,28 +566,34 @@ function dailySpec(seed) {
   if (seed < DAILY_FROM) return Object.assign({}, DAILY, { pat: seed % 5 });
   const utc = k => Date.UTC(Math.floor(k / 10000), Math.floor(k / 100) % 100 - 1, k % 100), n = Math.round((utc(seed) - utc(DAILY_FROM)) / 864e5);
   const th = dailyTheme(n), pc = DAILY_PACE[new Date(utc(seed)).getUTCDay()];
-  const mix = Object.assign({}, th.all ? LEVELS[LEVELS.length - 1].mix : DAILY_BASE);   // the days that are not about one kind of obstacle take the last level's mix
-  for (const k in th.lead) mix[k] = (mix[k] || 0) + th.lead[k];
-  return Object.assign({}, DAILY, { secs: 70, widths: [1, 1, 0, 0], rest: [2, 3], taper: .18, holes: .3, decor: .75, blockP: .65, slows: 1, ringOpen: .2 }, pc, th.set || {},
-    { speed: pc.speed + (th.faster || 0), mix, pat: seed % 5, theme: th.theme, about: th.about, pace: pc.pace, lead: Object.keys(th.lead) });
+  // the days that are not about one kind of obstacle take the last level's mix, with more to weave and turn through and less to jump
+  const mix = Object.assign({}, th.all ? Object.assign({}, LEVELS[LEVELS.length - 1].mix, { weave: 3, zigzag: 3, slalom: 3, stairs: 2, hurdles: 2, stones: 2, launch: 1, sprint: 1, crawl: 0 }) : DAILY_BASE);
+  for (const k in th.lead) mix[k] = (mix[k] || 0) + th.lead[k] * 2;
+  return Object.assign({}, DAILY, { secs: 70, widths: [1, 1, 0, 0], rest: [1, 2], restMin: 2, noBreather: true, risk: 1, taper: .12, holes: .3, decor: .75, blockP: .65, detour: .1 }, pc, th.set || {},
+    { speed: pc.speed + (th.faster || 0), mix, pat: seed % 5, theme: th.theme, about: th.about, pace: pc.pace, lead: Object.keys(th.lead), side: th.side || .5, sideMax: th.sideMax || .8, jump: th.jump || .3, share: th.share || .4 });
 }
-// The day's course. A recipe can still deal a dull hand (the theme hardly showing, or too few moves), so a few layouts
-// are tried in a fixed order and the first that plays to its theme is the day's: the same one for everybody.
+// The day's course. A recipe can still deal a dull hand (the theme hardly showing, too much jumping, too little to
+// do), so layouts are tried in a fixed order and the first that plays as the day should is the day's: the same one
+// for everybody. If none does, the one that comes closest.
 function dailyTrack(seed) {
   const spec = dailySpec(seed); if (!spec.theme) return new Track(seed, spec);
-  let first = null;
-  for (let k = 0; k < 8; k++) {
-    const t = new Track(seed + k * 7919, spec); if (!first) first = t;
-    let pieces = 0, led = 0; const fams = {}; for (const kind in t.kinds) { pieces += t.kinds[kind]; fams[KGROUP[kind]] = 1; if (spec.lead.indexOf(kind) >= 0) led += t.kinds[kind]; }
-    const perMin = t.events.filter(e => !e.opt).length / parTime(t) * 60;
-    if ((!spec.lead.length || led / pieces >= .4) && Object.keys(fams).length >= 4 && perMin >= 34) return t;
+  let best = null, least = 1e9;
+  for (let k = 0; k < 12; k++) {
+    const t = new Track(seed + k * 7919, spec), ev = t.events.filter(e => !e.opt), n = { L: 0, R: 0, F: 0, J: 0 };
+    let pieces = 0, led = 0; for (const kind in t.kinds) { pieces += t.kinds[kind]; if (spec.lead.indexOf(kind) >= 0) led += t.kinds[kind]; }
+    for (const e of ev) n[e.key]++;
+    const perMin = ev.length / parTime(t) * 60, side = (n.L + n.R) / ev.length, jump = n.J / ev.length;
+    let wait = 0, at = 0; for (const e of ev) { wait = Math.max(wait, e.z0 - at); at = e.z1; } wait /= spec.speed;   // the longest stretch with nothing to do, in seconds (near enough)
+    const short = (spec.lead.length ? Math.max(0, spec.share - led / pieces) : 0) + Math.max(0, spec.side - side) + Math.max(0, side - spec.sideMax) + Math.max(0, jump - spec.jump) + Math.max(0, 46 - perMin) / 46 + Math.max(0, wait - 4.5) / 4.5;   // how far from what the day should be
+    if (short < least) { least = short; best = t; }
+    if (!short) break;
   }
-  return first;
+  return best;
 }
 // obstacle families, for spacing things out and deciding which helper suits what comes next
-const KGROUP = { step: 'turns', stairs: 'turns', zigzag: 'turns', spiral: 'turns', flipGate: 'overhead', pingpong: 'overhead', dodge1: 'blocks', dodge2: 'blocks', slalom: 'blocks',
+const KGROUP = { step: 'turns', stairs: 'turns', zigzag: 'turns', spiral: 'turns', flipGate: 'overhead', pingpong: 'overhead', dodge1: 'blocks', dodge2: 'blocks', slalom: 'blocks', weave: 'blocks',
   blockFlip: 'blockflip', hurdle: 'bars', hurdles: 'bars', laneGap: 'gaps', stones: 'gaps', ringGap: 'ringgap', sweep: 'sweepers', beam: 'beams', fan: 'beams', fans: 'beams', launch: 'pads', sprint: 'sprint', crawl: 'slow', field: 'holes' };
-const CRASH = { dodge2: 1, slalom: 1, sweep: 1, beam: 1, fan: 1, fans: 1, hurdles: 1, blockFlip: 1 };      // things a shield saves you from
+const CRASH = { dodge2: 1, slalom: 1, weave: 1, sweep: 1, beam: 1, fan: 1, fans: 1, hurdles: 1, blockFlip: 1 };      // things a shield saves you from
 const PRECISION = { stones: 1, pingpong: 1, spiral: 1, zigzag: 1, fans: 1, hurdles: 1, slalom: 1 };        // rhythm sections where slow-mo helps
 const EMIX = [
   { step: 4, flipGate: 2, dodge1: 3, field: 1 },
@@ -710,7 +720,7 @@ class Track {
     for (const k of cfg.fresh || []) { this.lead(-.4, null); this.runKind(k); last = k; }
     while (this.S.length - this.extra < N) {
       const prog = (this.S.length - this.extra) / N;
-      if (!breathed && prog >= .5) { breathed = true; this.breather(shields > 0); if (shields > 0) shields--; continue; }
+      if (!breathed && prog >= .5 && !cfg.noBreather) { breathed = true; this.breather(shields > 0); if (shields > 0) shields--; continue; }
       const kind = this.draw(last); last = kind;
       // what the stretch before this obstacle offers: slow-mo (off the route, your choice) before a rhythm section,
       // a shield (on the route) before something you can run into
@@ -797,7 +807,7 @@ class Track {
     if (this.rnd() < .5) this.w = this.pickW();
     this.cps.push({ z: this.S.length + 1.5, lane: this.L });
     if (offer === 'slow') return this.detour('slow');
-    let n = Math.max(3, Math.round(P.rest[1] + (P.rest[0] - P.rest[1]) * prog) + this.ri(0, 1));
+    let n = Math.max(P.restMin || 3, Math.round(P.rest[1] + (P.rest[0] - P.rest[1]) * prog) + this.ri(0, 1));
     if (offer === 'shield') { n = Math.max(n, hop + 3); this.plain(n, { noHoles: true }); this.item(this.S.length - 2, this.L, 'shield'); return; }
     if (this.rnd() < P.detour) return this.detour();
     const want = this.rnd() < P.sparks; if (want) n = Math.max(n, hop + 2);
@@ -850,8 +860,8 @@ class Track {
     this.L += dir; this.w = 0; this.plain(k ? 1 : 2, { noHoles: true });
     if (!k) this.spark(this.S.length - 1, this.L);
   }
-  stairs() { const d = this.dir(), n = this.ri(2, 4); this.narrow(0); this.plain(2, { noHoles: true }); for (let i = 0; i < n; i++) { this.step(d, .7); this.plain(this.ri(0, 1), { noHoles: true }); } this.plain(2, { noHoles: true }); this.spark(this.S.length - 1, this.L); }
-  zigzag() { let d = this.dir(); const n = this.ri(3, 5); this.narrow(0); this.plain(2, { noHoles: true }); for (let i = 0; i < n; i++) { this.step(d, .7); this.plain(this.ri(0, 1), { noHoles: true }); d = -d; } this.plain(2, { noHoles: true }); this.spark(this.S.length - 1, this.L); }
+  stairs() { const d = this.dir(), n = this.ri(2, 4) + (this.P.more | 0); this.narrow(0); this.plain(2, { noHoles: true }); for (let i = 0; i < n; i++) { this.step(d, .7); this.plain(this.ri(0, 1), { noHoles: true }); } this.plain(2, { noHoles: true }); this.spark(this.S.length - 1, this.L); }
+  zigzag() { let d = this.dir(); const n = this.ri(3, 5) + (this.P.more | 0); this.narrow(0); this.plain(2, { noHoles: true }); for (let i = 0; i < n; i++) { this.step(d, .7); this.plain(this.ri(0, 1), { noHoles: true }); d = -d; } this.plain(2, { noHoles: true }); this.spark(this.S.length - 1, this.L); }
   spiral() { const d = this.dir(), n = this.ri(6, 9); this.narrow(0); this.plain(2, { noHoles: true }); for (let i = 0; i < n; i++) this.step(d, .6); this.plain(3, { noHoles: true }); this.spark(this.S.length - 2, this.L); this.spark(this.S.length - 1, this.L); }
   // floor ends; it carries on along the opposite wall. Both sides are narrow, so no lane is shared and turning cannot reach it
   flipGate() {
@@ -908,8 +918,11 @@ class Track {
     // landing strip past the opening, with a spark for threading it
     this.plain(Math.ceil(hr) + 1, { noHoles: true }); this.spark(this.S.length - 1, this.L);
   }
-  slalom() { let d = this.dir(); const n = this.ri(3, 4); for (let i = 0; i < n; i++) { this.dodge(1, 'bumps', d); d = -d; } }
-  fans() { const n = this.ri(2, 3); for (let i = 0; i < n; i++) this.dodge(1, this.rnd() < .5 ? 'fan' : 'beam'); }
+  slalom() { let d = this.dir(); const n = this.ri(3, 4) + (this.P.more | 0); for (let i = 0; i < n; i++) { this.dodge(1, 'bumps', d); d = -d; } }
+  // a run of block walls, each with its one opening somewhere else: a lane over or two, either way. Unlike a slalom,
+  // there is no rhythm to fall into: every wall has to be read.
+  weave() { const n = this.ri(4, 6) + (this.P.more | 0); for (let i = 0; i < n; i++) this.dodge(this.rnd() < .4 ? 2 : 1, 'bumps'); }
+  fans() { const n = this.ri(2, 3) + (this.P.more | 0); for (let i = 0; i < n; i++) this.dodge(1, this.rnd() < .5 ? 'fan' : 'beam'); }
   // blocks across your whole side; the opposite wall is clear
   blockFlip() {
     const P = this.P; this.narrow(1); this.plain(2, { noHoles: true });
@@ -1289,7 +1302,7 @@ function applyTune() {
 // ---------- play recording (temporary: so the game can be tuned from how it is really played) ----------
 // One small record per attempt: where it ended and on what, the time, sparks, how early or late each press came inside
 // the window the course allows for it, and the frame rate. Kept in this browser; see the Play data sheet.
-const BUILD = '2026-11-26' + '.' + 'b4c5', CORE_ID = '7ef89f0172';   // BUILD: the day, and a short id of exactly these sources that build.js stamps, so two different builds never carry one label. CORE_ID: which engine (generator + physics) this page was built from
+const BUILD = '2026-11-27' + '.' + '6f20', CORE_ID = '5f8b738232';   // BUILD: the day, and a short id of exactly these sources that build.js stamps, so two different builds never carry one label. CORE_ID: which engine (generator + physics) this page was built from
 // Where play records are sent from the public copy of the game: a small relay that files them in a repository of
 // their own, jamesccupps/EightFold-data (see relay/ in this repository). Empty = nothing is sent.
 let RELAY = 'https://eightfold-relay.jamesccupps.workers.dev/', relayAnywhere = false;
@@ -1764,7 +1777,7 @@ function startEndless(skip, random) {
   hue0 = random ? Math.random() * 360 : d.seed * 47 % 360; palZ = -99; enter('endless', tr, random ? 3 + ((Math.random() * 5) | 0) : 3 + d.seed % 5, skip);
 }
 // what a day's course is like, in a sentence or two
-const PACE_WORDS = { hard: 'Hard: nearly as fast as the last level, with one shield on the way.', harder: 'Harder: as fast as the last level, and no shield.', hardest: 'Hardest: faster than any level, and no shield.' };
+const PACE_WORDS = { hard: 'Hard: as fast as the last level and busier, with one shield on the way.', harder: 'Harder: faster than any level, and no shield.', hardest: 'Hardest: as fast as the daily gets, with no shield and no slow-mo.' };
 const dailyWords = sp => sp.about + ' ' + PACE_WORDS[sp.pace] + ' ' + DAILY.hint;
 // day: an earlier day's course (from dayOf); none for today's
 function startDaily(skip, day) {

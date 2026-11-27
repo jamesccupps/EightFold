@@ -1,7 +1,7 @@
 // ---------- play recording (temporary: so the game can be tuned from how it is really played) ----------
 // One small record per attempt: where it ended and on what, the time, sparks, how early or late each press came inside
 // the window the course allows for it, and the frame rate. Kept in this browser; see the Play data sheet.
-const BUILD = '2026-11-26' + '.' + '/*BUILDID*/', CORE_ID = '/*COREID*/';   // BUILD: the day, and a short id of exactly these sources that build.js stamps, so two different builds never carry one label. CORE_ID: which engine (generator + physics) this page was built from
+const BUILD = '2026-11-27' + '.' + '/*BUILDID*/', CORE_ID = '/*COREID*/';   // BUILD: the day, and a short id of exactly these sources that build.js stamps, so two different builds never carry one label. CORE_ID: which engine (generator + physics) this page was built from
 // Where play records are sent from the public copy of the game: a small relay that files them in a repository of
 // their own, jamesccupps/EightFold-data (see relay/ in this repository). Empty = nothing is sent.
 let RELAY = 'https://eightfold-relay.jamesccupps.workers.dev/', relayAnywhere = false;

@@ -22,7 +22,7 @@ const pct = (a, b) => b ? Math.round(100 * a / b) + '%' : '-';
 const count = a => { const m = {}; for (const x of a) m[x] = (m[x] || 0) + 1; return Object.entries(m).sort((x, y) => y[1] - x[1]); };
 const pad = (s, n) => String(s).padEnd(n), lpad = (s, n) => String(s).padStart(n);
 const out = s => console.log(s), head = s => out('\n== ' + s + ' ==');
-const NAME = { step: 'shifting floor', stairs: 'shifting floor (stairs)', zigzag: 'zigzag', spiral: 'spiral', flipGate: 'floor overhead', pingpong: 'floor overhead (repeated)', dodge1: 'tall block', dodge2: 'two tall blocks',
+const NAME = { step: 'shifting floor', stairs: 'shifting floor (stairs)', zigzag: 'zigzag', spiral: 'spiral', flipGate: 'floor overhead', pingpong: 'floor overhead (repeated)', dodge1: 'tall block', dodge2: 'two tall blocks', weave: 'weave of blocks',
   slalom: 'slalom', blockFlip: 'blocked side', hurdle: 'low bar', hurdles: 'low bars', laneGap: 'short gap', stones: 'stepping stones', ringGap: 'ring gap', sweep: 'sliding block', beam: 'beam', fan: 'fan', fans: 'fans',
   launch: 'launch pad', sprint: 'sprint zone', crawl: 'slow zone', field: 'scattered floor', riskFar: 'risk route (far wall)', riskSide: 'risk route (side strip)', floor: 'open floor', detour: 'spark detour', other: 'other' };
 const nm = k => NAME[k] || k;
